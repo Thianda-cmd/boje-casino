@@ -1,0 +1,338 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-bg: #0d1a25;
+  --color-panel: #112230;
+  --color-panel2: #162b3a;
+  --color-raised: #213a4c;
+  --color-hover: #2b475c;
+  --color-line: #1f3547;
+  --color-stage: #0a1620;
+  --color-muted: #90a4b8;
+  --color-dim: #5d7488;
+  --color-ink: #eef4f9;
+  --color-accent: #22d36f;
+  --color-accent-deep: #14a957;
+  --color-gold: #f7c548;
+  --color-danger: #ff4d61;
+  --color-sky: #4cb4ff;
+  --color-violet: #9b7bff;
+  --color-pink: #ff5fa2;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* ---------- Boje loaders (components/Loader.tsx; index.html has a plain copy) ---------- */
+@keyframes boje-chase {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+@keyframes boje-breathe {
+  0%,
+  100% {
+    transform: scale(0.93);
+  }
+  50% {
+    transform: scale(1);
+  }
+}
+@keyframes boje-shine {
+  0% {
+    transform: translateX(0);
+  }
+  55%,
+  100% {
+    transform: translateX(52px);
+  }
+}
+@keyframes boje-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) rotate(90deg);
+  }
+}
+@keyframes boje-wave {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  30% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* thin, quiet scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #26405400 transparent;
+}
+*:hover {
+  scrollbar-color: #264054 transparent;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ---------- Chicken Road ---------- */
+@keyframes drive {
+  from {
+    transform: translate3d(0, var(--car-from, -240px), 0);
+  }
+  to {
+    transform: translate3d(0, calc(var(--stage-h) + 60px), 0);
+  }
+}
+.car-drive {
+  animation-name: drive;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes px-bob {
+  0%,
+  49% {
+    transform: translateY(0);
+  }
+  50%,
+  100% {
+    transform: translateY(-3px);
+  }
+}
+.px-bob {
+  animation: px-bob 1s steps(1) infinite;
+}
+
+/* a sparkle that blinks on for a moment, in hard pixel steps */
+@keyframes px-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  6% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  12% {
+    opacity: 0.6;
+    transform: scale(0.5);
+  }
+  16% {
+    opacity: 0;
+  }
+}
+.px-twinkle {
+  animation: px-twinkle 2.6s steps(1) infinite;
+}
+
+@keyframes dash-scroll {
+  from {
+    background-position-y: 0;
+  }
+  to {
+    background-position-y: 48px;
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(247, 197, 72, 0.55), 0 0 24px 2px rgba(247, 197, 72, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(247, 197, 72, 0), 0 0 34px 6px rgba(247, 197, 72, 0.5);
+  }
+}
+.glow-pulse {
+  animation: glow-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+.shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-6px, 3px);
+  }
+  40% {
+    transform: translate(5px, -4px);
+  }
+  60% {
+    transform: translate(-4px, 2px);
+  }
+  80% {
+    transform: translate(3px, -1px);
+  }
+}
+.shake {
+  animation: shake 0.42s ease-in-out;
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.float-y {
+  animation: float-y 3.2s ease-in-out infinite;
+}
+
+/* ---------- modern games ---------- */
+@keyframes flame {
+  0%,
+  100% {
+    transform: scaleY(1) scaleX(1);
+    opacity: 0.95;
+  }
+  50% {
+    transform: scaleY(1.25) scaleX(0.9);
+    opacity: 1;
+  }
+}
+.flame {
+  transform-origin: 50% 0%;
+  animation: flame 0.12s ease-in-out infinite;
+}
+
+@keyframes flame-h {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.32, 0.86);
+  }
+}
+.flame-h {
+  transform-box: fill-box;
+  transform-origin: 100% 50%;
+  animation: flame-h 0.11s ease-in-out infinite;
+}
+
+@keyframes spark {
+  0%,
+  100% {
+    transform: scale(0.8) rotate(0deg);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.25) rotate(45deg);
+    opacity: 1;
+  }
+}
+.spark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spark 0.35s ease-in-out infinite;
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.twinkle {
+  animation: twinkle 2.4s ease-in-out infinite;
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin-slow {
+  animation: spin-slow 24s linear infinite;
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flame,
+  .flame-h,
+  .spark,
+  .twinkle,
+  .spin-slow,
+  .glow-pulse,
+  .shimmer,
+  .float-y,
+  .px-twinkle,
+  .px-bob {
+    animation: none;
+  }
+}

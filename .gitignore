@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-single/
+shots/
+tools/
+*.tsbuildinfo
+.env
+.env.*
+.vercel/
+.DS_Store

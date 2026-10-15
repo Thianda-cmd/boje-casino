@@ -1,0 +1,104 @@
+import { auth, cfg, createAccount, deleteUser, rpc } from './_lib/supa.js'
+
+/*
+  End-to-end check of the live backend: Crash functions, sign-up, sign-in, profile and wallet
+  saves, then removes the test account. Only answers with the key below; reports pass/fail only.
+*/
+
+const KEY = 'lc-selftest-6b1f0e2a'
+
+export default async function handler(req, res) {
+  res.setHeader('cache-control', 'no-store')
+  if (req.query?.key !== KEY) return res.status(404).json({ error: 'not-found' })
+  const c = cfg()
+  const steps = []
+  const step = async (name, fn) => {
+    const t0 = Date.now()
+    try {
+      const detail = await fn()
+      steps.push({ name, ok: true, ms: Date.now() - t0, detail })
+      return detail
+    } catch (e) {
+      steps.push({ name, ok: false, ms: Date.now() - t0, detail: String(e?.message || e).slice(0, 200) })
+      return null
+    }
+  }
+  const must = (cond, msg) => {
+    if (!cond) throw new Error(msg)
+  }
+
+  await step('config', async () => {
+    must(c.url && c.anon && c.service, 'missing settings')
+    return { url: !!c.url, anon: c.anon.startsWith('eyJ') ? 'jwt' : 'sb', service: c.service.startsWith('eyJ') ? 'jwt' : 'sb' }
+  })
+  await step('auth settings', async () => {
+    const r = await auth('/settings')
+    must(r.ok, `status ${r.status}`)
+    return { autoconfirm: r.body?.mailer_autoconfirm, signup_disabled: r.body?.disable_signup }
+  })
+  await step('crash_state as guest', async () => {
+    const r = await rpc('crash_state', { p_player: 'g_selftest0000000000' })
+    must(r.ok && r.body?.round?.id, `status ${r.status} ${JSON.stringify(r.body).slice(0, 120)}`)
+    return { round: r.body.round.id, phase: r.body.round.phase, history: r.body.history.length }
+  })
+  await step('direct table read is blocked', async () => {
+    const r = await fetch(`${c.url}/rest/v1/crash_round?select=seed&limit=1`, { headers: { apikey: c.anon, ...(c.anon.startsWith('eyJ') ? { authorization: `Bearer ${c.anon}` } : {}) } })
+    must(r.status === 401 || r.status === 403 || r.status === 404, `status ${r.status}`)
+    return { status: r.status }
+  })
+
+  const tag = Math.random().toString(36).slice(2, 8)
+  const email = `selftest.${tag}@example.com`
+  const password = `Pw-${tag}-${Date.now()}`
+  const username = `test_${tag}`
+  const made = await step('create account', async () => {
+    const r = await createAccount({ email, password, username, wallet: { balance: 1234, xp: 5 } })
+    must(r.status === 200, `${r.status} ${r.error}`)
+    return { id: !!r.id, rid: r.id }
+  })
+  const id = made?.rid
+  if (made) delete made.rid
+  let token = null
+  if (id) {
+    await step('sign in', async () => {
+      const r = await auth('/token?grant_type=password', { method: 'POST', body: { email, password } })
+      must(r.ok && r.body?.access_token, `status ${r.status} ${r.body?.error_code || r.body?.msg || ''}`)
+      token = r.body.access_token
+      return { expires_in: r.body.expires_in }
+    })
+  }
+  if (token) {
+    await step('my_profile', async () => {
+      const r = await rpc('my_profile', {}, { token })
+      must(r.ok && r.body?.username === username && r.body?.wallet?.balance === 1234, `status ${r.status} ${JSON.stringify(r.body).slice(0, 120)}`)
+      return { rev: r.body.rev }
+    })
+    await step('save_wallet', async () => {
+      const r = await rpc('save_wallet', { p_wallet: { balance: 1300, xp: 9 }, p_rev: 0 }, { token })
+      must(r.ok && r.body?.ok && r.body.rev === 1, `status ${r.status} ${JSON.stringify(r.body).slice(0, 120)}`)
+      const again = await rpc('save_wallet', { p_wallet: { balance: 1 }, p_rev: 0 }, { token })
+      must(again.body?.error === 'conflict', 'stale save was not refused')
+      return { rev: r.body.rev }
+    })
+    await step('crash_bet as user', async () => {
+      const r = await rpc('crash_bet', { p_player: null, p_name: 'x', p_bet: 1, p_auto: 1.5 }, { token })
+      must(r.ok && (r.body?.ok || r.body?.error === 'closed'), `status ${r.status} ${JSON.stringify(r.body).slice(0, 120)}`)
+      return r.body
+    })
+    await step('admin function refused for users', async () => {
+      const r = await rpc('admin_create_profile', { p_id: id, p_username: 'nope_nope' }, { token })
+      must(!r.ok, `status ${r.status}`)
+      return { status: r.status }
+    })
+  }
+  if (id) {
+    await step('delete account', async () => {
+      const r = await deleteUser(id)
+      must(r.ok, `status ${r.status}`)
+      const gone = await rpc('username_available', { p_username: username })
+      must(gone.body === true, 'profile still there')
+      return { status: r.status }
+    })
+  }
+  return res.status(200).json({ ok: steps.every((s) => s.ok), steps })
+}
