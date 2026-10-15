@@ -43,7 +43,7 @@ Vercel functions in `api/`:
 - `setup.js`: applies the schema when its version changes (`POST /api/setup`). Needs `POSTGRES_URL`.
 - `auth.js`: sign-up (rate limited per IP) and account deletion, which need the service key.
 - `config.js`: the public Supabase URL and key for the browser.
-- `selftest.js`: an end-to-end check of Crash and accounts, guarded by a key.
+- `selftest.js`: an end-to-end check of Crash and accounts. It only answers `?key=` matching the `SELFTEST_KEY` env var (set in Vercel; keep a copy in an untracked `.env.local`).
 
 Without the backend (or in the single-file preview) Crash runs the same rules locally for one player and
 accounts are hidden.

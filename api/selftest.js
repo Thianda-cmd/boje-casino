@@ -2,14 +2,13 @@ import { auth, cfg, createAccount, deleteUser, rpc } from './_lib/supa.js'
 
 /*
   End-to-end check of the live backend: Crash functions, sign-up, sign-in, profile and wallet
-  saves, then removes the test account. Only answers with the key below; reports pass/fail only.
+  saves, then removes the test account. Only answers when ?key= matches the SELFTEST_KEY env var; reports pass/fail only.
 */
-
-const KEY = 'lc-selftest-6b1f0e2a'
 
 export default async function handler(req, res) {
   res.setHeader('cache-control', 'no-store')
-  if (req.query?.key !== KEY) return res.status(404).json({ error: 'not-found' })
+  const key = process.env.SELFTEST_KEY
+  if (!key || req.query?.key !== key) return res.status(404).json({ error: 'not-found' })
   const c = cfg()
   const steps = []
   const step = async (name, fn) => {
