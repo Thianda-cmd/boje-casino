@@ -1,7 +1,8 @@
 import { useUid } from './ids'
 
-/* A sleek rocket pointing right (0°). The flame sits behind the tail and flickers while `thrust` is on. */
-export function Rocket({ width = 96, thrust = true, className, x, y }: { width?: number; thrust?: boolean; className?: string; x?: number; y?: number }) {
+/* A sleek rocket pointing right (0°). The flame sits behind the tail while `thrust` is on and flickers unless `flicker` is off
+   (static art such as lobby covers turns it off, since an animated SVG part repaints the whole picture every frame). */
+export function Rocket({ width = 96, thrust = true, flicker = true, className, x, y }: { width?: number; thrust?: boolean; flicker?: boolean; className?: string; x?: number; y?: number }) {
   const u = useUid()
   return (
     <svg x={x} y={y} width={width} height={(width * 48) / 120} viewBox="0 0 120 48" className={className} overflow="visible" aria-hidden>
@@ -28,7 +29,7 @@ export function Rocket({ width = 96, thrust = true, className, x, y }: { width?:
       </defs>
       {thrust && (
         <g transform="translate(34 24)">
-          <g className="flame-h">
+          <g className={flicker ? 'flame-h' : undefined}>
             <path d="M0 -8.5C-12 -7 -26 -3 -34 0C-26 3 -12 7 0 8.5Z" fill={`url(#${u}f)`} transform="translate(0 0)" />
             <path d="M0 -4.5C-6 -4 -13 -1.5 -17 0C-13 1.5 -6 4 0 4.5Z" fill="#fffbe6" opacity=".9" />
           </g>

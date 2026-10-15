@@ -515,7 +515,7 @@ export default function Slots() {
   )
 }
 
-const pill = 'flex h-10 items-center gap-2 rounded-full bg-[#0b0720]/75 px-4 ring-1 ring-white/10 backdrop-blur-sm'
+const pill = 'flex h-10 items-center gap-2 rounded-full bg-[#0b0720]/85 px-4 ring-1 ring-white/10'
 
 /** A number that counts up to its value. */
 function Counter({ value, className = '' }: { value: number; className?: string }) {
@@ -567,7 +567,7 @@ function BannerCard({ banner, bet, onDone }: { banner: Banner; bet: number; onDo
 
   return (
     <motion.div
-      className="absolute inset-0 z-30 flex cursor-pointer items-center justify-center bg-black/50 p-6 backdrop-blur-[2px]"
+      className="absolute inset-0 z-30 flex cursor-pointer items-center justify-center bg-black/60 p-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.25 } }}

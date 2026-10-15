@@ -1,5 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import type { Sprite } from '../lib/pixel'
 import { Px } from './pixelui'
 import { asphalt, bush, chicken, curb, flower, grass, vehicle } from '../games/chicken/sprites'
@@ -129,7 +128,7 @@ function CrashCover() {
       <path d={line} fill="none" stroke="#ff6fae" strokeWidth="7" opacity=".55" filter={`url(#${u}b)`} />
       <path d={line} fill="none" stroke={`url(#${u}s)`} strokeWidth="4.5" strokeLinecap="round" />
       <g transform="translate(160 70) rotate(-60)">
-        <Rocket width={70} x={-70 * 0.29} y={-70 * 0.2} />
+        <Rocket width={70} x={-70 * 0.29} y={-70 * 0.2} flicker={false} />
       </g>
     </Scene>
   )
@@ -156,7 +155,7 @@ function MinesCover() {
                 </>
               )}
               {k === 'g' && <Gem size={30} x={x + 4} y={y + 4} />}
-              {k === 'm' && <Bomb size={32} x={x + 3} y={y + 3} />}
+              {k === 'm' && <Bomb size={32} x={x + 3} y={y + 3} flicker={false} />}
             </g>
           )
         })}
@@ -521,6 +520,27 @@ function VideoPokerCover() {
   )
 }
 
+/** One lane's car driving down the banner road, over and over. A Web Animation of transform only, so the browser runs it
+ *  on the GPU; a script-driven animation here would repaint the shadowed sprite every frame. */
+function Car({ left, dur, delay, rest, children }: { left: string; dur: number; delay: number; rest: number; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el?.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const total = dur + rest
+    const a = el.animate(
+      [{ transform: 'translateY(-170px)' }, { transform: 'translateY(340px)', offset: dur / total }, { transform: 'translateY(340px)' }],
+      { duration: total * 1000, delay: delay * 1000, iterations: Infinity, fill: 'backwards' },
+    )
+    return () => a.cancel()
+  }, [dur, delay, rest])
+  return (
+    <div ref={ref} className="absolute top-0 will-change-transform" style={{ left, transform: 'translateY(-170px)' }}>
+      {children}
+    </div>
+  )
+}
+
 /** The lobby banner's road: three lanes of traffic and a chicken waiting at the kerb. */
 export function HeroRoad() {
   const lanes = [
@@ -536,16 +556,9 @@ export function HeroRoad() {
           <div key={i} className="absolute inset-y-0 w-1" style={{ left: 16 + i * 88 - 2, backgroundImage: 'linear-gradient(#e8edf3 50%, transparent 50%)', backgroundSize: '4px 40px' }} />
         ))}
         {lanes.map((l, i) => (
-          <motion.div
-            key={i}
-            className="absolute top-0"
-            style={{ left: l.left }}
-            initial={{ y: -170 }}
-            animate={{ y: 340 }}
-            transition={{ duration: l.dur, repeat: Infinity, ease: 'linear', delay: l.delay, repeatDelay: 0.6 + i * 0.4 }}
-          >
+          <Car key={i} left={l.left} dur={l.dur} delay={l.delay} rest={0.6 + i * 0.4}>
             <Px s={l.car} scale={4} style={{ filter: 'drop-shadow(0 8px 0 rgba(0,0,0,.3))' }} />
-          </motion.div>
+          </Car>
         ))}
       </div>
       <Px s={bush()} scale={4} className="absolute left-[18%] top-[10%]" />

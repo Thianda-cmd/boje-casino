@@ -442,7 +442,7 @@ export default function Heist() {
               exit={{ opacity: 0 }}
               className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center"
             >
-              <span className="rounded-full bg-black/55 px-4 py-2 text-[13px] font-bold text-ink backdrop-blur">Tap anywhere to start the dial</span>
+              <span className="rounded-full bg-black/65 px-4 py-2 text-[13px] font-bold text-ink">Tap anywhere to start the dial</span>
             </motion.div>
           )}
           {outcome && phase !== 'opening' && !running && <OutcomeCard key={outcome.id} outcome={outcome} />}
@@ -825,7 +825,7 @@ function OutcomeCard({ outcome }: { outcome: Outcome }) {
       transition={{ type: 'spring', stiffness: 320, damping: 22, delay: alarm ? 0.35 : 0 }}
     >
       <div
-        className={`max-w-[300px] rounded-2xl border-[3px] bg-panel/95 px-7 py-5 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,.75)] backdrop-blur ${
+        className={`max-w-[300px] rounded-2xl border-[3px] bg-panel px-7 py-5 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,.75)] ${
           alarm ? 'border-danger shadow-[0_0_48px_-10px_rgba(255,77,97,.6)]' : 'border-gold shadow-[0_0_48px_-10px_rgba(247,197,72,.6)]'
         }`}
       >

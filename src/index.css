@@ -192,17 +192,31 @@ input[type="number"] {
   animation: glow-pulse 1.6s ease-in-out infinite;
 }
 
+/* a gloss band that sweeps across gold buttons; it moves by transform only, so the button itself never repaints */
 @keyframes shimmer {
   from {
-    background-position: -200% 0;
+    transform: translateX(-100%);
   }
+  60%,
   to {
-    background-position: 200% 0;
+    transform: translateX(100%);
   }
 }
-.shimmer {
-  background-size: 200% 100%;
-  animation: shimmer 3s linear infinite;
+@layer components {
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+}
+.shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 25%, rgba(255, 255, 255, 0.6) 50%, transparent 75%);
+  animation: shimmer 3s ease-in-out infinite;
 }
 
 @keyframes shake {
@@ -322,6 +336,28 @@ input[type="number"] {
   }
 }
 
+/* the lobby banner's picture slides in when its slide becomes active (transform and opacity only) */
+@keyframes hero-art-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px) scale(0.97);
+  }
+}
+.hero-art-in {
+  animation: hero-art-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* lobby cards rise in on mount; transform and opacity only, and no fill after the end so layout animations keep working */
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.card-in {
+  animation: card-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .flame,
   .flame-h,
@@ -329,7 +365,9 @@ input[type="number"] {
   .twinkle,
   .spin-slow,
   .glow-pulse,
-  .shimmer,
+  .shimmer::after,
+  .card-in,
+  .hero-art-in,
   .float-y,
   .px-twinkle,
   .px-bob {

@@ -267,7 +267,7 @@ function MobileNav({ route, onGames }: { route: string; onGames: () => void }) {
     ['/account', profile ? <Avatar index={profile.avatar} size={24} /> : <IconUser />, profile ? 'Me' : 'Account'],
   ]
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex bg-panel/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-12px_rgba(0,0,0,.7)] backdrop-blur lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex bg-panel pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-12px_rgba(0,0,0,.7)] lg:hidden">
       {items.map(([to, icon, label]) => {
         const active = to === 'games' ? route.startsWith('/game/') : to === '/' ? route === '/' : route.startsWith(to)
         return (
@@ -392,7 +392,7 @@ function SearchModal({ onClose }: { onClose: () => void }) {
     onClose()
   }
   return (
-    <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-start sm:pt-[10vh]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+    <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-start sm:pt-[10vh]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div
         initial={{ y: 30, opacity: 0, scale: 0.98 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}

@@ -23,7 +23,7 @@ export function HudChip({ label, value, tone }: { label: string; value: ReactNod
   const color = tone === 'gold' ? 'text-[#f7c548]' : tone === 'green' ? 'text-[#4be38f]' : tone === 'red' ? 'text-[#ff6b7c]' : 'text-white'
   return (
     <div
-      className="bg-[#0b1118]/75 px-3 py-1.5 backdrop-blur"
+      className="bg-[#0b1118]/85 px-3 py-1.5"
       style={{ fontFamily: PIXEL_FONT, boxShadow: 'inset 0 0 0 2px rgba(255,255,255,.08), 0 3px 0 rgba(0,0,0,.35)' }}
     >
       <div className="text-[9px] uppercase text-white/55">{label}</div>

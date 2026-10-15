@@ -35,6 +35,7 @@ interface Particle {
   smoke?: boolean
 }
 
+
 export default function Crash() {
   const stake = useStake()
   const settle = useWallet((s) => s.settle)
@@ -406,16 +407,23 @@ export default function Crash() {
         const stroke = ctx.createLinearGradient(padL, 0, Math.max(padL + 1, hx), 0)
         stroke.addColorStop(0, c1)
         stroke.addColorStop(1, c2)
-        ctx.beginPath()
-        pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
-        ctx.strokeStyle = stroke
-        ctx.lineWidth = small ? 4 : 5
+        const curve = new Path2D()
+        pts.forEach(([x, y], i) => (i ? curve.lineTo(x, y) : curve.moveTo(x, y)))
+        const lw = small ? 4 : 5
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
-        ctx.shadowColor = c2
-        ctx.shadowBlur = 18
-        ctx.stroke()
-        ctx.shadowBlur = 0
+        // the glow is two wide see-through strokes under the line; a canvas shadow blur on a long path is far slower
+        ctx.strokeStyle = c2
+        ctx.globalAlpha = 0.1
+        ctx.lineWidth = lw + 16
+        ctx.stroke(curve)
+        ctx.globalAlpha = 0.2
+        ctx.lineWidth = lw + 7
+        ctx.stroke(curve)
+        ctx.globalAlpha = 1
+        ctx.strokeStyle = stroke
+        ctx.lineWidth = lw
+        ctx.stroke(curve)
 
         // where players got out: a dot on the curve and, where there is room, their name
         if (f) {
@@ -481,16 +489,19 @@ export default function Crash() {
           p.vy -= 10 * dt
         } else p.vy += 300 * dt
         const k = p.life / p.max
-        ctx.globalAlpha = p.smoke ? 0.35 * (1 - k) : 1 - k * k
+        const a = p.smoke ? 0.35 * (1 - k) : 1 - k * k
         ctx.fillStyle = p.color
         if (!p.smoke) {
-          ctx.shadowColor = p.color
-          ctx.shadowBlur = 8
+          // a faint halo instead of a shadow blur
+          ctx.globalAlpha = a * 0.25
+          ctx.beginPath()
+          ctx.arc(p.x, p.y, p.size * 2.4, 0, Math.PI * 2)
+          ctx.fill()
         }
+        ctx.globalAlpha = a
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.smoke ? p.size * (1 + k * 1.5) : p.size, 0, Math.PI * 2)
         ctx.fill()
-        ctx.shadowBlur = 0
       }
       ctx.globalAlpha = 1
 

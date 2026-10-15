@@ -18,7 +18,7 @@ export function Toasts() {
             exit={{ opacity: 0, x: 40, transition: { duration: 0.15 } }}
             transition={{ type: 'spring', stiffness: 420, damping: 32 }}
             onClick={() => dismiss(t.id)}
-            className={`pointer-events-auto flex items-center gap-3 rounded-xl border bg-panel2/95 px-4 py-3 text-left shadow-[0_16px_40px_-12px_rgba(0,0,0,.6)] backdrop-blur ${
+            className={`pointer-events-auto flex items-center gap-3 rounded-xl border bg-panel2 px-4 py-3 text-left shadow-[0_16px_40px_-12px_rgba(0,0,0,.6)] ${
               t.kind === 'reward' ? 'border-gold/40' : t.kind === 'win' ? 'border-accent/40' : 'border-line'
             }`}
           >

@@ -160,10 +160,21 @@ function Hero() {
       onMouseLeave={() => setHover(false)}
       className="relative min-h-[280px] overflow-hidden rounded-2xl shadow-[0_24px_60px_-30px_rgba(0,0,0,.8)] sm:min-h-[300px]"
     >
+      {/* every slide's picture stays mounted and the active one fades in, so changing slides only fades layers the
+          GPU already has; mounting the art fresh each time redrew the shadowed covers and stalled a frame */}
+      {SLIDES.map((x, j) => (
+        <div
+          key={x.key}
+          aria-hidden={j !== i}
+          className={`absolute inset-0 transition-opacity duration-500 will-change-[opacity] ${j === i ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+          style={{ background: x.bg }}
+        >
+          <div className={`absolute inset-0 ${j === i ? 'hero-art-in' : ''}`}>{x.art}</div>
+        </div>
+      ))}
       <AnimatePresence initial={false}>
-        <motion.div key={s.key} className="absolute inset-0" style={{ background: s.bg }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
-          {s.art}
-          <div className="relative z-10 flex h-full max-w-[460px] flex-col justify-center px-6 pb-12 pt-6 sm:px-8 sm:pb-12 sm:pt-8">
+        <motion.div key={s.key} className="absolute inset-0 z-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+          <div className="relative flex h-full max-w-[460px] flex-col justify-center px-6 pb-12 pt-6 sm:px-8 sm:pb-12 sm:pt-8">
             <motion.span
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -199,6 +210,10 @@ function Hero() {
   )
 }
 
+// the hero's star field; it twinkles in four groups, each its own little svg that fades as a whole, so the
+// browser can run the fade on the GPU instead of repainting the whole banner every frame
+const STARS = Array.from({ length: 40 }, (_, i) => ({ cx: (i * 97) % 400, cy: (i * 53) % 230, r: i % 4 ? 0.9 : 1.6 }))
+
 function HeroCrash() {
   const u = useUid()
   const pts: string[] = []
@@ -206,7 +221,14 @@ function HeroCrash() {
   const line = `M${pts.join(' L')}`
   return (
     <div className="absolute inset-y-0 right-0 hidden w-[58%] sm:block [mask-image:linear-gradient(to_right,transparent,black_22%)]">
-      <svg className="h-full w-full" viewBox="0 0 400 270" preserveAspectRatio="xMaxYMid slice" aria-hidden>
+      {[0, 1, 2, 3].map((g) => (
+        <svg key={g} className="twinkle absolute inset-0 h-full w-full" style={{ animationDelay: `${g * 0.6}s` }} viewBox="0 0 400 270" preserveAspectRatio="xMaxYMid slice" aria-hidden>
+          {STARS.filter((_, i) => i % 4 === g).map((st, i) => (
+            <circle key={i} {...st} fill="#fff" opacity=".7" />
+          ))}
+        </svg>
+      ))}
+      <svg className="relative h-full w-full" viewBox="0 0 400 270" preserveAspectRatio="xMaxYMid slice" aria-hidden>
         <defs>
           <linearGradient id={`${u}s`} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0" stopColor="#8f74ff" />
@@ -217,13 +239,10 @@ function HeroCrash() {
             <stop offset="1" stopColor="#ff6fae" stopOpacity="0" />
           </linearGradient>
         </defs>
-        {Array.from({ length: 40 }, (_, i) => (
-          <circle key={i} className="twinkle" style={{ animationDelay: `${(i * 0.37) % 2.4}s` }} cx={(i * 97) % 400} cy={(i * 53) % 230} r={i % 4 ? 0.9 : 1.6} fill="#fff" opacity=".7" />
-        ))}
         <path d={`${line} L340 250 Z`} fill={`url(#${u}f)`} />
         <path d={line} fill="none" stroke={`url(#${u}s)`} strokeWidth="5" strokeLinecap="round" />
         <g transform="translate(340 63) rotate(-58)">
-          <Rocket width={96} x={-96 * 0.29} y={-96 * 0.2} />
+          <Rocket width={96} x={-96 * 0.29} y={-96 * 0.2} flicker={false} />
         </g>
         <text x="236" y="120" fontSize="34" fontWeight="900" fill="#fff" fontFamily="Manrope, system-ui, sans-serif">
           12.48×
@@ -237,7 +256,7 @@ function HeroVault() {
   return (
     <div className="absolute inset-y-0 right-0 hidden w-[52%] items-center justify-center sm:flex">
       <div className="absolute h-[70%] w-[60%] rounded-full bg-gold/20 blur-3xl" />
-      <motion.div initial={{ rotate: -40, scale: 0.85, opacity: 0 }} animate={{ rotate: 0, scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 120, damping: 16 }}>
+      <motion.div initial={{ rotate: -40, scale: 0.85, opacity: 0 }} animate={{ rotate: 0, scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 120, damping: 16 }} style={{ willChange: 'transform' }}>
         <VaultDoor size={230} className="drop-shadow-[0_24px_40px_rgba(0,0,0,.6)]" />
       </motion.div>
     </div>
@@ -256,7 +275,7 @@ function HeroFan({ ids = ['blackjack', 'videopoker', 'slots', 'roulette', 'mines
             animate={{ opacity: 1, y: 0, rotate: (i - mid) * 7 }}
             transition={{ delay: 0.1 + i * 0.06, type: 'spring', stiffness: 200, damping: 20 }}
             className="absolute top-[18%] h-[72%] overflow-hidden rounded-xl shadow-[0_18px_40px_-12px_rgba(0,0,0,.7)] ring-1 ring-white/10"
-            style={{ left: `${10 + i * 15}%`, aspectRatio: '4 / 5', zIndex: i === 2 ? 5 : 5 - Math.abs(i - 2), transformOrigin: '50% 120%' }}
+            style={{ left: `${10 + i * 15}%`, aspectRatio: '4 / 5', zIndex: i === 2 ? 5 : 5 - Math.abs(i - 2), transformOrigin: '50% 120%', willChange: 'transform' }}
           >
             <GameCover id={id} />
           </motion.div>
@@ -295,22 +314,19 @@ function GameGrid() {
             <motion.button
               key={g.id}
               layout
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ delay: 0.03 * i, type: 'spring', stiffness: 260, damping: 24 }}
-              whileHover={{ y: -6 }}
-              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 24 }}
               onClick={() => navigate(`/game/${g.id}`)}
-              className="group text-left"
+              className="card-in group text-left"
+              style={{ animationDelay: `${0.03 * i}s` }}
             >
-              <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-panel2 shadow-[0_14px_30px_-16px_rgba(0,0,0,.9)] ring-1 ring-white/5 transition-shadow group-hover:shadow-[0_22px_40px_-16px_rgba(0,0,0,.9)]">
+              <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-panel2 shadow-[0_14px_30px_-16px_rgba(0,0,0,.9)] ring-1 ring-white/5 transition-transform duration-200 will-change-transform group-hover:-translate-y-1.5 group-active:translate-y-0 group-active:scale-[.98]">
                 <GameCover id={g.id} />
                 {g.tag && <Tag tag={g.tag} />}
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent p-3 pt-14">
                   <div className="text-[17px] font-black leading-tight tracking-tight text-white drop-shadow sm:text-[18px]">{g.name}</div>
                 </div>
-                <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 transition-opacity will-change-[opacity] group-hover:opacity-100">
                   <span className="rounded-full bg-white px-5 py-2.5 text-[14px] font-extrabold text-[#0b1520] shadow-lg">Play</span>
                 </div>
               </div>
@@ -325,7 +341,7 @@ function GameGrid() {
 function Tag({ tag }: { tag: 'new' | 'live' | 'hot' }) {
   if (tag === 'live')
     return (
-      <span className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-white backdrop-blur">
+      <span className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-white">
         <span className="relative flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-70" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-danger" />

@@ -1,7 +1,7 @@
 import { useUid } from './ids'
 
-/* A round bomb with a lit fuse. `lit` animates the spark. */
-export function Bomb({ size = 48, lit = true, className, x, y }: { size?: number; lit?: boolean; className?: string; x?: number; y?: number }) {
+/* A round bomb with a lit fuse. `lit` shows the spark, which flickers unless `flicker` is off (static art). */
+export function Bomb({ size = 48, lit = true, flicker = true, className, x, y }: { size?: number; lit?: boolean; flicker?: boolean; className?: string; x?: number; y?: number }) {
   const u = useUid()
   return (
     <svg x={x} y={y} width={size} height={size} viewBox="0 0 64 64" className={className} overflow="visible" aria-hidden>
@@ -27,7 +27,7 @@ export function Bomb({ size = 48, lit = true, className, x, y }: { size?: number
       {lit && (
         <g>
           <circle cx="54.5" cy="8" r="7" fill={`url(#${u}s)`} />
-          <path className="spark" d="M54.5 2.5l1.3 4.2 4.2 1.3-4.2 1.3-1.3 4.2-1.3-4.2-4.2-1.3 4.2-1.3Z" fill="#fff6c2" />
+          <path className={flicker ? 'spark' : undefined} d="M54.5 2.5l1.3 4.2 4.2 1.3-4.2 1.3-1.3 4.2-1.3-4.2-4.2-1.3 4.2-1.3Z" fill="#fff6c2" />
         </g>
       )}
     </svg>

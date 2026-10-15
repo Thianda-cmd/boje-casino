@@ -284,7 +284,7 @@ export default function Roulette() {
             </motion.button>
           </div>
           <motion.div
-            className="absolute inset-0 z-20 flex items-center justify-center bg-[#06100d]/70 backdrop-blur-[2px]"
+            className="absolute inset-0 z-20 flex items-center justify-center bg-[#06100d]/80"
             initial={false}
             animate={{ opacity: wheelUp ? 1 : 0 }}
             transition={{ duration: 0.25 }}

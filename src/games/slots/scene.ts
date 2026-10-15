@@ -5,7 +5,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { COLS, ROWS, type Grid, type Sym } from './rules'
 import { SYMBOL_COLOR, buildSymbol, createEnvironment, orbColor, symbolMaterials, warmUp } from './models'
-import { Bits, POINT_FRAG, Sparks, WHITE_HOT, easeInOut, glowTexture, ring, rnd, roundRect } from '../../lib/three/fx'
+import { AutoQuality, Bits, POINT_FRAG, Sparks, WHITE_HOT, easeInOut, glowTexture, ring, rnd, roundRect } from '../../lib/three/fx'
 
 /*
   The 3D stage: a 6 × 5 grid of symbols behind a gold frame, lit by a studio environment and bloom.
@@ -218,6 +218,9 @@ export class SlotScene {
   private w = 1
   private h = 1
   private dpr = 1
+  private baseDpr = 1
+  private readonly quality = new AutoQuality()
+  private drewLast = false
   private dist = 14
   private raf = 0
   private last = 0
@@ -240,7 +243,7 @@ export class SlotScene {
   constructor(private readonly host: HTMLElement) {
     const mobile = matchMedia('(pointer: coarse)').matches
     this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' })
-    this.dpr = Math.min(devicePixelRatio || 1, mobile ? 1.5 : 1.75)
+    this.dpr = this.baseDpr = Math.min(devicePixelRatio || 1, mobile ? 1.5 : 1.75)
     this.renderer.setPixelRatio(this.dpr)
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.05
@@ -509,6 +512,7 @@ export class SlotScene {
     if (w < 2 || h < 2) return
     this.w = w
     this.h = h
+    this.renderer.setPixelRatio(this.dpr)
     this.renderer.setSize(w, h, false)
     this.composer.setPixelRatio(this.dpr)
     this.composer.setSize(w, h)
@@ -847,13 +851,22 @@ export class SlotScene {
     this.acc += Math.min(0.05, Math.max(0, (now - this.last) / 1000))
     this.last = now
     // when nothing is happening, 30 frames a second is plenty for the idle sway
-    if (!this.busy() && this.acc < 1 / 31) return
+    if (!this.busy() && this.acc < 1 / 31) {
+      this.drewLast = false
+      return
+    }
     const real = Math.min(0.05, this.acc)
     this.acc = 0
     const dt = real * this.speed
     this.time += dt
     this.clock += real
     this.update(dt, real)
+    // slow device: draw fewer pixels rather than drop frames
+    if (this.quality.frame(now, this.drewLast) && this.w > 1) {
+      this.dpr = this.baseDpr * this.quality.q
+      this.resize(this.w, this.h)
+    }
+    this.drewLast = true
     this.composer.render()
   }
 

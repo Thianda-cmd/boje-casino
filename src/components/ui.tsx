@@ -279,7 +279,7 @@ export function WinPopup({ mult, amount }: { mult: number; amount: number }) {
       exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
       transition={{ type: 'spring', stiffness: 340, damping: 22 }}
     >
-      <div className="min-w-[180px] rounded-2xl border-[3px] border-accent bg-panel/95 px-8 py-5 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,.75),0_0_48px_-10px_rgba(34,211,111,.55)] backdrop-blur">
+      <div className="min-w-[180px] rounded-2xl border-[3px] border-accent bg-panel px-8 py-5 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,.75),0_0_48px_-10px_rgba(34,211,111,.55)]">
         <div className="tnum text-[34px] font-black leading-none tracking-tight text-accent">{fmtMult(mult)}</div>
         <div className="mx-auto my-3 h-[3px] w-10 rounded-full bg-raised" />
         <div className="tnum flex items-center justify-center gap-1.5 text-[16px] font-extrabold">

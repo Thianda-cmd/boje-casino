@@ -111,12 +111,43 @@ export default function Plinko() {
     let raf = 0
     let last = performance.now()
     let lastPegSound = 0
+    let drawnKey = ''
+    let lastEvent = 0
+    const sprites = new Map<string, HTMLCanvasElement>()
+    // a peg with its soft glow, drawn once per size and reused (a canvas shadow blur on every peg every frame is slow)
+    const pegSprite = (r: number, hot: boolean) => {
+      const key = `${r.toFixed(2)}${hot ? 'h' : ''}`
+      let c = sprites.get(key)
+      if (!c) {
+        const pad = Math.ceil(r + (hot ? 12 : 4) * 1.5)
+        c = document.createElement('canvas')
+        c.width = c.height = Math.ceil(pad * 2 * dpr)
+        const g = c.getContext('2d')!
+        g.scale(dpr, dpr)
+        g.shadowColor = hot ? 'rgba(255,95,162,.9)' : 'rgba(255,255,255,.35)'
+        g.shadowBlur = hot ? 12 : 4 // device pixels, like the original per-peg blur
+        g.fillStyle = hot ? '#ffd0e6' : '#ffffff'
+        g.beginPath()
+        g.arc(pad, pad, r, 0, Math.PI * 2)
+        g.fill()
+        sprites.set(key, c)
+      }
+      return c
+    }
 
     const frame = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
       const { rows: R, risk: K } = cfg.current
       const table = TABLES[R][K]
+      // nothing moving and nothing changed since the last frame we drew: leave the canvas as it is
+      const key = `${R}${K}${size.w}x${size.h}`
+      if (balls.current.length > 0) lastEvent = now
+      if (key === drawnKey && now - lastEvent > 700) {
+        raf = requestAnimationFrame(frame)
+        return
+      }
+      drawnKey = key
       const W = size.w
       const Hh = size.h
       const small = Hh < 500
@@ -146,13 +177,9 @@ export default function Plinko() {
             ctx.fillStyle = `rgba(255,95,162,${0.28 * a})`
             ctx.fill()
           }
-          ctx.beginPath()
-          ctx.arc(x, y, pegR, 0, Math.PI * 2)
-          ctx.fillStyle = age < 0.18 ? '#ffd0e6' : '#ffffff'
-          ctx.shadowColor = age < 0.18 ? 'rgba(255,95,162,.9)' : 'rgba(255,255,255,.35)'
-          ctx.shadowBlur = age < 0.18 ? 12 : 4
-          ctx.fill()
-          ctx.shadowBlur = 0
+          const sp = pegSprite(pegR, age < 0.18)
+          const half = sp.width / dpr / 2
+          ctx.drawImage(sp, x - half, y - half, half * 2, half * 2)
         }
       }
 
@@ -245,13 +272,18 @@ export default function Plinko() {
         g.addColorStop(0, '#ffe1ef')
         g.addColorStop(0.35, '#ff6fae')
         g.addColorStop(1, '#c4185c')
+        // soft pink halo, then the ball
+        const halo = ctx.createRadialGradient(x, y, ballR * 0.6, x, y, ballR * 2.3)
+        halo.addColorStop(0, 'rgba(255,95,162,.45)')
+        halo.addColorStop(1, 'rgba(255,95,162,0)')
+        ctx.fillStyle = halo
+        ctx.beginPath()
+        ctx.arc(x, y, ballR * 2.3, 0, Math.PI * 2)
+        ctx.fill()
         ctx.beginPath()
         ctx.arc(x, y, ballR, 0, Math.PI * 2)
         ctx.fillStyle = g
-        ctx.shadowColor = 'rgba(255,95,162,.7)'
-        ctx.shadowBlur = 14
         ctx.fill()
-        ctx.shadowBlur = 0
       }
       if (landed || balls.current.some((b) => b.done)) {
         const before = balls.current.length
