@@ -1114,4 +1114,247 @@ export const sfx = {
       tone(349, 0.5, 'triangle', 0.035, 0.3, 311, [5, 9])
     },
   },
+  /* double: colours are 0 red, 1 green, 2 black */
+  double: {
+    // a chip lands on a colour: a clack on the felt with a little note in the colour's key (green sparkles)
+    chip: (c = 0) => {
+      const f = [587, 784, 494][c] ?? 587
+      noise(0.025, 0.09, 3200, 'bandpass')
+      tone(f, 0.07, 'triangle', 0.05, 0, f * 1.25)
+      tone(f * 2, 0.05, 'sine', 0.014, 0.012)
+      if (c === 1) tone(1568, 0.2, 'sine', 0.014, 0.03, undefined, [7, 10])
+    },
+    // the last seconds of betting (3, 2, 1): a soft woodblock, brighter on the last one
+    count: (n = 3) => {
+      tone(n > 1 ? 880 : 1175, 0.07, 'triangle', 0.034)
+      noise(0.014, 0.028, 4200, 'highpass')
+    },
+    // no more bets: two notes stepping down
+    close: () => {
+      tone(784, 0.1, 'triangle', 0.038)
+      tone(587, 0.18, 'triangle', 0.038, 0.09)
+    },
+    // the strip pushes off: a low thump under a rush of air
+    spin: () => {
+      sweep(0.6, 0.05, 260, 2600, 'bandpass', 0.9)
+      tone(98, 0.26, 'sine', 0.07, 0, 147)
+    },
+    // a tile passes the marker (speed 0-1): a soft tick, light while the strip races and rounder as it slows; gated so
+    // a fast strip never stacks ticks
+    tick: (() => {
+      const pass = gate(24)
+      return (speed = 0) => {
+        if (!pass()) return
+        const s = Math.max(0, Math.min(1, speed))
+        const f = 700 + 900 * s ** 0.7
+        tone(f, 0.03, 'triangle', 0.032 - s * 0.016)
+        noise(0.01, 0.026 - s * 0.012, f * 2.3, 'bandpass')
+      }
+    })(),
+    // the strip comes to rest: a soft thunk, then a chime in the winning colour; green gets a run of bells
+    land: (c = 0) => {
+      noise(0.05, 0.08, 700, 'lowpass')
+      tone(150, 0.14, 'sine', 0.08, 0, 90)
+      if (c === 1) {
+        sweep(0.5, 0.04, 900, 5200, 'bandpass', 2, 0.05)
+        ;[784, 988, 1175, 1568, 1976].forEach((f, i) => tone(f, 0.26, 'triangle', 0.045, 0.06 + i * 0.06))
+        ;[1568, 2093, 2637].forEach((f, i) => tone(f, 0.7, 'sine', 0.018, 0.4 + i * 0.07, undefined, [6, 9]))
+      } else {
+        const f = c === 0 ? 659 : 523
+        tone(f, 0.2, 'triangle', 0.05, 0.05)
+        tone(f * 1.5, 0.32, 'sine', 0.024, 0.12)
+      }
+    },
+    // your bets paid: coins, with a fanfare when it is big (a green win)
+    win: (big = false) => {
+      ;[1047, 1319, 1568].forEach((f, i) => tone(f, 0.14, 'triangle', 0.045, i * 0.07))
+      noise(0.06, 0.04, 6000, 'highpass', 0.05)
+      if (big) {
+        ;[523, 659, 784, 1047].forEach((f, i) => hold(f, 0.16, 'sawtooth', 0.012, 0.22 + i * 0.09))
+        ;[1568, 2093, 2637, 3136].forEach((f, i) => tone(f, 0.6, 'sine', 0.018, 0.6 + i * 0.08, undefined, [6, 9]))
+      }
+    },
+    // nothing came in
+    lose: () => {
+      tone(330, 0.16, 'triangle', 0.03)
+      tone(262, 0.3, 'sine', 0.03, 0.12, 220)
+    },
+    // the table refused a chip (it comes straight back)
+    refused: () => {
+      tone(220, 0.12, 'square', 0.018)
+      tone(185, 0.18, 'square', 0.016, 0.1)
+    },
+  },
+  /* lucky claw: the cabinet's motors and clunks, plush squeaks and the prize fanfares */
+  claw: (() => {
+    const g = { squeak: gate(70), thud: gate(60), slip: gate(80), hop: gate(90) }
+    /** a held machine noise from now until the returned function is called: a tone through a lowpass with a wobble */
+    const drone = (f: number, type: OscillatorType, cut: number, gain: number, wobble: [number, number], noiseGain = 0) => {
+      const a = ac()
+      if (!a) return () => {}
+      const t = a.currentTime
+      const o = a.createOscillator()
+      o.type = type
+      o.frequency.setValueAtTime(f * 0.8, t)
+      o.frequency.exponentialRampToValueAtTime(f, t + 0.12)
+      const lfo = a.createOscillator()
+      const depth = a.createGain()
+      lfo.frequency.value = wobble[0]
+      depth.gain.value = wobble[1]
+      lfo.connect(depth).connect(o.frequency)
+      const lp = a.createBiquadFilter()
+      lp.type = 'lowpass'
+      lp.frequency.value = cut
+      const v = a.createGain()
+      v.gain.setValueAtTime(0, t)
+      v.gain.linearRampToValueAtTime(gain, t + 0.06)
+      o.connect(lp).connect(v).connect(out(a))
+      let hiss: AudioBufferSourceNode | null = null
+      if (noiseGain > 0) {
+        const len = Math.floor(a.sampleRate * 1)
+        const buf = a.createBuffer(1, len, a.sampleRate)
+        const d = buf.getChannelData(0)
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1
+        hiss = a.createBufferSource()
+        hiss.buffer = buf
+        hiss.loop = true
+        const bp = a.createBiquadFilter()
+        bp.type = 'bandpass'
+        bp.frequency.value = cut * 2.4
+        bp.Q.value = 1.2
+        const ng = a.createGain()
+        ng.gain.value = noiseGain
+        hiss.connect(bp).connect(ng).connect(v)
+        hiss.start(t)
+      }
+      o.start(t)
+      lfo.start(t)
+      let stopped = false
+      return () => {
+        if (stopped) return
+        stopped = true
+        const n = a.currentTime
+        v.gain.cancelScheduledValues(n)
+        v.gain.setValueAtTime(v.gain.value, n)
+        v.gain.linearRampToValueAtTime(0, n + 0.09)
+        o.frequency.cancelScheduledValues(n)
+        o.frequency.setValueAtTime(o.frequency.value, n)
+        o.frequency.exponentialRampToValueAtTime(f * 0.7, n + 0.09)
+        o.stop(n + 0.1)
+        lfo.stop(n + 0.1)
+        hiss?.stop(n + 0.1)
+      }
+    }
+    return {
+      // the coin drops in: a bright clink, a little roll and a thunk in the box
+      coin: () => {
+        tone(2093, 0.07, 'square', 0.022)
+        tone(2637, 0.12, 'square', 0.02, 0.05)
+        for (let i = 0; i < 4; i++) noise(0.02, 0.04 - i * 0.007, 3200, 'bandpass', 0.12 + i * 0.045)
+        tone(150, 0.12, 'sine', 0.06, 0.33, 90)
+        noise(0.05, 0.05, 700, 'lowpass', 0.33)
+      },
+      // the big plastic button: a hollow tock
+      button: () => {
+        tone(760, 0.05, 'triangle', 0.05, 0, 380)
+        noise(0.03, 0.05, 1800, 'bandpass')
+      },
+      // the gantry motor while the carriage moves; returns its off switch
+      motor: (rate = 1) => drone(96 * rate, 'sawtooth', 520 * rate, 0.035, [13, 3], 0.012),
+      // the carriage stops: a small mechanical knock
+      stop: () => {
+        tone(150, 0.08, 'sine', 0.05, 0, 90)
+        noise(0.04, 0.05, 500, 'lowpass')
+      },
+      // the winch paying out (down) or winding in; returns its off switch
+      winch: (down = true) => drone(down ? 210 : 250, 'triangle', down ? 900 : 1100, 0.022, [22, down ? 6 : 9], 0.006),
+      // the prongs snap shut: a metal clunk with a ring
+      clunk: () => {
+        tone(190, 0.1, 'square', 0.03, 0, 95)
+        noise(0.05, 0.08, 2600, 'bandpass')
+        tone(1250, 0.18, 'triangle', 0.022, 0.01, 1180)
+        tone(1870, 0.12, 'sine', 0.012, 0.01)
+      },
+      // a plush squeaker, k times the usual pitch
+      squeak: (k = 1) => {
+        if (!g.squeak()) return
+        tone(1100 * k, 0.14, 'triangle', 0.028, 0, 1500 * k, [20, 40 * k])
+        tone(1150 * k, 0.14, 'sine', 0.022, 0, 1560 * k, [20, 40 * k])
+        noise(0.04, 0.02, 3500, 'bandpass', 0.02)
+      },
+      // felt sliding against metal
+      slip: () => {
+        if (!g.slip()) return
+        sweep(0.22, 0.06, 3400, 900, 'bandpass', 1.6)
+        tone(520, 0.2, 'triangle', 0.012, 0.02, 300)
+      },
+      // a plushie lands (size 0-1): a soft felt thump
+      thud: (size = 1) => {
+        if (!g.thud()) return
+        noise(0.12 + size * 0.08, 0.1 + size * 0.1, 320, 'lowpass')
+        tone(120, 0.14, 'sine', 0.05 + size * 0.05, 0, 62)
+      },
+      // a plushie hops: a cartoon boing
+      hop: () => {
+        if (!g.hop()) return
+        tone(300, 0.2, 'sine', 0.05, 0, 760, [14, 30])
+        tone(600, 0.12, 'triangle', 0.015, 0.02, 1100)
+      },
+      // it lands on the chute's rim: a hollow plastic bonk
+      rim: () => {
+        tone(540, 0.12, 'triangle', 0.06, 0, 380)
+        noise(0.05, 0.08, 1800, 'bandpass')
+        tone(260, 0.2, 'sine', 0.04, 0.02, 200)
+      },
+      // something falls through the air
+      whoosh: () => {
+        sweep(0.35, 0.05, 600, 2600, 'bandpass', 0.9)
+        tone(800, 0.3, 'sine', 0.014, 0, 260)
+      },
+      // the prize door swings up: a clack and a springy wobble
+      flap: () => {
+        noise(0.05, 0.12, 1500, 'bandpass')
+        tone(260, 0.1, 'square', 0.025, 0, 170)
+        tone(330, 0.35, 'sine', 0.035, 0.05, 300, [16, 30])
+      },
+      // the win, scaled by the prize: a ding for the small ones up to a full fanfare with sparkles for the top ones
+      fanfare: (mult = 2) => {
+        const tier = mult >= 50 ? 3 : mult >= 10 ? 2 : mult >= 3 ? 1 : 0
+        if (tier === 0) {
+          ;[784, 988, 1175].forEach((f, i) => tone(f, 0.18, 'triangle', 0.05, i * 0.07))
+          tone(1568, 0.4, 'sine', 0.025, 0.22, undefined, [6, 8])
+          return
+        }
+        ;[523, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, 'triangle', 0.05, i * 0.08))
+        ;[1047, 1319, 1568].forEach((f) => tone(f, 0.55, 'triangle', 0.028, 0.32))
+        if (tier >= 2) {
+          ;[392, 523, 659].forEach((f, i) => hold(f, 0.12, 'sawtooth', 0.016, i * 0.1))
+          hold(784, 0.6, 'sawtooth', 0.018, 0.3, 784, [5, 5])
+          ;[2093, 2637, 3136, 2637, 3136, 4186].forEach((f, i) => tone(f, 0.12, 'sine', 0.016, 0.55 + i * 0.06))
+        }
+        if (tier >= 3) {
+          reverseCymbal(0.5, 0.05)
+          ;[523, 659, 784, 1047, 1319].forEach((f, i) => hold(f, i === 4 ? 1.1 : 0.14, 'sawtooth', 0.014, 0.6 + i * 0.1, f, [5, 4]))
+          ;[1568, 2093, 2637, 3136].forEach((f, i) => tone(f, 1.2, 'sine', 0.014, 1.0 + i * 0.05, undefined, [6, 9]))
+          noise(0.9, 0.05, 6000, 'highpass', 1.0)
+        }
+      },
+      // the shown-off plushie bows out: a sparkly pop
+      poof: () => {
+        noise(0.08, 0.1, 3000, 'highpass')
+        tone(880, 0.16, 'sine', 0.04, 0, 1760)
+        ;[1568, 2093, 2637].forEach((f, i) => tone(f, 0.1, 'sine', 0.014, 0.05 + i * 0.04))
+      },
+      // a new plushie falls in to fill the spot
+      restock: () => {
+        tone(1400, 0.45, 'sine', 0.02, 0, 500)
+        sweep(0.4, 0.03, 2400, 700, 'bandpass', 1.4)
+      },
+      // the claw came up empty: a soft "aww"
+      aww: () => {
+        tone(440, 0.26, 'triangle', 0.03, 0, 415, [5, 6])
+        tone(392, 0.5, 'triangle', 0.03, 0.24, 330, [5, 9])
+      },
+    }
+  })(),
 }

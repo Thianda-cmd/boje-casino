@@ -1,4 +1,4 @@
-export type GameId = 'chicken' | 'crash' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
+export type GameId = 'chicken' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
 
 export type Category = 'originals' | 'table'
 
@@ -15,6 +15,7 @@ export interface GameInfo {
 export const GAMES: GameInfo[] = [
   { id: 'chicken', name: 'Chicken Road', category: 'originals', tagline: 'Cross lane by lane, cash out before the traffic gets you.', accent: '#f7a440', tag: 'hot' },
   { id: 'crash', name: 'Crash', category: 'originals', tagline: 'Everyone rides the same rocket. Cash out before it blows.', accent: '#9b7bff', tag: 'live' },
+  { id: 'double', name: 'Double', category: 'originals', tagline: 'Red, black or green. One strip, and everyone bets the same spin.', accent: '#ef3e5c', tag: 'live' },
   { id: 'mines', name: 'Mines', category: 'originals', tagline: 'Find gems, dodge mines, push your luck tile by tile.', accent: '#22d36f' },
   { id: 'plinko', name: 'Plinko', category: 'originals', tagline: 'Drop the ball through the pegs. Edges pay up to 1,000×.', accent: '#ff5fa2' },
   { id: 'dice', name: 'Dice', category: 'originals', tagline: 'Pick your odds, roll over or under.', accent: '#4cb4ff' },
@@ -25,6 +26,7 @@ export const GAMES: GameInfo[] = [
   { id: 'cases', name: 'Cases', category: 'originals', tagline: 'Pick a crate and watch the loot reel glide to your prize.', accent: '#ffb547', tag: 'new' },
   { id: 'battles', name: 'Case Battles', category: 'originals', tagline: 'Open crates head to head. The biggest haul takes the whole pot.', accent: '#ff7a3d', tag: 'live' },
   { id: 'derby', name: 'Duck Derby', category: 'originals', tagline: 'Six rubber ducks, one wild river. Back a duck and cheer it home.', accent: '#ffd23f', tag: 'new' },
+  { id: 'claw', name: 'Lucky Claw', category: 'originals', tagline: 'Pick a plushie, drop the claw, and hope it holds on.', accent: '#ff6f91', tag: 'new' },
   { id: 'chompers', name: 'Chompers', category: 'originals', tagline: 'Cartoon monsters chomp every donut on the reels.', accent: '#2ee87f', tag: 'new' },
   { id: 'popparty', name: 'Pop Party', category: 'originals', tagline: 'Balloon animals pop on a light-up floor; every pop lights a multiplier.', accent: '#ff4fb8', tag: 'new' },
   { id: 'roboriot', name: 'Robo Riot', category: 'originals', tagline: 'Toy robots charge the Power Grid: magnets, zappers and boosters stack the cells.', accent: '#5cf2ff', tag: 'new' },

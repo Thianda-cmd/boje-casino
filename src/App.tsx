@@ -39,6 +39,8 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   roulette: lazy(() => import('./games/roulette/Roulette')),
   chompers: lazy(() => import('./games/chompers/Chompers')),
   cases: lazy(() => import('./games/cases/Cases')),
+  double: lazy(() => import('./games/double/Double')),
+  claw: lazy(() => import('./games/claw/LuckyClaw')),
   battles: lazy(() => import('./games/battles/CaseBattles')),
   derby: lazy(() => import('./games/derby/DuckDerby')),
   baccarat: lazy(() => import('./games/baccarat/Baccarat')),

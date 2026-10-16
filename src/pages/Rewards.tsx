@@ -10,6 +10,7 @@ import {
   FAUCET_THRESHOLD,
   HEIST_LOOT,
   HEIST_MAX_PICKS,
+  HEIST_REGEN,
   TIERS,
   heistPicks,
   dailyReward,
@@ -189,20 +190,28 @@ function dailyState(dailyLast: number, dailyStreak: number, now: number) {
 /*  Header with everything that's ready, and Claim all                 */
 /* ------------------------------------------------------------------ */
 
+/** "a", "a and b", "a, b and c" */
+function joinAnd(parts: string[]) {
+  return parts.length < 2 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+}
+
 function Header() {
   const now = useNow(1000)
   const s = useWallet()
   const daily = dailyState(s.dailyLast, s.dailyStreak, now)
-  const ready: number[] = []
-  if (s.balance < FAUCET_THRESHOLD && now - s.faucetLast >= FAUCET_COOLDOWN) ready.push(FAUCET_AMOUNT)
-  if (daily.ready) ready.push(dailyReward(daily.day))
+  // what Claim all would collect right now, named so the summary can say it
+  const ready: { label: string; amount: number }[] = []
+  if (daily.ready) ready.push({ label: 'daily bonus', amount: dailyReward(daily.day) })
   const lvl = pendingLevelCoins(s.xp, s.levelClaimed)
-  if (lvl > 0) ready.push(lvl)
-  for (const c of CHALLENGES) {
+  const lvls = levelFromXp(s.xp).level - s.levelClaimed
+  if (lvl > 0) ready.push({ label: lvls === 1 ? 'level reward' : 'level rewards', amount: lvl })
+  if (s.balance < FAUCET_THRESHOLD && now - s.faucetLast >= FAUCET_COOLDOWN) ready.push({ label: 'refill', amount: FAUCET_AMOUNT })
+  const done = CHALLENGES.filter((c) => {
     const st = s.challenges[c.id]
-    if (st && !st.claimed && st.progress >= c.goal) ready.push(c.reward)
-  }
-  const total = ready.reduce((a, b) => a + b, 0)
+    return st && !st.claimed && st.progress >= c.goal
+  })
+  if (done.length) ready.push({ label: done.length === 1 ? '1 challenge' : `${done.length} challenges`, amount: done.reduce((a, c) => a + c.reward, 0) })
+  const total = ready.reduce((a, r) => a + r.amount, 0)
 
   const claimAll = () => {
     const w = useWallet.getState()
@@ -227,15 +236,16 @@ function Header() {
 
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-      <div>
+      {/* the text takes what the Claim all box leaves (wrapping inside), so the box stays beside it on a wide screen */}
+      <div className="min-w-[280px] flex-1 max-sm:min-w-0">
         <h1 className="text-[24px] font-black tracking-tight">Rewards</h1>
-        <p className="text-[13px] text-muted">Free coins for playing, leveling up and coming back. Coins have no cash value.</p>
+        <p className="text-pretty text-[13px] text-muted">Collect free play-money coins here: a daily bonus, level-up rewards, an emergency refill, Vault Heist and challenges.</p>
       </div>
       <div className="flex w-full items-center gap-3 rounded-2xl bg-panel p-2 pl-4 ring-1 ring-white/[.03] sm:w-auto">
-        <div className="min-w-0 flex-1 leading-tight sm:min-w-[150px]">
+        <div className="min-w-0 flex-1 leading-tight sm:min-w-[150px] sm:max-w-[320px]">
           {ready.length ? (
             <>
-              <div className="text-[12px] font-bold text-muted">{ready.length === 1 ? '1 reward ready' : `${ready.length} rewards ready`}</div>
+              <div className="text-[12px] font-bold text-muted">Ready: {joinAnd(ready.map((r) => r.label))}</div>
               <div className="tnum mt-0.5 flex items-center gap-1.5 text-[19px] font-black text-gold">
                 {fmt(total, 0)} <Coin size={16} />
               </div>
@@ -243,11 +253,13 @@ function Header() {
           ) : (
             <>
               <div className="text-[12px] font-bold text-muted">All caught up</div>
-              <div className="tnum mt-0.5 text-[14px] font-extrabold">Next daily in {fmtDuration(daily.left)}</div>
+              <div className="tnum mt-0.5 text-[14px] font-extrabold">
+                Next <span className="max-sm:hidden">daily </span>bonus in {fmtDuration(daily.left)}
+              </div>
             </>
           )}
         </div>
-        <ClaimButton ready={ready.length > 0} onClick={claimAll} className="h-11 w-[132px]">
+        <ClaimButton ready={ready.length > 0} onClick={claimAll} className="h-11 w-[112px] sm:w-[132px]">
           {ready.length ? 'Claim all' : <IconCheck size={18} />}
         </ClaimButton>
       </div>
@@ -305,6 +317,9 @@ function VipCard() {
   const rank = TIERS.findIndex((t) => t.name === tier.name)
   const pending = pendingLevelCoins(xp, levelClaimed)
   const pct = Math.min(100, (lv.into / lv.need) * 100)
+  // levels reached but not yet paid: levelClaimed + 1 … lv.level
+  const from = levelClaimed + 1
+  const reached = from === lv.level ? `Level ${lv.level} reached` : `Levels ${from}–${lv.level} reached`
 
   return (
     <Panel flush>
@@ -331,16 +346,21 @@ function VipCard() {
         <div className="grid grid-cols-3 gap-2">
           <Stat label="Wagered" value={fmt(totalWagered, 0)} />
           <Stat label="Rounds" value={fmt(rounds, 0)} />
-          <Stat label="Best win" value={fmt(biggestWin, 0)} />
+          <Stat label="Biggest win" value={fmt(biggestWin, 0)} />
         </div>
 
         <div className="rounded-xl bg-stage/80 p-3.5 ring-1 ring-white/[.05]">
           <div className="flex items-center justify-between gap-2 text-[12px] font-bold">
-            <span className="text-muted">Level rewards</span>
-            <span className="tnum flex items-center gap-1 text-dim">
-              Level {lv.level + 1} pays <span className="text-gold">{fmt(levelReward(lv.level + 1), 0)}</span> <Coin size={12} />
-            </span>
+            <span className="text-muted">Level-up rewards</span>
+            {pending > 0 ? (
+              <span className="tnum text-violet">{reached}</span>
+            ) : (
+              <span className="tnum flex items-center gap-1 text-dim">
+                Level {lv.level + 1} pays <span className="text-gold">{fmt(levelReward(lv.level + 1), 0)}</span> <Coin size={12} />
+              </span>
+            )}
           </div>
+          <p className="mt-1 text-pretty text-[12px] leading-snug text-dim">Each level you reach pays {levelReward(1)} coins times the level number.</p>
           <ClaimButton className="mt-2.5 h-12 w-full" ready={pending > 0} tone="violet" onClick={() => claim(claimLevels(), 'Level reward claimed')}>
             {pending > 0 ? (
               <>
@@ -348,7 +368,7 @@ function VipCard() {
               </>
             ) : (
               <>
-                <IconLock size={15} /> Level up to unlock
+                <IconLock size={15} /> Unlocks at level {lv.level + 1}
               </>
             )}
           </ClaimButton>
@@ -368,6 +388,9 @@ function TierTrack({ level, rank }: { level: number; rank: number }) {
   const gradient = `linear-gradient(90deg, ${TIERS.map((t) => t.color).join(', ')})`
   return (
     <div className="relative border-t border-white/[.05] bg-black/15 px-2 py-4 sm:px-6">
+      <p className="mb-3.5 text-balance px-2 text-center text-[12px] leading-snug text-dim">
+        <span className="font-bold text-muted">VIP tiers</span> are badges that show your level and pay nothing extra. The coins come from leveling up.
+      </p>
       <div className="relative">
         {/* nodes sit at the centre of five equal columns: 10%, 30%, ... 90% */}
         <div className="absolute left-[10%] right-[10%] top-[16px] h-[3px] -translate-y-1/2 overflow-hidden rounded-full bg-white/[.07]">
@@ -410,7 +433,20 @@ function Daily() {
   const { dailyLast, dailyStreak, claimDaily } = useWallet()
   const claim = useClaim()
   const d = dailyState(dailyLast, dailyStreak, now)
-  const broke = d.ready && !d.alive && dailyStreak > 1
+  const todayCoins = dailyReward(d.day)
+  // what the claim after this one pays, if the streak holds (claimed: the next one; ready: the one after today's)
+  const next = dailyReward(Math.min(d.day + 1, 7))
+  const hours = (ms: number) => ms / 3600_000
+  // "16h 59m" never breaks across lines
+  const dur = (ms: number) => fmtDuration(ms).replace(/ /g, ' ')
+  const grace = hours(DAILY_STREAK_RESET - DAILY_COOLDOWN)
+  const sub = !d.ready
+    ? `Next bonus: ${next} coins in ${dur(d.left)}. Then you have ${grace} hours to claim it before your streak resets.`
+    : !dailyLast
+      ? `Claim ${todayCoins} coins now. Every day in a row pays more, up to ${dailyReward(7)} on day\u00a07.`
+      : !d.alive
+        ? `Over ${hours(DAILY_STREAK_RESET)} hours have passed since your last claim, so your streak restarts at day\u00a01.`
+        : `Claim ${todayCoins} coins now; the next one pays ${next}. Claim within ${dur(dailyLast + DAILY_STREAK_RESET - now)} to keep your streak.`
 
   return (
     <Panel>
@@ -421,11 +457,19 @@ function Daily() {
             <IconGift size={18} /> Daily bonus
           </Eyebrow>
           <div className="mt-1 text-[22px] font-black tracking-tight">{d.ready ? `Day ${d.day} is ready` : `Day ${d.day} claimed`}</div>
-          <p className="mt-0.5 text-[13px] text-muted">{broke ? 'Your streak reset after 48 hours away.' : 'Claim once a day. Miss 48 hours and the streak starts over.'}</p>
+          <p className="tnum mt-0.5 text-pretty text-[13px] text-muted">{sub}</p>
         </div>
-        <span className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-extrabold ${d.streak ? 'bg-[#ff8a3d]/12 text-[#ff9a52]' : 'bg-stage text-dim'}`}>
-          <IconFire size={15} /> <span className="tnum">{d.streak}</span>
-          <span className="max-sm:hidden">day streak</span>
+        {/* the streak: "3 days in a row" ("3 in a row" on a phone); with no streak the phone leaves it to the text */}
+        <span className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-extrabold ${d.streak ? 'bg-[#ff8a3d]/12 text-[#ff9a52]' : 'bg-stage text-dim max-sm:hidden'}`}>
+          <IconFire size={15} />
+          {d.streak ? (
+            <span className="tnum">
+              {d.streak}
+              <span className="max-sm:hidden"> {d.streak === 1 ? 'day' : 'days'}</span> in a row
+            </span>
+          ) : (
+            <span>{dailyLast ? 'Streak reset' : 'No streak yet'}</span>
+          )}
         </span>
       </div>
 
@@ -451,7 +495,10 @@ function Daily() {
                       : 'bg-stage ring-1 ring-white/[.04]'
               }`}
             >
-              <span className={`text-[10px] font-bold sm:text-[11px] ${today ? 'text-gold' : done ? 'text-accent' : big ? 'text-violet' : 'text-dim'}`}>Day {day}</span>
+              <span className={`text-[10px] font-bold sm:text-[11px] ${today ? 'text-gold' : done ? 'text-accent' : big ? 'text-violet' : 'text-dim'}`}>
+                Day {day}
+                {big ? '+' : ''}
+              </span>
               {done ? (
                 <span className="flex h-8 items-center justify-center">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-[#032412] shadow-[0_4px_12px_-4px_rgba(34,211,111,.8)]">
@@ -478,6 +525,9 @@ function Daily() {
             <span className="tnum">Next bonus in {fmtDuration(d.left)}</span>
           )}
         </ClaimButton>
+        <p className="mt-2.5 text-balance text-center text-[12px] leading-snug text-dim">
+          A new bonus opens {hours(DAILY_COOLDOWN)} hours after each claim. Go {hours(DAILY_STREAK_RESET)} hours without claiming and you're back to day&nbsp;1.
+        </p>
       </div>
     </Panel>
   )
@@ -515,6 +565,7 @@ function Refill() {
   const cooling = left > 0
   const eligible = balance < FAUCET_THRESHOLD
   const ready = eligible && !cooling
+  const minutes = FAUCET_COOLDOWN / 60_000
   return (
     <Panel className="flex flex-col">
       <Glow color="#4cb4ff" opacity={0.13} className="-right-24 -top-28 h-80 w-80" />
@@ -524,20 +575,22 @@ function Refill() {
       <div className="relative mt-1 flex items-center gap-1.5 text-[22px] font-black tracking-tight">
         <span className="tnum">+{FAUCET_AMOUNT}</span> <Coin size={20} />
       </div>
-      <p className="relative mt-0.5 text-[13px] text-muted">A top-up to get you back in the game when you're nearly out.</p>
+      <p className="relative mt-0.5 text-pretty text-[13px] text-muted">
+        {FAUCET_AMOUNT} free coins when your balance drops below {FAUCET_THRESHOLD}, once every {minutes} minutes.
+      </p>
       <div className="relative mt-4 flex flex-col gap-2">
-        <Condition ok={eligible} label={`Balance under ${FAUCET_THRESHOLD}`} value={fmt(balance)} />
-        <Condition ok={!cooling} label={`Once every ${FAUCET_COOLDOWN / 60000} min`} value={cooling ? fmtDuration(left) : 'Ready'} />
+        <Condition ok={eligible} label={`Balance below ${FAUCET_THRESHOLD}`} value={eligible ? fmt(balance) : `You have ${fmt(balance)}`} />
+        <Condition ok={!cooling} label={`Once every ${minutes} min`} value={cooling ? `Next in ${fmtDuration(left)}` : 'Ready'} />
       </div>
       <div className="relative mt-auto pt-5">
         <ClaimButton ready={ready} tone="sky" progress={cooling ? 1 - left / FAUCET_COOLDOWN : undefined} onClick={() => claim(claimFaucet(), 'Refill claimed')}>
           {ready ? (
-            <>
-              Claim {FAUCET_AMOUNT} coins
-            </>
+            <>Claim {FAUCET_AMOUNT} coins</>
+          ) : eligible ? (
+            <span className="tnum">Next refill in {fmtDuration(left)}</span>
           ) : (
             <>
-              <IconLock size={16} /> {eligible ? 'Cooling down' : 'Only when nearly out'}
+              <IconLock size={16} /> Your balance is too high
             </>
           )}
         </ClaimButton>
@@ -579,9 +632,15 @@ function HeistCard() {
             </Eyebrow>
             <span className="rounded-full bg-accent/12 px-2 py-0.5 text-[11px] font-extrabold text-accent">Free to play</span>
           </div>
-          <div className="mt-1 text-[22px] font-black tracking-tight">Earn up to {fmt(HEIST_LOOT[HEIST_LOOT.length - 1], 0)} coins a run</div>
-          <p className="mt-1 max-w-[560px] text-[13px] text-muted">Time your picks to crack eight vaults, each faster than the last. Bank whenever you like, but one slip sets off the alarm and the bag is gone.</p>
-          <div className="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-8">
+          <div className="mt-1 text-[22px] font-black tracking-tight">
+            Crack all {HEIST_LOOT.length} vaults for {fmt(HEIST_LOOT[HEIST_LOOT.length - 1], 0)} coins
+          </div>
+          <p className="mt-1 max-w-[600px] text-pretty text-[13px] text-muted">
+            A free timing game: tap as the needle crosses the notch to crack each vault. Every vault grows the bag, and gold notches add a bonus. Bank it any time; miss
+            once and the alarm takes it.
+          </p>
+          <div className="mt-3 text-[11px] font-bold text-dim">What the bag holds after each vault</div>
+          <div className="mt-1.5 grid grid-cols-4 gap-1.5 sm:grid-cols-8">
             {HEIST_LOOT.map((loot, i) => {
               const hit = i < best
               return (
@@ -593,26 +652,31 @@ function HeistCard() {
             })}
           </div>
           {heist.runs > 0 && (
-            <div className="tnum mt-2 text-[12px] text-dim">
-              Best run: vault {best} of {HEIST_LOOT.length} · {fmt(heist.earned, 0)} coins banked in {heist.runs} {heist.runs === 1 ? 'run' : 'runs'}
+            <div className="tnum mt-2 text-pretty text-[12px] text-dim">
+              Your best: {best} of {HEIST_LOOT.length} vaults · {fmt(heist.earned, 0)} coins banked over {heist.runs} {heist.runs === 1 ? 'run' : 'runs'}
             </div>
           )}
         </div>
         <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between rounded-xl bg-stage px-3 py-2 ring-1 ring-white/[.04]">
-            <div className="flex gap-1">
-              {Array.from({ length: HEIST_MAX_PICKS }, (_, i) => (
-                <Lockpick key={i} on={i < picks} size={26} />
-              ))}
+          <div className="rounded-xl bg-stage px-3 py-2 ring-1 ring-white/[.04]">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex gap-1">
+                {Array.from({ length: HEIST_MAX_PICKS }, (_, i) => (
+                  <Lockpick key={i} on={i < picks} size={26} />
+                ))}
+              </div>
+              <span className="tnum text-[12px] font-bold text-muted">{next ? `Next pick in ${fmtDuration(next)}` : `${picks} of ${HEIST_MAX_PICKS} ready`}</span>
             </div>
-            <span className="tnum text-[12px] font-bold text-muted">{next ? `+1 in ${fmtDuration(next)}` : 'Full'}</span>
+            <p className="mt-1 text-pretty text-[11.5px] leading-snug text-dim">
+              Each run uses a lockpick. You hold up to {HEIST_MAX_PICKS}, and one comes back every {HEIST_REGEN / 60_000} minutes.
+            </p>
           </div>
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={() => navigate('/heist')}
             className="flex h-12 items-center justify-center gap-1.5 rounded-xl bg-gold text-[15px] font-extrabold text-[#2a1c00] shadow-[0_8px_22px_-10px_rgba(247,197,72,.8),inset_0_-3px_0_rgba(0,0,0,.16)] transition hover:brightness-105"
           >
-            {picks ? 'Play Vault Heist' : 'Practice the dial'} <IconChevron size={16} />
+            {picks ? 'Play Vault Heist' : 'Practice run · no coins'} <IconChevron size={16} />
           </motion.button>
         </div>
       </div>
@@ -648,11 +712,13 @@ function Challenges() {
           <h2 className="flex items-center gap-2 text-[20px] font-black tracking-tight">
             <IconTrophy size={21} className="text-gold" /> Challenges
           </h2>
-          <p className="mt-0.5 text-[13px] text-muted">One-time rewards. Only bets of {CHALLENGE_MIN_BET}+ coins count.</p>
-          <div className="mt-3 flex items-center gap-3">
-            <Bar pct={(earned / pot) * 100} color="linear-gradient(90deg,#f7c548,#ffe38f)" className="h-2 w-[150px] sm:w-[200px]" />
+          <p className="mt-0.5 text-pretty text-[13px] text-muted">
+            Each challenge pays its reward once. Only bets of {CHALLENGE_MIN_BET} coins or more count, except for High Roller, which counts every bet.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+            <Bar pct={(earned / pot) * 100} color="linear-gradient(90deg,#f7c548,#ffe38f)" className="h-2 w-full sm:w-[200px]" track="bg-white/[.06]" />
             <span className="tnum text-[12px] font-bold text-muted">
-              <span className="text-ink">{doneCount}</span>/{CHALLENGES.length} done · <span className="text-gold">{fmt(earned, 0)}</span> of {fmt(pot, 0)} coins
+              <span className="text-ink">{doneCount}</span> of {CHALLENGES.length} claimed · <span className="text-gold">{fmt(earned, 0)}</span> of {fmt(pot, 0)} coins earned
             </span>
           </div>
         </div>
@@ -690,18 +756,23 @@ function Challenges() {
         </AnimatePresence>
       </motion.div>
       {rows.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-line p-8 text-center text-[14px] text-muted">{filter === 'done' ? 'No challenges claimed yet.' : 'Every challenge is done. Nice work.'}</div>
+        <div className="rounded-2xl border border-dashed border-line p-8 text-center text-[14px] text-muted">
+          {filter === 'done' ? 'No challenges claimed yet. Finish one and claim it to see it here.' : 'You have claimed every challenge. Nice work.'}
+        </div>
       )}
     </section>
   )
 }
+
+/** What a multi-step challenge's counter counts ("2 / 5 in a row"). */
+const UNITS: Record<string, string> = { explorer: 'games', 'card-shark': 'in a row', 'high-roller': 'wagered' }
 
 function ChallengeCard({ id, progress, claimed, ready, onClaim }: { id: string; progress: number; claimed: boolean; ready: boolean; onClaim: () => void }) {
   const c = CHALLENGES.find((x) => x.id === id)!
   const game = c.game ? gameById(c.game) : null
   const accent = game ? game.accent : '#f7c548'
   const pct = Math.min(100, (progress / c.goal) * 100)
-  const counter = c.goal > 100 ? `${fmt(Math.min(progress, c.goal), 0)} / ${fmt(c.goal, 0)}` : `${Math.min(progress, c.goal)} / ${c.goal}`
+  const counter = `${fmt(Math.min(progress, c.goal), 0)} / ${fmt(c.goal, 0)}${UNITS[c.id] ? ` ${UNITS[c.id]}` : ''}`
   const tile: CSSProperties = { background: `linear-gradient(145deg, ${accent}38, ${accent}10)`, color: accent, boxShadow: `inset 0 0 0 1px ${accent}33` }
 
   return (
@@ -729,7 +800,7 @@ function ChallengeCard({ id, progress, claimed, ready, onClaim }: { id: string; 
               <Coin size={13} /> {fmt(c.reward, 0)}
             </span>
           </div>
-          <div className="mt-1 text-[13px] leading-snug text-muted">{c.desc}</div>
+          <div className="mt-1 text-pretty text-[13px] leading-snug text-muted">{c.desc}</div>
         </div>
       </div>
 
@@ -742,7 +813,7 @@ function ChallengeCard({ id, progress, claimed, ready, onClaim }: { id: string; 
         )}
         {claimed ? (
           <div className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent/10 text-[13px] font-bold text-accent">
-            <IconCheck size={16} /> Completed
+            <IconCheck size={16} /> Claimed
           </div>
         ) : ready ? (
           <ClaimButton ready className="h-10 w-full" onClick={onClaim}>

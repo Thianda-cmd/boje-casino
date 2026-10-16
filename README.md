@@ -1,8 +1,8 @@
 # Boje Casino (play money)
 
-A Stake-style casino with twenty games. Originals: Chicken Road, Crash, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
-Wheel, Cases, Case Battles and Duck Derby. Table and machine games: Blackjack, Live Blackjack, Baccarat, Roulette,
-Video Poker, Chompers, Pop Party and Robo Riot.
+A Stake-style casino with twenty-two games. Originals: Chicken Road, Crash, Double, Mines, Plinko, Dice, Limbo, Keno,
+Hi-Lo, Wheel, Cases, Case Battles, Duck Derby and Lucky Claw. Table and machine games: Blackjack, Live Blackjack,
+Baccarat, Roulette, Video Poker, Chompers, Pop Party and Robo Riot.
 Vault Heist is a free skill game that pays coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
 
@@ -51,16 +51,35 @@ Vercel functions in `api/`:
 - `auth.js`: sign-up (rate limited per IP) and account deletion, which need the service key.
 - `config.js`: the public Supabase URL and key for the browser.
 - `selftest.js`: an end-to-end check of Crash, Live Blackjack (on the hidden test table 99), Case Battles (on hidden
-  battles of `g_selftest` guests, left out of the lobby) and accounts. It only answers `?key=` matching the
-  `SELFTEST_KEY` env var (set in Vercel; keep a copy in an untracked `.env.local`).
+  battles of `g_selftest` guests, left out of the lobby), Double (reads, and a bet the server refuses, so nothing
+  shows in the shared columns) and accounts. It only answers `?key=` matching the `SELFTEST_KEY` env var (set in
+  Vercel; keep a copy in an untracked `.env.local`).
 
-Without the backend (or in the single-file preview) Crash runs the same rules locally for one player and
-accounts are hidden.
+Without the backend (or in the single-file preview) Crash runs the same rules locally for one player, Double runs
+them locally against house bots, and accounts are hidden.
 
 ## Multiplayer Crash
 Rounds are shared by everyone through `crash_state`, `crash_bet` and `crash_cashout`. Rounds are created lazily
 by whichever call sees the last one finish, the crash point is drawn on the server and only revealed once it
 happens, and cash-outs are timed by the database clock. Signed-in players show up under their username.
+
+## Multiplayer Double
+One strip of 33 tiles (0 green, 1–16 red, 17–32 black) is spun for everyone through `dbl_state`, `dbl_bet` and
+`dbl_round_info`. Rounds repeat like Crash's, created lazily under an advisory lock by whichever call sees the last one
+finish: 15 s of betting, a 6 s spin, then 3 s showing the winners. Each round commits to sha256(seed) when it is
+created; betting closes half a second before the spin, when the roll is revealed, so every browser starts the same
+spin on the server clock (one Web Animation of transform only whose time is set from the server, so a page opened or
+reloaded mid-spin picks it up where it is), and the seed is revealed once the strip lands. A player may back several
+colours and add to a bet until betting closes, up to 100,000 per colour; the columns list the 30 biggest bets per
+colour by username (or guest name), never by id. Browsers poll `dbl_state` around the close, the spin and the landing
+(slower when hidden), and the 100-roll history is only sent when it has changed. Chips leave the wallet when they are
+sent and wait in a per-round ledger in localStorage under a Web Lock (`src/games/double/ledger.ts`): a round settles
+once, on what the browser paid and the server holds, so a chip that never reached the table comes back and a refused
+one is refunded at once; a round missed while away settles the next time Double opens, because each poll names the
+browser's unsettled rounds (`p_open`) and `dbl_state` returns the player's bets on any of them that have landed, however
+many rounds came after (a stake older than the three days rounds are kept counts as lost). Without the backend the
+same rules run in the browser with house bots (marked BOT): rounds follow the wall clock and each seed is sha256 of a
+secret kept on the device, so every tab, and a reload, sees the same rounds.
 
 ## Multiplayer Blackjack
 Live Blackjack seats up to five players at shared tables (six listed, from 1–100 up to 100–10,000). Everything
@@ -113,18 +132,25 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
 ## Economy (src/store/wallet.ts)
 - Start with 1,000 coins.
 - Daily bonus: 100 → 500 over a 7-day streak, 22h cooldown, streak resets after 48h.
-- Levels: 1 XP per coin wagered, each level needs more XP; level-ups pay 75 × level.
+- Levels: 1 XP per coin wagered, each level needs more XP; level-ups pay 75 × level. The VIP tiers (Bronze, Silver,
+  Gold, Platinum, Diamond at levels 0, 5, 12, 25, 40) are cosmetic badges and pay nothing extra.
 - Emergency refill: 50 coins, only below 10 coins, once per 30 minutes.
 - Vault Heist: crack up to eight dials by timing each pick; the bag holds 10, 25, 50, 90, 150, 250, 400 and 650
-  coins after each vault, banked whenever you like and lost on a miss. Three lockpicks, one back every 45 min.
-- Challenges: 21 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
-  Crash, a 2% Dice win); Live Blackjack rounds count towards Explorer and High Roller. Only bets of 25+ count.
+  coins after each vault, plus a bonus for each gold notch hit, banked whenever you like and lost on a miss. Three
+  lockpicks, one back every 45 min; practice runs cost none and pay nothing.
+- Challenges: 23 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
+  Crash, a 2% Dice win); Live Blackjack rounds count towards Explorer and High Roller. Only bets of 25+ count,
+  except towards High Roller, which counts every bet.
 
 ## Game math
 - Chicken Road: per-lane survival 90/80/70/55% (Easy → Daredevil), multiplier = 0.97 / survival^lanes.
 - Mines: 5×5, multiplier = 0.97 / P(all picks safe).
 - Plinko: 8/12/16 rows, low/medium/high risk tables.
 - Crash: P(crash ≥ x) = 0.97 / x.
+- Double: 33 tiles, roll = the first 52 bits of sha256(seed + ":double") mod 33. Red (1–16) and black (17–32) pay 2×
+  (16/33 × 2), green (0) pays 32× (1/33 × 32), so every bet returns 32/33 = 96.97%; one stake and one settle per round
+  over all your colours (`cd tools/double-sql && node test.mjs` runs the rounds on PGlite, checks the 33 rolls are
+  uniform and match the browser's formula, and the payouts).
 - Blackjack: 6 decks, dealer stands on soft 17, 3:2 blackjack, double on any two, one split.
 - Live Blackjack: the same rules on a shared 6-deck shoe (reshuffled at a random cut between 234 and 260 cards),
   the dealer peeks with an ace or ten up, double after split allowed, 15 s per decision (8 s after a hit).
@@ -163,6 +189,13 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   one settle when the podium shows; the race (src/games/derby/race.ts) is built to end in the drawn order
   (`node --experimental-strip-types --import ./tools/ts-resolve.mjs tools/derby-test.ts` enumerates all 720 orders
   on all 720 deals with exact fractions; `tools/derby-race-test.ts` checks thousands of planned races).
+- Lucky Claw: eight prize plushies tagged 1.5×, 2×, 3×, 5×, 10×, 25×, 50× and 100×; the grab wins with chance
+  exactly 0.97 / multiplier (a whole number of ways out of 30,000: 19,400 down to 291), so every prize returns 97%
+  (64.67% down to 0.97%). The outcome is drawn when the claw drops (src/games/claw/rules.ts); how a loss looks (slips
+  on the lift 30%, wriggles free mid-carry 28%, bounces off the chute 20%, grabs the neighbour 22%) and whether a win
+  gives a scare on the way are drawn from the outcome alone, the same for every prize. One stake per grab, one settle
+  when the outcome shows (`node --experimental-strip-types --import ./tools/ts-resolve.mjs tools/claw-test.ts`
+  checks the sums exactly, samples the win rates and checks that the show only follows the outcome).
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
 - Pop Party: 7 × 7 floor; 5+ touching balloons pay, winners pop and the rest float up until nothing wins. Every
   pop lights the tile underneath, and each further pop doubles it up to ×128; a win is multiplied by the sum of

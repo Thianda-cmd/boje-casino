@@ -15,6 +15,7 @@ import { PrizeWheel } from '../art/PrizeWheel'
 import { wheelSegments } from '../games/wheel/rules'
 import { CrateArt, ItemArt } from '../games/cases/art'
 import { duckMarkup, type Expr } from '../games/derby/art'
+import { bojeFacets } from '../art/brand'
 
 /* Lobby art. Chicken Road keeps its pixel look; everything else is clean vector art on a bold gradient. */
 
@@ -55,6 +56,10 @@ export function GameCover({ id }: { id: GameId }) {
       return <BattlesCover />
     case 'derby':
       return <DerbyCover />
+    case 'double':
+      return <DoubleCover />
+    case 'claw':
+      return <ClawCover />
     case 'cases':
       return <CasesCover />
     case 'baccarat':
@@ -1439,6 +1444,327 @@ function DerbyCover() {
       ))}
       <Sparkle x={186} y={98} r={4} />
       <Sparkle x={14} y={70} r={3.5} />
+    </Scene>
+  )
+}
+
+const DOUBLE_FACETS = bojeFacets(0.09)
+const DOUBLE_SHADE = [0.98, 0.86, 0.7, 0.62, 0.76, 0.92]
+// the tiles round the green zero, in the strip's order (src/games/double/rules.ts WHEEL)
+const DOUBLE_ROW: [number, 'r' | 'k' | 'g'][] = [[15, 'r'], [31, 'k'], [16, 'r'], [32, 'k'], [0, 'g'], [1, 'r'], [17, 'k'], [2, 'r'], [18, 'k']]
+
+/** Double: the strip coming to rest on the green zero under the gold marker, with chips riding on each colour. */
+function DoubleCover() {
+  // ids carry a '_': React's ids never do, so no other component's `${uid}x` can name one of these
+  const u = useUid() + '_'
+  const cy = 118
+  const T = 38
+  const P = 44
+  const tile = (x: number, n: number, c: 'r' | 'k' | 'g', s: number) => (
+    <g key={n}>
+      <rect x={x - s / 2} y={cy - s / 2} width={s} height={s} rx={s * 0.21} fill={`url(#${u}${c})`} />
+      <rect x={x - s / 2 + 4} y={cy - s / 2 + 4} width={s - 8} height={s - 8} rx={s * 0.14} fill="none" stroke="#fff" strokeOpacity={c === 'k' ? 0.12 : 0.24} strokeWidth="1.1" />
+      {c !== 'g' && (
+        <text x={x} y={cy + s * 0.13} textAnchor="middle" fontSize={s * 0.36} fontWeight="900" fill={c === 'k' ? '#dde6f0' : '#fff'} fontFamily="Manrope, system-ui, sans-serif">
+          {n}
+        </text>
+      )}
+    </g>
+  )
+  // a chip like art/Chip's, its sheen from this cover's own gradient
+  const chip = (x: number, y: number, size: number, body: string, inset: string, label: string, k: string) => (
+    <svg key={k} x={x} y={y} width={size} height={size} viewBox="0 0 64 64">
+      <circle cx="32" cy="34.5" r="29" fill="rgba(0,0,0,.35)" />
+      <circle cx="32" cy="32" r="29" fill={body} />
+      {Array.from({ length: 6 }, (_, i) => (
+        <rect key={i} x="28" y="3" width="8" height="9" rx="1.5" fill={inset} transform={`rotate(${i * 60} 32 32)`} />
+      ))}
+      <circle cx="32" cy="32" r="20.5" fill={body} stroke="rgba(0,0,0,.18)" strokeWidth="1.5" />
+      <circle cx="32" cy="32" r="17.5" fill="none" stroke={inset} strokeOpacity=".7" strokeWidth="1.4" strokeDasharray="3.2 2.6" />
+      <circle cx="32" cy="32" r="29" fill={`url(#${u}sh)`} />
+      <text x="32" y="32" dy=".36em" textAnchor="middle" fontFamily="Manrope, ui-sans-serif, system-ui, sans-serif" fontWeight="800" fontSize={label.length >= 3 ? 15 : 18} fill="#fff">
+        {label}
+      </text>
+    </svg>
+  )
+  return (
+    <Scene from="#ff4d6a" to="#24061a">
+      <defs>
+        <linearGradient id={`${u}r`} x1="0" y1="0" x2=".55" y2="1">
+          <stop offset="0" stopColor="#ff7487" />
+          <stop offset=".5" stopColor="#f2384f" />
+          <stop offset="1" stopColor="#b5163a" />
+        </linearGradient>
+        <linearGradient id={`${u}k`} x1="0" y1="0" x2=".55" y2="1">
+          <stop offset="0" stopColor="#4a586f" />
+          <stop offset=".5" stopColor="#2a3445" />
+          <stop offset="1" stopColor="#141a25" />
+        </linearGradient>
+        <linearGradient id={`${u}g`} x1="0" y1="0" x2=".55" y2="1">
+          <stop offset="0" stopColor="#7affba" />
+          <stop offset=".46" stopColor="#22d36f" />
+          <stop offset="1" stopColor="#0a8c46" />
+        </linearGradient>
+        <radialGradient id={`${u}glow`} cx=".5" cy=".5" r=".5">
+          <stop offset="0" stopColor="#e2ffee" stopOpacity=".95" />
+          <stop offset=".38" stopColor="#3ef08e" stopOpacity=".5" />
+          <stop offset="1" stopColor="#22d36f" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${u}fade`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#090d15" stopOpacity=".95" />
+          <stop offset=".24" stopColor="#090d15" stopOpacity="0" />
+          <stop offset=".76" stopColor="#090d15" stopOpacity="0" />
+          <stop offset="1" stopColor="#090d15" stopOpacity=".95" />
+        </linearGradient>
+        <radialGradient id={`${u}sh`} cx="0.35" cy="0.3" r="0.8">
+          <stop offset="0" stopColor="#fff" stopOpacity=".35" />
+          <stop offset=".6" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <clipPath id={`${u}c`}>
+          <rect x="-30" y={cy - 31} width="260" height="62" rx="14" />
+        </clipPath>
+      </defs>
+      {Array.from({ length: 12 }, (_, i) => (
+        <path key={i} d={`M100 ${cy} L95 -80 L105 -80 Z`} fill="#fff" opacity=".055" transform={`rotate(${i * 30 + 8} 100 ${cy})`} />
+      ))}
+      <ellipse cx="100" cy={cy} rx="92" ry="78" fill={`url(#${u}glow)`} />
+      <g transform={`rotate(-9 100 ${cy})`}>
+        {/* the strip */}
+        <rect x="-30" y={cy - 31} width="260" height="62" rx="14" fill="#090d15" opacity=".94" />
+        <g clipPath={`url(#${u}c)`}>
+          {DOUBLE_ROW.map(([n, c], i) => (c === 'g' ? null : tile(100 + (i - 4) * P, n, c, T)))}
+          <rect x="-30" y={cy - 31} width="260" height="62" fill={`url(#${u}fade)`} />
+        </g>
+        <rect x="-30" y={cy - 31} width="260" height="62" rx="14" fill="none" stroke="#fff" strokeOpacity=".08" />
+        {/* the winner: the green zero, lifted and lit, carrying the Boje gem */}
+        <g style={{ filter: 'drop-shadow(0 0 9px rgba(62,240,142,.85))' }}>
+          {tile(100, 0, 'g', 52)}
+          <rect x={74} y={cy - 26} width="52" height="52" rx="11" fill="none" stroke="#fff" strokeWidth="2.4" />
+        </g>
+        <g transform={`translate(${100 - 16} ${cy - 16})`}>
+          {DOUBLE_FACETS.map((d, i) => (
+            <path key={`s${i}`} d={d} fill="#06612f" opacity=".45" transform="translate(0 1.6)" />
+          ))}
+          {DOUBLE_FACETS.map((d, i) => (
+            <path key={i} d={d} fill="#fff" opacity={DOUBLE_SHADE[i]} />
+          ))}
+        </g>
+        {/* the marker */}
+        <g style={{ filter: 'drop-shadow(0 0 4px rgba(247,197,72,.8))' }}>
+          <rect x="98.7" y={cy - 40} width="2.6" height="80" rx="1.3" fill="#f7c548" />
+          <path d={`M91 ${cy - 43}h18l-9 10Z`} fill="#f7c548" />
+          <path d={`M91 ${cy + 43}h18l-9-10Z`} fill="#f7c548" />
+        </g>
+      </g>
+      {/* what green pays */}
+      <g transform="rotate(-9 100 46)" style={{ filter: 'drop-shadow(0 5px 6px rgba(40,0,15,.45))' }}>
+        <rect x="69" y="31" width="62" height="28" rx="14" fill="#f7c548" />
+        <rect x="76" y="33.5" width="48" height="9" rx="4.5" fill="#fff" opacity=".24" />
+        <text x="100" y="51" textAnchor="middle" fontSize="17" fontWeight="900" fill="#2a1c00" fontFamily="Manrope, system-ui, sans-serif" letterSpacing=".3">
+          32×
+        </text>
+      </g>
+      {/* chips riding on red, green and black */}
+      <g style={{ filter: 'drop-shadow(0 6px 6px rgba(30,0,10,.45))' }}>
+        {[186, 178, 170].map((y, i) => chip(22, y, 42, '#e8344e', '#ffe5e9', '5', `r${i}`))}
+        {[186, 178].map((y, i) => chip(136, y, 42, '#26313f', '#f7c548', '100', `k${i}`))}
+        {[192, 183].map((y, i) => chip(75, y, 50, '#1fb866', '#e6fff1', '25', `g${i}`))}
+      </g>
+      <Sparkle x={150} y={70} r={6} />
+      <Sparkle x={42} y={78} r={4} />
+      <Sparkle x={178} y={152} r={3.5} />
+      <Sparkle x={26} y={154} r={3} />
+    </Scene>
+  )
+}
+
+/** A pastel blob plushie for the Lucky Claw heap: round body, ears (round or bunny) and a little face. */
+function CoverBlob({ x, y, r, color, ears = 'round', tilt = 0 }: { x: number; y: number; r: number; color: string; ears?: 'round' | 'bunny' | 'none'; tilt?: number }) {
+  const e = r * 0.36
+  return (
+    <g transform={`translate(${x} ${y}) rotate(${tilt})`} stroke={INK} strokeWidth="2.5" strokeLinejoin="round">
+      {ears === 'round' && [-1, 1].map((s) => <circle key={s} cx={s * r * 0.7} cy={-r * 0.72} r={e} fill={color} />)}
+      {ears === 'bunny' && [-1, 1].map((s) => <ellipse key={s} cx={s * r * 0.36} cy={-r * 1.12} rx={e * 0.62} ry={r * 0.55} fill={color} transform={`rotate(${s * 12} ${s * r * 0.36} ${-r * 1.12})`} />)}
+      <ellipse rx={r} ry={r * 0.9} fill={color} />
+      <ellipse cy={r * 0.3} rx={r * 0.5} ry={r * 0.36} fill="#fff" opacity=".45" stroke="none" />
+      <circle cx={-r * 0.34} cy={-r * 0.1} r={r * 0.11} fill={INK} stroke="none" />
+      <circle cx={r * 0.34} cy={-r * 0.1} r={r * 0.11} fill={INK} stroke="none" />
+      <path d={`M${-r * 0.16} ${r * 0.12} q${r * 0.16} ${r * 0.16} ${r * 0.32} 0`} fill="none" strokeWidth="1.8" strokeLinecap="round" />
+      <ellipse cx={-r * 0.6} cy={r * 0.12} rx={r * 0.16} ry={r * 0.09} fill="#ff8fb5" stroke="none" opacity=".8" />
+      <ellipse cx={r * 0.6} cy={r * 0.12} rx={r * 0.16} ry={r * 0.09} fill="#ff8fb5" stroke="none" opacity=".8" />
+    </g>
+  )
+}
+
+/** Lucky Claw: the golden unicorn, the 100× prize, swinging up out of the heap in the claw, under the marquee lights. */
+function ClawCover() {
+  const u = useUid()
+  const mane = ['#ff5f8f', '#ff9a3c', '#ffe04a', '#5fe08c', '#4fb8ff', '#a77dff']
+  const heap: [number, number, number, string, 'round' | 'bunny' | 'none', number][] = [
+    [18, 214, 24, '#a8e6ff', 'round', -12],
+    [60, 226, 22, '#ffe08a', 'bunny', 8],
+    [104, 220, 25, '#c9b8ff', 'round', -4],
+    [150, 228, 23, '#b8f2c8', 'none', 10],
+    [190, 212, 24, '#ffb3d1', 'round', 14],
+    [-2, 246, 22, '#ffc8a8', 'none', 0],
+    [40, 252, 24, '#ffb3d1', 'round', -8],
+    [86, 252, 23, '#a8e6ff', 'none', 6],
+    [130, 254, 24, '#ffe08a', 'round', -10],
+    [174, 250, 25, '#c9b8ff', 'bunny', 4],
+  ]
+  // a prong, from the hub out to its knuckle and down to the hooked tip (mirrored for the right one)
+  const prong = (s: number) => `M${100 + s * 15} 35 L${100 + s * 40} 66 Q${100 + s * 45} 94 ${100 + s * 33} 116 Q${100 + s * 28} 124 ${100 + s * 21} 124`
+  return (
+    <Scene from="#ff73b4" to="#4a1fb8">
+      <defs>
+        <linearGradient id={`${u}g`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffe48a" />
+          <stop offset=".55" stopColor="#ffc72e" />
+          <stop offset="1" stopColor="#f29a12" />
+        </linearGradient>
+        <radialGradient id={`${u}h`} cx=".38" cy=".32" r=".8">
+          <stop offset="0" stopColor="#fff2b8" />
+          <stop offset=".55" stopColor="#ffd040" />
+          <stop offset="1" stopColor="#f0a020" />
+        </radialGradient>
+        <linearGradient id={`${u}c`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#b8c4dc" />
+        </linearGradient>
+        <linearGradient id={`${u}r`} x1="0" y1="0" x2="1" y2="0">
+          {mane.map((c, i) => (
+            <stop key={c} offset={i / (mane.length - 1)} stopColor={c} />
+          ))}
+        </linearGradient>
+        <radialGradient id={`${u}l`}>
+          <stop offset="0" stopColor="#fff6c8" stopOpacity=".95" />
+          <stop offset=".45" stopColor="#ffd86b" stopOpacity=".35" />
+          <stop offset="1" stopColor="#ffd86b" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* light rays behind the prize */}
+      <g opacity=".22" fill="#fff">
+        {Array.from({ length: 12 }, (_, i) => (
+          <path key={i} d="M100 112 L92 -40 L108 -40 Z" transform={`rotate(${i * 30} 100 112)`} />
+        ))}
+      </g>
+      <circle cx="100" cy="112" r="74" fill={`url(#${u}l)`} />
+
+      {/* the marquee lights along the top */}
+      <rect x="-5" y="-4" width="210" height="18" fill="#2a1666" />
+      <rect x="-5" y="12" width="210" height="4" fill="#ffcf4d" />
+      {Array.from({ length: 11 }, (_, i) => (
+        <g key={i}>
+          <circle cx={6 + i * 19} cy="5" r={i % 2 ? 4.2 : 5} fill={i % 2 ? '#ff7ac8' : '#fff1a8'} opacity=".55" />
+          <circle cx={6 + i * 19} cy="5" r={i % 2 ? 2.6 : 3.2} fill={i % 2 ? '#ffd1ec' : '#ffffff'} />
+        </g>
+      ))}
+
+      {/* the heap */}
+      {heap.map(([x, y, r, c, e, t], i) => (
+        <CoverBlob key={i} x={x} y={y} r={r} color={c} ears={e} tilt={t} />
+      ))}
+
+      {/* the cable, and the back prong half hidden behind her head */}
+      <path d="M100 14 V24" stroke={INK} strokeWidth="5" />
+      <path d="M100 14 V24" stroke="#6a7090" strokeWidth="2" />
+      <path d="M100 36 V74" stroke={INK} strokeWidth="9" strokeLinecap="round" />
+      <path d="M100 36 V74" stroke={`url(#${u}c)`} strokeWidth="4.5" strokeLinecap="round" />
+
+      {/* motion lines: it is swinging */}
+      <g stroke="#fff" strokeWidth="2.6" strokeLinecap="round" fill="none" opacity=".85">
+        <path d="M40 104 q-7 12 0 24" />
+        <path d="M30 98 q-9 18 0 36" opacity=".6" />
+        <path d="M160 104 q7 12 0 24" />
+        <path d="M170 98 q9 18 0 36" opacity=".6" />
+      </g>
+
+      {/* Goldie: her mane flowing to one side and her rainbow tail behind, then body, dangling legs and head */}
+      <g stroke={INK} strokeWidth="3" strokeLinejoin="round">
+        {[
+          [74, 80, 10, 0],
+          [66, 94, 10, 1],
+          [66, 109, 9.5, 2],
+          [71, 123, 9, 3],
+          [128, 78, 8.5, 5],
+          [134, 154, 8.5, 4],
+          [141, 165, 8, 5],
+          [143, 177, 7.5, 0],
+        ].map(([x, y, r, c], i) => (
+          <circle key={i} cx={x} cy={y} r={r} fill={mane[c]} />
+        ))}
+        <path d="M84 150 Q82 166 80 174" fill="none" strokeWidth="12" strokeLinecap="round" />
+        <path d="M116 150 Q118 166 120 174" fill="none" strokeWidth="12" strokeLinecap="round" />
+        <path d="M84 150 Q82 166 80 174" fill="none" stroke="#ffc72e" strokeWidth="6.5" strokeLinecap="round" />
+        <path d="M116 150 Q118 166 120 174" fill="none" stroke="#ffc72e" strokeWidth="6.5" strokeLinecap="round" />
+        <ellipse cx="80" cy="176" rx="6.5" ry="4.5" fill="#ff8fc4" strokeWidth="2.5" />
+        <ellipse cx="120" cy="176" rx="6.5" ry="4.5" fill="#ff8fc4" strokeWidth="2.5" />
+        <ellipse cx="100" cy="142" rx="26" ry="21" fill={`url(#${u}g)`} />
+        <ellipse cx="100" cy="146" rx="15" ry="12" fill="#fff4d9" strokeWidth="0" />
+        <path d="M76 132 Q66 140 68 150" fill="none" strokeWidth="11" strokeLinecap="round" />
+        <path d="M124 132 Q134 140 132 150" fill="none" strokeWidth="11" strokeLinecap="round" />
+        <path d="M76 132 Q66 140 68 150" fill="none" stroke="#ffc72e" strokeWidth="6" strokeLinecap="round" />
+        <path d="M124 132 Q134 140 132 150" fill="none" stroke="#ffc72e" strokeWidth="6" strokeLinecap="round" />
+        <path d="M84 78 L78 56 L96 70 Z" fill="#ffc72e" />
+        <path d="M116 78 L122 56 L104 70 Z" fill="#ffc72e" />
+        <path d="M85 72 L81.5 61 L90 68 Z M115 72 L118.5 61 L110 68 Z" fill="#ff9fd0" strokeWidth="1.6" />
+        <circle cx="100" cy="100" r="31" fill={`url(#${u}h)`} />
+        <ellipse cx="100" cy="113" rx="18" ry="12.5" fill="#fff4d9" />
+        {/* the forelock over her brow */}
+        <circle cx="86" cy="75" r="7.5" fill={mane[0]} strokeWidth="2.5" />
+        <circle cx="96" cy="71" r="6.5" fill={mane[5]} strokeWidth="2.5" />
+      </g>
+      <ellipse cx="91" cy="91" rx="10" ry="6" fill="#fff" opacity=".45" transform="rotate(-30 91 91)" />
+      <ellipse cx="88" cy="99" rx="4.6" ry="5.8" fill={INK} />
+      <ellipse cx="112" cy="99" rx="4.6" ry="5.8" fill={INK} />
+      <circle cx="86.6" cy="97" r="1.8" fill="#fff" />
+      <circle cx="110.6" cy="97" r="1.8" fill="#fff" />
+      <path d="M83 93 l-3 -3 M86 92 l-1.5 -3.4 M117 93 l3 -3 M114 92 l1.5 -3.4" stroke={INK} strokeWidth="1.8" strokeLinecap="round" />
+      <ellipse cx="78" cy="108" rx="5.5" ry="3.2" fill="#ff8fb5" opacity=".85" />
+      <ellipse cx="122" cy="108" rx="5.5" ry="3.2" fill="#ff8fb5" opacity=".85" />
+      <circle cx="94" cy="111" r="1.6" fill="#d9925a" />
+      <circle cx="106" cy="111" r="1.6" fill="#d9925a" />
+      <path d="M94 117 q6 5 12 0" fill="none" stroke={INK} strokeWidth="2.2" strokeLinecap="round" />
+
+      {/* the tag on her tummy */}
+      <path d="M88 128 L100 136 L112 128" fill="none" stroke="#ff4f7b" strokeWidth="2" />
+      <g transform="translate(100 146) rotate(-6)">
+        <rect x="-21" y="-10" width="42" height="20" rx="10" fill={`url(#${u}g)`} stroke={INK} strokeWidth="2.8" />
+        <rect x="-17" y="-6.5" width="34" height="13" rx="6.5" fill="none" stroke={`url(#${u}r)`} strokeWidth="1.6" />
+        <text y="4.6" textAnchor="middle" fontSize="13" fontWeight="900" fill="#fff" stroke={INK} strokeWidth="3.4" paintOrder="stroke" fontFamily="Manrope, system-ui, sans-serif">
+          100×
+        </text>
+      </g>
+
+      {/* the front prongs hug her head */}
+      {[-1, 1].map((s) => (
+        <g key={s}>
+          <path d={prong(s)} fill="none" stroke={INK} strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={prong(s)} fill="none" stroke={`url(#${u}c)`} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx={100 + s * 40} cy="66" r="6" fill="#ffcf4d" stroke={INK} strokeWidth="2.5" />
+          <circle cx={100 + s * 21} cy="124" r="4.6" fill="#ff5f9e" stroke={INK} strokeWidth="2.5" />
+        </g>
+      ))}
+      <g stroke={INK} strokeWidth="3" strokeLinejoin="round">
+        <rect x="80" y="21" width="40" height="17" rx="8.5" fill="#ffcf4d" />
+        <rect x="80" y="28" width="40" height="6" fill="#ff5f9e" strokeWidth="2.2" />
+      </g>
+      <circle cx="88" cy="26" r="1.6" fill="#fff" />
+      {/* her horn, pearly with a gold spiral, pointing up in front of the hub */}
+      <g stroke={INK} strokeWidth="3" strokeLinejoin="round">
+        <path d="M93.5 73 L103 36 L110 73 Z" fill="#fff8e8" />
+      </g>
+      <path d="M96 64.5 L107.5 61.5 M98 56 L106 53.5 M100 47.5 L104.8 45.8" stroke="#f2a516" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+
+      {/* glass glints and sparkles */}
+      <path d="M150 20 L196 20 L120 250 L74 250 Z" fill="#fff" opacity=".06" />
+      <path d="M200 60 L208 60 L150 250 L142 250 Z" fill="#fff" opacity=".08" />
+      <Sparkle x={150} y={56} r={6} />
+      <Sparkle x={44} y={62} r={4.5} />
+      <Sparkle x={162} y={150} r={4} />
+      <Sparkle x={32} y={160} r={3.5} />
+      <Sparkle x={128} y={34} r={3} />
     </Scene>
   )
 }

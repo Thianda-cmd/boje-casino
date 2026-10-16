@@ -13,9 +13,11 @@
   leaves the database and the hole card is only sent once the dealer plays. Wallets stay on the client, as in Crash.
   Case Battles: two to four seats open the same crates; every item is drawn when the last seat fills, under a
   per-battle advisory lock, and the rounds play out on the database clock. Wallets stay on the client.
+  Double: one red, black and green strip spun for everyone. Rounds repeat lazily like Crash; each commits to
+  sha256(seed) when it is created, the roll is revealed when betting closes and the seed once the strip has landed.
 */
 
-export const SCHEMA_VERSION = '2026-10-16.2'
+export const SCHEMA_VERSION = '2026-10-16.3'
 
 export const SCHEMA_SQL = /* sql */ `
 set local lock_timeout = '8s';
@@ -1869,6 +1871,203 @@ begin
   return jsonb_build_object('state', 'done', 'cost', b.unit * cardinality(b.cases), 'payout', b.payouts[st]);
 end $$;
 
+/* ------------------------------------------------------------------ */
+/*  Double                                                             */
+/* ------------------------------------------------------------------ */
+-- One strip of 33 tiles shared by everyone: roll 0 is green, 1 to 16 red, 17 to 32 black. Rounds repeat: 15 s of
+-- betting, the strip spins for 6 s onto the roll, then 3 s showing the winners. Like Crash, rounds are created
+-- lazily, under advisory lock (7355, 0), by whichever call sees the last one has finished showing. Each round commits
+-- to sha256(seed) when it is created; the roll is the first 52 bits of sha256(seed + ':double') mod 33. Betting
+-- closes 500 ms before the spin and the roll is revealed then, so every browser starts the same spin on time; the
+-- seed is revealed once the strip has landed. Red and black pay 2x, green 32x: every bet returns 32/33 (96.97%).
+-- A player may bet on several colours and add to a bet until betting closes, up to 100,000 per colour. Wallets stay
+-- on the client, as in Crash.
+
+create table if not exists public.dbl_round (
+  id bigint primary key,
+  starts_at bigint not null,                -- the strip starts to spin; betting closed 500 ms before
+  ends_at bigint not null,                  -- the strip lands; the next round comes 3 s later
+  roll smallint not null check (roll between 0 and 32),
+  seed text not null,
+  hash text not null
+);
+create table if not exists public.dbl_bet (
+  round_id bigint not null references public.dbl_round (id) on delete cascade,
+  player text not null,                     -- auth uid or guest id; never sent to clients
+  color text not null check (color in ('red', 'green', 'black')),
+  name text not null,
+  avatar smallint not null default 0,
+  amount numeric(14, 2) not null check (amount >= 1 and amount <= 100000),
+  placed_at bigint not null,                -- the first chip on this colour, for a steady order
+  primary key (round_id, player, color)
+);
+create index if not exists dbl_bet_player on public.dbl_bet (player, round_id desc);
+create table if not exists public.dbl_watch (
+  viewer text primary key,                  -- auth uid or guest id of a browser polling dbl_state
+  seen_at bigint not null
+);
+create index if not exists dbl_watch_seen on public.dbl_watch (seen_at);
+alter table public.dbl_round enable row level security;
+alter table public.dbl_bet enable row level security;
+alter table public.dbl_watch enable row level security;
+revoke all on public.dbl_round, public.dbl_bet, public.dbl_watch from anon, authenticated;
+
+/* ---------- helpers (not granted) ---------- */
+
+-- the roll a seed gives; src/games/double/fair.ts runs the same formula in the browser
+create or replace function public._dbl_roll(seed text) returns smallint
+language sql immutable set search_path = public as $$
+  select (('x' || substr(encode(sha256(convert_to(seed || ':double', 'UTF8')), 'hex'), 1, 13))::bit(52)::bigint % 33)::smallint
+$$;
+
+create or replace function public._dbl_phase(r public.dbl_round, now_ms bigint) returns text
+language sql immutable set search_path = public as $$
+  select case when now_ms < r.starts_at - 500 then 'betting' when now_ms < r.ends_at then 'spinning' else 'done' end
+$$;
+
+-- the round in play; once the last one has shown its winners for 3 s, one caller creates the next and the rest wait
+-- on the lock and then read it. Every 100th round clears rounds over three days old and viewers gone a minute.
+create or replace function public._dbl_current(now_ms bigint) returns public.dbl_round
+language plpgsql volatile set search_path = public as $$
+declare
+  r public.dbl_round;
+  s text;
+  t bigint;
+begin
+  select * into r from public.dbl_round order by id desc limit 1;
+  if found and now_ms < r.ends_at + 3000 then
+    return r;
+  end if;
+  perform pg_advisory_xact_lock(7355, 0);
+  select * into r from public.dbl_round order by id desc limit 1;
+  if found and now_ms < r.ends_at + 3000 then
+    return r;
+  end if;
+  s := replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
+  t := now_ms + 15000;
+  insert into public.dbl_round (id, starts_at, ends_at, roll, seed, hash)
+  values (coalesce(r.id, 0) + 1, t, t + 6000, public._dbl_roll(s), s, encode(sha256(convert_to(s, 'UTF8')), 'hex'))
+  returning * into r;
+  if r.id % 100 = 0 then
+    delete from public.dbl_round where ends_at < now_ms - 259200000;
+    delete from public.dbl_watch where seen_at < now_ms - 60000;
+  end if;
+  return r;
+end $$;
+
+/* ---------- public functions ---------- */
+
+-- Feed in src/games/double/net.ts. p_hist is the newest finished round the browser already has: when nothing has
+-- finished since, the 100-round history is left out (null) and the browser keeps its copy. p_open lists (as a json
+-- array, up to 50) the rounds the browser has paid into and not settled: those that have landed always come back in
+-- past, so a round missed while 20 newer ones were played elsewhere still settles on what really happened.
+drop function if exists public.dbl_state(text, bigint);
+create or replace function public.dbl_state(p_player text default null, p_hist bigint default null, p_open jsonb default null)
+returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  me text := public._bj_player(p_player);
+  r public.dbl_round := public._dbl_current(now_ms);
+  ph text := public._dbl_phase(r, now_ms);
+  head bigint;
+  asked bigint[] := array(
+    select e::bigint from jsonb_array_elements_text(case when jsonb_typeof(p_open) = 'array' then p_open else '[]'::jsonb end) e
+     where e ~ '^[0-9]{1,15}$' limit 50);
+begin
+  -- who is watching, for the online count; a viewer's row is rewritten at most every 5 s
+  if me is not null then
+    insert into public.dbl_watch as w (viewer, seen_at) values (me, now_ms)
+    on conflict (viewer) do update set seen_at = excluded.seen_at where w.seen_at < excluded.seen_at - 5000;
+  end if;
+  select id into head from public.dbl_round where ends_at <= now_ms order by id desc limit 1;
+  return jsonb_build_object(
+    'now', now_ms,
+    'round', jsonb_build_object(
+      'id', r.id, 'phase', ph, 'startsAt', r.starts_at, 'endsAt', r.ends_at, 'hash', r.hash,
+      'roll', case when ph <> 'betting' then r.roll end,
+      'seed', case when ph = 'done' then r.seed end),
+    'colors', (
+      select jsonb_object_agg(c.color, jsonb_build_object(
+               'total', coalesce((select sum(amount) from public.dbl_bet where round_id = r.id and color = c.color), 0),
+               'players', (select count(*) from public.dbl_bet where round_id = r.id and color = c.color),
+               'bets', coalesce((
+                 select jsonb_agg(jsonb_build_object('name', b.name, 'avatar', b.avatar, 'amount', b.amount, 'me', coalesce(b.player = me, false))
+                          order by b.amount desc, b.placed_at, b.name)
+                   from (select * from public.dbl_bet where round_id = r.id and color = c.color
+                          order by amount desc, placed_at, name limit 30) b), '[]'::jsonb)))
+        from (values ('red'), ('green'), ('black')) as c (color)),
+    'mine', (
+      select jsonb_build_object('red', coalesce(sum(amount) filter (where color = 'red'), 0),
+                                'green', coalesce(sum(amount) filter (where color = 'green'), 0),
+                                'black', coalesce(sum(amount) filter (where color = 'black'), 0))
+        from public.dbl_bet where round_id = r.id and player = me having count(*) > 0),
+    'online', (select count(*) from public.dbl_watch where seen_at > now_ms - 20000),
+    'head', head,
+    'history', case when p_hist is not null and p_hist = head then null else coalesce((
+      select jsonb_agg(jsonb_build_object('id', h.id, 'roll', h.roll) order by h.id desc)
+        from (select id, roll from public.dbl_round where ends_at <= now_ms order by id desc limit 100) h), '[]'::jsonb) end,
+    -- this player's last 20 finished rounds with a bet, and any of the asked ones, for settling rounds the browser
+    -- missed: an asked round that has landed and is not here held no bet of this player's
+    'past', coalesce((
+      select jsonb_agg(jsonb_build_object('round', p.round_id, 'roll', p.roll, 'red', p.red, 'green', p.green, 'black', p.black)
+               order by p.round_id desc)
+        from (
+          (select b.round_id, d.roll,
+                  coalesce(sum(b.amount) filter (where b.color = 'red'), 0) red,
+                  coalesce(sum(b.amount) filter (where b.color = 'green'), 0) green,
+                  coalesce(sum(b.amount) filter (where b.color = 'black'), 0) black
+             from public.dbl_bet b join public.dbl_round d on d.id = b.round_id
+            where me is not null and b.player = me and d.ends_at <= now_ms
+            group by b.round_id, d.roll order by b.round_id desc limit 20)
+          union
+          (select b.round_id, d.roll,
+                  coalesce(sum(b.amount) filter (where b.color = 'red'), 0) red,
+                  coalesce(sum(b.amount) filter (where b.color = 'green'), 0) green,
+                  coalesce(sum(b.amount) filter (where b.color = 'black'), 0) black
+             from public.dbl_bet b join public.dbl_round d on d.id = b.round_id
+            where me is not null and b.player = me and d.ends_at <= now_ms and b.round_id = any(asked)
+            group by b.round_id, d.roll)
+        ) p), '[]'::jsonb)
+  );
+end $$;
+
+-- adds p_amount to this player's bet on p_color in round p_round (null: whichever round is taking bets)
+create or replace function public.dbl_bet(p_player text, p_name text, p_color text, p_amount numeric,
+                                          p_round bigint default null, p_avatar int default 0) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  me text := public._bj_player(p_player);
+  amt numeric := round(p_amount, 2);
+  r public.dbl_round;
+  total numeric;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'error', 'player'); end if;
+  if p_color is null or p_color not in ('red', 'green', 'black') or amt is null or not (amt between 1 and 100000) then
+    return jsonb_build_object('ok', false, 'error', 'invalid');
+  end if;
+  r := public._dbl_current(now_ms);
+  if public._dbl_phase(r, now_ms) <> 'betting' or (p_round is not null and p_round <> r.id) then
+    return jsonb_build_object('ok', false, 'error', 'closed', 'round', r.id);
+  end if;
+  insert into public.dbl_bet as b (round_id, player, color, name, avatar, amount, placed_at)
+  values (r.id, me, p_color, public._bj_name(p_name), public._bj_avatar(p_avatar), amt, now_ms)
+  on conflict (round_id, player, color) do update
+    set amount = b.amount + excluded.amount, name = excluded.name, avatar = excluded.avatar
+    where b.amount + excluded.amount <= 100000
+  returning b.amount into total;
+  if total is null then return jsonb_build_object('ok', false, 'error', 'limit'); end if;
+  return jsonb_build_object('ok', true, 'round', r.id, 'color', p_color, 'amount', total);
+end $$;
+
+-- seed, hash and roll of a round that has landed, for checking it was fair
+create or replace function public.dbl_round_info(p_round bigint) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', id, 'hash', hash, 'roll', roll, 'seed', seed, 'startsAt', starts_at, 'endsAt', ends_at)
+  from public.dbl_round where id = p_round and ends_at <= public._now_ms()
+$$;
+
 -- who may call what: the browser gets the public functions, the service key gets the admin ones
 revoke execute on all functions in schema public from public, anon, authenticated;
 grant usage on schema public to anon, authenticated, service_role;
@@ -1894,6 +2093,9 @@ grant execute on function
   public.cb_bots(bigint, text),
   public.cb_leave(bigint, text),
   public.cb_result(bigint, text),
+  public.dbl_state(text, bigint, jsonb),
+  public.dbl_bet(text, text, text, numeric, bigint, int),
+  public.dbl_round_info(bigint),
   public.username_available(text)
 to anon, authenticated;
 grant execute on function

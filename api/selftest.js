@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto'
 import { auth, cfg, createAccount, deleteUser, rpc } from './_lib/supa.js'
 
 /*
   End-to-end check of the live backend: Crash, Live Blackjack (on the hidden test table 99), Case Battles (on
-  battles of g_selftest guests, which the lobby lists leave out) and accounts: sign-up, sign-in, profile and wallet
-  saves, then removes the test account. Only answers when ?key= matches the SELFTEST_KEY env var; reports pass/fail
-  only.
+  battles of g_selftest guests, which the lobby lists leave out), Double (reads only, so no test bet shows in the
+  shared columns) and accounts: sign-up, sign-in, profile and wallet saves, then removes the test account. Only
+  answers when ?key= matches the SELFTEST_KEY env var; reports pass/fail only.
 */
 
 export default async function handler(req, res) {
@@ -134,6 +135,36 @@ export default async function handler(req, res) {
     must(!JSON.stringify(r.body).includes(cbA) && !JSON.stringify(r.body).includes('bot_'), 'player ids leaked')
     must((await rpc('cb_result', { p_battle: id, p_player: cbA })).body?.state === 'running', 'result while running')
     return { id, pot: b.pot }
+  })
+
+  // Double: every player sees the same round, so the selftest reads it and only places a bet the server refuses
+  const dblGuest = cbGuest()
+  await step('dbl_state as guest', async () => {
+    const r = await rpc('dbl_state', { p_player: dblGuest, p_hist: null })
+    const f = r.body
+    must(
+      r.ok && f?.round?.id && ['betting', 'spinning', 'done'].includes(f.round.phase) && ['red', 'green', 'black'].every((k) => Array.isArray(f.colors?.[k]?.bets)) && Array.isArray(f.history) && f.mine === null,
+      `status ${r.status} ${JSON.stringify(f).slice(0, 120)}`,
+    )
+    must((f.round.phase === 'betting') === (f.round.roll === null) && (f.round.phase === 'done') === (f.round.seed !== null), 'the roll or seed came out early')
+    must(!JSON.stringify(f).includes(dblGuest), 'player id leaked')
+    // p_open (the browser's unsettled rounds) goes over as a json array; this guest has no bets, so nothing comes back
+    const again = await rpc('dbl_state', { p_player: dblGuest, p_hist: f.head, p_open: [f.head ?? 1, f.round.id] })
+    // (before any round has landed there is no head to name, so the empty history comes back each time)
+    must(again.ok && (f.head == null || again.body?.head !== f.head || again.body?.history === null), 'an unchanged history was sent again')
+    must(Array.isArray(again.body?.past) && again.body.past.length === 0, `past with p_open ${JSON.stringify(again.body?.past).slice(0, 80)}`)
+    return { round: f.round.id, phase: f.round.phase, history: f.history.length, online: f.online }
+  })
+  await step('dbl_bet refuses a bad bet; dbl_round_info checks out', async () => {
+    const bad = await rpc('dbl_bet', { p_player: dblGuest, p_name: 'Selftest', p_color: 'blue', p_amount: 5, p_round: null, p_avatar: 0 })
+    must(bad.ok && bad.body?.ok === false && bad.body.error === 'invalid', `bet ${bad.status} ${JSON.stringify(bad.body).slice(0, 120)}`)
+    const s = await rpc('dbl_state', { p_player: dblGuest, p_hist: null })
+    const last = s.body?.history?.[0]
+    if (!last) return { note: 'no round has landed yet' }
+    const info = await rpc('dbl_round_info', { p_round: last.id })
+    must(info.ok && info.body?.roll === last.roll && typeof info.body.seed === 'string', `info ${info.status} ${JSON.stringify(info.body).slice(0, 120)}`)
+    must(createHash('sha256').update(info.body.seed).digest('hex') === info.body.hash, 'the seed does not match the hash')
+    return { round: last.id, roll: last.roll }
   })
 
   const tag = Math.random().toString(36).slice(2, 8)

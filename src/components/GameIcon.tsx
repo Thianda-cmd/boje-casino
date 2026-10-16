@@ -113,6 +113,30 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
           <path d="M2 21.2c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1 2-1 4-1" opacity=".55" />
         </svg>
       )
+    case 'double':
+      // the strip: a tile either side of the lit winner, with the marker's notches above and below it
+      return (
+        <svg {...p}>
+          <rect x="1.3" y="7.6" width="5" height="8.8" rx="1.5" opacity=".6" />
+          <rect x="17.7" y="7.6" width="5" height="8.8" rx="1.5" opacity=".6" />
+          <rect x="8.7" y="6.6" width="6.6" height="10.8" rx="1.8" fill="currentColor" fillOpacity=".28" />
+          <path d="M9.9 1h4.2L12 3.3ZM9.9 23h4.2L12 20.7Z" fill="currentColor" strokeWidth="1" />
+        </svg>
+      )
+    case 'claw':
+      return (
+        <svg {...p}>
+          {/* the claw on its cable, its two prongs hugging a little plushie's head */}
+          <path d="M12 1.5v2.6" />
+          <rect x="8.3" y="4.1" width="7.4" height="3.3" rx="1.5" />
+          <path d="M9.4 7.4 4.9 11c-1 3-.4 5.9 2 7.8" />
+          <path d="M14.6 7.4 19.1 11c1 3 .4 5.9-2 7.8" />
+          <circle cx="12" cy="15.4" r="3" />
+          <circle cx="9.5" cy="12.5" r="1.25" fill="currentColor" stroke="none" />
+          <circle cx="14.5" cy="12.5" r="1.25" fill="currentColor" stroke="none" />
+          <path d="M4 22h16" opacity=".55" />
+        </svg>
+      )
     case 'cases':
       return (
         <svg {...p}>
