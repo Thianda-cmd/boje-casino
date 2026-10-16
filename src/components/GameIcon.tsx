@@ -91,6 +91,26 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
           <path d="M7.5 15h9M9 15l1 1.6 1-1.6 1 1.6 1-1.6 1 1.6 1-1.6" />
         </svg>
       )
+    case 'cases':
+      return (
+        <svg {...p}>
+          {/* a crate with its lid lifted and a glint of loot rising out */}
+          <path d="M4 12.5h16v6.3a1.7 1.7 0 0 1-1.7 1.7H5.7A1.7 1.7 0 0 1 4 18.8Z" />
+          <rect x="2.8" y="7.6" width="18.4" height="3.2" rx="1.1" />
+          <path d="M12 12.5v3.2M7.5 15.5v2M16.5 15.5v2" />
+          <path d="M12 1.5l.65 1.45L14.1 3.6l-1.45.65L12 5.7l-.65-1.45L9.9 3.6l1.45-.65Z" fill="currentColor" strokeWidth="1" />
+        </svg>
+      )
+    case 'baccarat':
+      return (
+        <svg {...p}>
+          {/* a card face up and one being squeezed, its corner peeled back */}
+          <rect x="2" y="4.5" width="9" height="14" rx="1.8" />
+          <path d="M6.5 9.2 8.4 11.5 6.5 13.8 4.6 11.5Z" fill="currentColor" stroke="none" />
+          <path d="M17 18.5h2.7a1.8 1.8 0 0 0 1.8-1.8V6.3a1.8 1.8 0 0 0-1.8-1.8h-5.4a1.8 1.8 0 0 0-1.8 1.8V14Z" />
+          <path d="M13 14h4v4.5Z" fill="currentColor" fillOpacity=".35" />
+        </svg>
+      )
     case 'roboriot':
       return (
         <svg {...p}>

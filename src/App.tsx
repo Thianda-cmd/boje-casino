@@ -17,6 +17,7 @@ import { GameIcon } from './components/GameIcon'
 import { GameCover } from './components/covers'
 import { Toasts } from './components/Toasts'
 import { isMuted, setMuted } from './lib/sound'
+import { BootDone } from './lib/boot'
 import Lobby from './pages/Lobby'
 import Rewards from './pages/Rewards'
 import History from './pages/History'
@@ -35,6 +36,8 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   blackjack: lazy(() => import('./games/blackjack/Blackjack')),
   roulette: lazy(() => import('./games/roulette/Roulette')),
   chompers: lazy(() => import('./games/chompers/Chompers')),
+  cases: lazy(() => import('./games/cases/Cases')),
+  baccarat: lazy(() => import('./games/baccarat/Baccarat')),
   popparty: lazy(() => import('./games/popparty/PopParty')),
   roboriot: lazy(() => import('./games/roboriot/RoboRiot')),
   livebj: lazy(() => import('./games/livebj/LiveBlackjack')),
@@ -76,18 +79,25 @@ export default function App() {
     page = (
       <Suspense fallback={pageFallback}>
         <Game />
+        <BootDone />
       </Suspense>
     )
   } else if (route.startsWith('/heist'))
     page = (
       <Suspense fallback={pageFallback}>
         <Heist />
+        <BootDone />
       </Suspense>
     )
-  else if (route.startsWith('/rewards')) page = <Rewards />
-  else if (route.startsWith('/history')) page = <History />
-  else if (route.startsWith('/account')) page = <Account />
-  else page = <Lobby />
+  else {
+    const Page = route.startsWith('/rewards') ? Rewards : route.startsWith('/history') ? History : route.startsWith('/account') ? Account : Lobby
+    page = (
+      <>
+        <Page />
+        <BootDone />
+      </>
+    )
+  }
 
   return (
     <div className="flex h-full">

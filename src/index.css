@@ -43,50 +43,38 @@ body {
 }
 
 /* ---------- Boje loaders (components/Loader.tsx; index.html has a plain copy) ---------- */
-@keyframes boje-chase {
-  to {
-    stroke-dashoffset: -100;
-  }
-}
-@keyframes boje-breathe {
-  0%,
-  100% {
-    transform: scale(0.93);
-  }
-  50% {
-    transform: scale(1);
-  }
-}
-@keyframes boje-shine {
-  0% {
-    transform: translateX(0);
-  }
-  55%,
-  100% {
-    transform: translateX(52px);
-  }
-}
-@keyframes boje-twinkle {
+/* the light passing over one facet of the gem; six facets offset by a sixth of a turn make it travel round */
+@keyframes boje-facet {
   0%,
   100% {
     opacity: 0;
-    transform: scale(0.3) rotate(0deg);
   }
-  50% {
+  16% {
     opacity: 1;
-    transform: scale(1) rotate(90deg);
+  }
+  48% {
+    opacity: 0;
   }
 }
-@keyframes boje-wave {
-  0%,
-  60%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.55;
-  }
-  30% {
-    transform: translateY(-5px);
+/* the small spinner: each facet lights up and fades, so a bright wedge turns round the gem */
+@keyframes boje-spin {
+  0% {
     opacity: 1;
+  }
+  70%,
+  100% {
+    opacity: 0.22;
+  }
+}
+/* loaders arrive after a moment, so quick loads never flash one */
+@keyframes boje-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 

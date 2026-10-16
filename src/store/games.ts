@@ -1,4 +1,4 @@
-export type GameId = 'chicken' | 'crash' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'roulette' | 'videopoker'
+export type GameId = 'chicken' | 'crash' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
 
 export type Category = 'originals' | 'table'
 
@@ -22,11 +22,13 @@ export const GAMES: GameInfo[] = [
   { id: 'keno', name: 'Keno', category: 'originals', tagline: 'Pick up to 10 numbers, ten are drawn.', accent: '#a46bff' },
   { id: 'hilo', name: 'Hi-Lo', category: 'originals', tagline: 'Higher or lower? Chain your calls.', accent: '#2fd6c3' },
   { id: 'wheel', name: 'Wheel', category: 'originals', tagline: 'Spin the wheel, pick your risk.', accent: '#ff7a45' },
+  { id: 'cases', name: 'Cases', category: 'originals', tagline: 'Pick a crate and watch the loot reel glide to your prize.', accent: '#ffb547', tag: 'new' },
   { id: 'chompers', name: 'Chompers', category: 'originals', tagline: 'Cartoon monsters chomp every donut on the reels.', accent: '#2ee87f', tag: 'new' },
   { id: 'popparty', name: 'Pop Party', category: 'originals', tagline: 'Balloon animals pop on a light-up floor; every pop lights a multiplier.', accent: '#ff4fb8', tag: 'new' },
   { id: 'roboriot', name: 'Robo Riot', category: 'originals', tagline: 'Toy robots charge the Power Grid: magnets, zappers and boosters stack the cells.', accent: '#5cf2ff', tag: 'new' },
   { id: 'blackjack', name: 'Blackjack', category: 'table', tagline: 'Six decks, dealer stands on soft 17, blackjack pays 3 to 2.', accent: '#4f8bff' },
   { id: 'livebj', name: 'Live Blackjack', category: 'table', tagline: 'Real players, one shoe. Pull up a seat at a shared table.', accent: '#f2a93b', tag: 'live' },
+  { id: 'baccarat', name: 'Baccarat', category: 'table', tagline: 'Player, Banker or Tie. Squeeze the cards, follow the road.', accent: '#e8c46a', tag: 'new' },
   { id: 'roulette', name: 'Roulette', category: 'table', tagline: 'European single zero. Red, black, or your lucky number.', accent: '#ff4d61' },
   { id: 'videopoker', name: 'Video Poker', category: 'table', tagline: 'Jacks or Better. Hold, draw, chase the royal flush.', accent: '#2fb8ff', tag: 'new' },
 ]

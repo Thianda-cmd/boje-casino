@@ -1,8 +1,8 @@
 # Boje Casino (play money)
 
-A Stake-style casino with sixteen games. Originals: Chicken Road, Crash, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo
-and Wheel. Table and machine games: Blackjack, Live Blackjack, Roulette, Video Poker, Chompers, Pop Party and Robo
-Riot.
+A Stake-style casino with eighteen games. Originals: Chicken Road, Crash, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
+Wheel and Cases. Table and machine games: Blackjack, Live Blackjack, Baccarat, Roulette, Video Poker, Chompers, Pop
+Party and Robo Riot.
 Vault Heist is a free skill game that pays coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
 
@@ -28,12 +28,16 @@ Chicken Road is the only pixel-art game (src/lib/pixel.ts, sprites in `src/games
 of palette keys rendered once to tiny canvases and scaled up with `image-rendering: pixelated`.
 Every other game and the site UI use a modern casino style. Its art is vector SVG drawn in React components in
 `src/art/` (cards, chips, gems, bomb, rocket, roulette wheel, prize wheel, vault, avatars, VIP badges) and the lobby
-covers in `src/components/covers.tsx`. The slot symbols are 3D models built in code (`models.ts` in
+covers in `src/components/covers.tsx`; the Cases crates and loot are in `src/games/cases/art.tsx`. The slot symbols
+are 3D models built in code (`models.ts` in
 `src/games/chompers/`, `src/games/popparty/` and `src/games/roboriot/`). No image files ship.
 
-Brand: the Boje mark (a cut gem with a B) and its loaders are in `src/components/Loader.tsx`: the big loader for
-pages and games, a small spinner for buttons, and a plain-CSS copy of the big one in `index.html` that shows
-before any script has run. Local storage keys still start with `lumen.` so existing wallets carry over.
+Brand: the Boje mark (a cut gem with a B) and its loaders are in `src/components/Loader.tsx`. The loaders are one
+quiet motion: the gem is cut into six facets and a soft light travels round them. The big loader (pages and games,
+with an optional label and progress line), a small spinner for buttons, and a plain-CSS copy of the big one in
+`index.html` that shows before any script has run. All of them run on the page's clock, so a hand-over never
+restarts the light, and the boot screen stays up until the first page has mounted (`src/lib/boot.ts`). Local
+storage keys still start with `lumen.` so existing wallets carry over.
 
 ## Backend (Supabase through Vercel)
 The browser talks to Supabase directly. The public URL and key come from the build env
@@ -88,7 +92,7 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
 - Emergency refill: 50 coins, only below 10 coins, once per 30 minutes.
 - Vault Heist: crack up to eight dials by timing each pick; the bag holds 10, 25, 50, 90, 150, 250, 400 and 650
   coins after each vault, banked whenever you like and lost on a miss. Three lockpicks, one back every 45 min.
-- Challenges: 17 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
+- Challenges: 19 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
   Crash, a 2% Dice win); Live Blackjack rounds count towards Explorer and High Roller. Only bets of 25+ count.
 
 ## Game math
@@ -99,11 +103,26 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
 - Blackjack: 6 decks, dealer stands on soft 17, 3:2 blackjack, double on any two, one split.
 - Live Blackjack: the same rules on a shared 6-deck shoe (reshuffled at a random cut between 234 and 260 cards),
   the dealer peeks with an ace or ten up, double after split allowed, 15 s per decision (8 s after a hit).
+- Baccarat: Punto Banco on an 8-deck shoe (the first card sets the burn; once the cut card, 14 to 26 cards from the
+  end, comes out, one last hand is dealt before the shuffle), naturals on 8 or 9, Player draws on 0 to 5, Banker by
+  the full third-card tableau. Player 1:1, Banker 0.95:1, Tie 8:1 (Player and Banker push), Player Pair and Banker
+  Pair 11:1. Exact house edges: Banker 1.06%, Player 1.24%, Tie 14.36%, each pair 10.36%
+  (src/games/baccarat/rules.ts; `node --experimental-strip-types --import ./tools/ts-resolve.mjs
+  tools/baccarat-test.ts` checks the tableau case by case, enumerates the shoe exactly and simulates rounds through
+  the real shoe). The scoreboard (bead plate, Big Road) and the cards left in the shoe are kept on the device; a
+  reload reshuffles the unseen cards.
 - Dice: payout 99 / win chance, roll 0.00 to 100.00.
 - Limbo: P(result ≥ x) = 0.99 / x.
 - Keno: 40 numbers, 10 drawn, 1 to 10 picks, four risk tables at about 99% return (src/games/keno/tables.ts).
 - Hi-Lo: endless deck, each correct call multiplies by 0.99 / P(call).
 - Wheel: 10 to 50 segments, three risks; every table sums to 0.99 × segments.
+- Cases: four crates, each a table of whole weights out of 100,000 that returns exactly 98%
+  (src/games/cases/rules.ts). Wooden (low) 0.3× to 10×, 1× or more 36.8% of the time; Steel (medium) 0.2× to 100×,
+  26.8%; Gold (high) 0.1× to 500×, 13.5%; Obsidian (extreme) 0.1× to 1,000×, 7.2%, with 100× or more 1 in 571. The
+  item is drawn when the crate opens and the reel is built to stop on it, its fillers drawn from the same table.
+  Rarity follows the multiplier: under 1× common, 1× uncommon, 2× rare, 10× epic, 100× legendary
+  (`node --experimental-strip-types --import ./tools/ts-resolve.mjs tools/cases-test.ts` checks the sums and samples
+  the picker).
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
 - Pop Party: 7 × 7 floor; 5+ touching balloons pay, winners pop and the rest float up until nothing wins. Every
   pop lights the tile underneath, and each further pop doubles it up to ×128; a win is multiplied by the sum of

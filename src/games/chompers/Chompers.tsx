@@ -1059,7 +1059,7 @@ export default function Chompers() {
         {!ready && (
           <motion.div
             key="loading"
-            className="absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(ellipse_at_50%_35%,#3a1670_0%,#14072e_70%)]"
+            className="absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(ellipse_at_50%_42%,#221048_0%,#14072e_72%)]"
             exit={{ opacity: 0, transition: { duration: 0.45 } }}
           >
             {failed ? (

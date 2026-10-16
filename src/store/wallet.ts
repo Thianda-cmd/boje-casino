@@ -207,6 +207,15 @@ export const CHALLENGES: Challenge[] = [
     step: (e, p) => (e.game === 'roulette' && e.meta?.straight === true ? 1 : p),
   },
   {
+    id: 'cases-legend',
+    game: 'cases',
+    title: 'Legendary Pull',
+    desc: 'Pull a legendary item worth 100× or more from a crate in Cases.',
+    reward: 3000,
+    goal: 1,
+    step: (e, p) => (e.game === 'cases' && Number(e.meta?.mult) >= 100 ? 1 : p),
+  },
+  {
     id: 'chompers-max',
     game: 'chompers',
     title: 'Monster Mash',
@@ -232,6 +241,15 @@ export const CHALLENGES: Challenge[] = [
     reward: 4000,
     goal: 1,
     step: (e, p) => (e.game === 'roboriot' && e.meta?.full === true ? 1 : p),
+  },
+  {
+    id: 'baccarat-tie',
+    game: 'baccarat',
+    title: 'Dead Heat',
+    desc: 'Win a Tie bet in Baccarat.',
+    reward: 2000,
+    goal: 1,
+    step: (e, p) => (e.game === 'baccarat' && e.meta?.tieWin === true ? 1 : p),
   },
   {
     id: 'poker-quads',

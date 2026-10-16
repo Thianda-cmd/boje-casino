@@ -6,3 +6,24 @@ export const BOJE_B =
 /** the light top facet and the shaded left facet, drawn inside the hexagon */
 export const BOJE_FACET_TOP = 'M16 1 30 9.3 16 16 2 9.3Z'
 export const BOJE_FACET_LEFT = 'M2 9.3 16 16v15L2 22.7Z'
+
+const GEM: [number, number][] = [
+  [16, 2.6],
+  [27.6, 9.3],
+  [27.6, 22.7],
+  [16, 29.4],
+  [4.4, 22.7],
+  [4.4, 9.3],
+]
+
+/** The hexagon cut into six facets that meet in the middle, clockwise from the top right. `inset` pulls each facet
+ *  towards its own centre, which opens a hairline gap between neighbours. */
+export function bojeFacets(inset = 0.07): string[] {
+  return GEM.map((a, i) => {
+    const b = GEM[(i + 1) % GEM.length]
+    const gx = (16 + a[0] + b[0]) / 3
+    const gy = (16 + a[1] + b[1]) / 3
+    const pt = ([x, y]: [number, number]) => `${(gx + (x - gx) * (1 - inset)).toFixed(2)} ${(gy + (y - gy) * (1 - inset)).toFixed(2)}`
+    return `M${pt([16, 16])}L${pt(a)}L${pt(b)}Z`
+  })
+}

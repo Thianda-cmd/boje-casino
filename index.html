@@ -11,7 +11,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
     <style>
-      /* Boje boot screen: shown until the app has drawn its first frame (main.tsx fades it out) */
+      /* Boje boot screen: shown until the app has drawn its first frame (main.tsx fades it out). The same faceted
+         gem as components/Loader.tsx: a soft light travels round the six facets, one turn every 2.4 s. */
       #boot {
         position: fixed;
         inset: 0;
@@ -19,10 +20,10 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: radial-gradient(ellipse at 50% 38%, #163049 0%, #0d1a25 62%);
+        background: radial-gradient(ellipse at 50% 40%, #13283b 0%, #0d1a25 64%);
         color: #eef4f9;
         font-family: Manrope, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-        transition: opacity 0.45s ease, visibility 0.45s;
+        transition: opacity 0.4s ease, visibility 0.4s;
       }
       #boot.gone {
         opacity: 0;
@@ -32,122 +33,51 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 14px;
-        transition: transform 0.45s ease;
+        gap: 18px;
       }
-      #boot.gone .bj {
-        transform: scale(1.06);
+      #boot .gem {
+        width: 72px;
+        height: 72px;
+        filter: drop-shadow(0 12px 26px rgba(8, 110, 62, 0.32));
       }
-      #boot .ring {
-        position: relative;
-        width: 104px;
-        height: 104px;
-      }
-      #boot .hex {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-      }
-      #boot .run {
-        stroke-dasharray: 20 30;
-        animation: bj-chase 1.5s linear infinite;
-        filter: drop-shadow(0 0 6px rgba(52, 255, 150, 0.7));
-      }
-      #boot .mark {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 58px;
-        height: 58px;
-        margin: -29px 0 0 -29px;
-        animation: bj-breathe 1.5s ease-in-out infinite;
-        filter: drop-shadow(0 6px 14px rgba(20, 200, 110, 0.45));
-      }
-      #boot .shine {
-        animation: bj-shine 2.4s ease-in-out infinite;
-      }
-      #boot .glint {
-        position: absolute;
-        animation: bj-twinkle 1.8s ease-in-out infinite;
+      #boot .lit {
+        opacity: 0;
+        animation: bj-facet 2.4s ease-in-out infinite;
       }
       #boot .word {
         display: flex;
-        font-size: 28px;
-        font-weight: 800;
+        align-items: baseline;
+        gap: 6px;
         line-height: 1;
+      }
+      #boot .word b {
+        font-size: 24px;
+        font-weight: 800;
         letter-spacing: -0.045em;
       }
-      #boot .word span {
-        display: inline-block;
-        animation: bj-wave 1.5s ease-in-out infinite;
-      }
-      #boot .word span:nth-child(2) {
-        animation-delay: 0.1s;
-      }
-      #boot .word span:nth-child(3) {
-        animation-delay: 0.2s;
-      }
-      #boot .word span:nth-child(4) {
-        animation-delay: 0.3s;
-      }
-      #boot .sub {
-        margin-top: -6px;
+      #boot .word i {
+        font-style: normal;
         font-size: 10px;
         font-weight: 800;
-        letter-spacing: 0.32em;
+        letter-spacing: 0.3em;
         text-transform: uppercase;
         color: #22d36f;
       }
-      @keyframes bj-chase {
-        to {
-          stroke-dashoffset: -100;
-        }
-      }
-      @keyframes bj-breathe {
-        0%,
-        100% {
-          transform: scale(0.93);
-        }
-        50% {
-          transform: scale(1);
-        }
-      }
-      @keyframes bj-shine {
-        0% {
-          transform: translateX(0);
-        }
-        55%,
-        100% {
-          transform: translateX(52px);
-        }
-      }
-      @keyframes bj-twinkle {
+      @keyframes bj-facet {
         0%,
         100% {
           opacity: 0;
-          transform: scale(0.3) rotate(0deg);
         }
-        50% {
+        16% {
           opacity: 1;
-          transform: scale(1) rotate(90deg);
         }
-      }
-      @keyframes bj-wave {
-        0%,
-        60%,
-        100% {
-          transform: translateY(0);
-          opacity: 0.55;
-        }
-        30% {
-          transform: translateY(-6px);
-          opacity: 1;
+        48% {
+          opacity: 0;
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        #boot * {
-          animation: none !important;
+        #boot .lit {
+          animation: none;
         }
       }
     </style>
@@ -155,44 +85,33 @@
   <body>
     <div id="boot" role="status" aria-label="Loading Boje Casino">
       <div class="bj">
-        <div class="ring">
-          <svg class="hex" viewBox="0 0 84 84" aria-hidden="true">
-            <defs>
-              <linearGradient id="bjr" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#6dffb2" />
-                <stop offset="1" stop-color="#25d9f0" />
-              </linearGradient>
-            </defs>
-            <path d="M42 4 74.9 23v38L42 80 9.1 61V23Z" fill="none" stroke="#fff" stroke-opacity=".07" stroke-width="3" stroke-linejoin="round" />
-            <path class="run" d="M42 4 74.9 23v38L42 80 9.1 61V23Z" pathLength="100" fill="none" stroke="url(#bjr)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-            <defs>
-              <linearGradient id="bjg" x1="0.15" y1="0" x2="0.85" y2="1">
-                <stop offset="0" stop-color="#6dffb2" />
-                <stop offset="0.5" stop-color="#1fd172" />
-                <stop offset="1" stop-color="#0b8a47" />
-              </linearGradient>
-              <clipPath id="bjc"><path d="M16 2.6 27.6 9.3v13.4L16 29.4 4.4 22.7V9.3Z" /></clipPath>
-            </defs>
-            <path d="M16 2.6 27.6 9.3v13.4L16 29.4 4.4 22.7V9.3Z" fill="url(#bjg)" stroke="url(#bjg)" stroke-width="2.6" stroke-linejoin="round" />
-            <g clip-path="url(#bjc)">
-              <path d="M16 1 30 9.3 16 16 2 9.3Z" fill="#fff" opacity=".2" />
-              <path d="M2 9.3 16 16v15L2 22.7Z" fill="#000" opacity=".08" />
-              <polygon class="shine" points="-4,-4 3,-4 -6,36 -13,36" fill="#fff" opacity=".5" />
-            </g>
-            <path
-              d="M10.3 8.5h6.4c3.1 0 5 1.55 5 4 0 1.5-.8 2.6-2.1 3.1 1.75.5 2.75 1.85 2.75 3.65 0 2.7-2.1 4.25-5.4 4.25H10.3Zm3.4 2.7v3.4h2.6c1.2 0 1.9-.62 1.9-1.7s-.7-1.7-1.9-1.7Zm0 6.1v3.6h2.9c1.35 0 2.15-.68 2.15-1.8s-.8-1.8-2.15-1.8Z"
-              fill="#04260f"
-              fill-rule="evenodd"
-            />
-          </svg>
-          <svg class="glint" style="right: -4px; top: 4px; width: 16px; height: 16px; color: #bfffe0" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 0c.35 2.6 1.4 3.65 5 5-3.6 1.35-4.65 2.4-5 5-.35-2.6-1.4-3.65-5-5 3.6-1.35 4.65-2.4 5-5Z" fill="currentColor" /></svg>
-          <svg class="glint" style="left: -6px; top: 44px; width: 11px; height: 11px; color: #9fefff; animation-delay: 0.6s" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 0c.35 2.6 1.4 3.65 5 5-3.6 1.35-4.65 2.4-5 5-.35-2.6-1.4-3.65-5-5 3.6-1.35 4.65-2.4 5-5Z" fill="currentColor" /></svg>
-          <svg class="glint" style="right: 14px; bottom: 0; width: 9px; height: 9px; color: #ffe9a8; animation-delay: 1.2s" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 0c.35 2.6 1.4 3.65 5 5-3.6 1.35-4.65 2.4-5 5-.35-2.6-1.4-3.65-5-5 3.6-1.35 4.65-2.4 5-5Z" fill="currentColor" /></svg>
-        </div>
-        <div class="word" aria-hidden="true"><span>b</span><span>o</span><span>j</span><span>e</span></div>
-        <div class="sub" aria-hidden="true">casino</div>
+        <svg class="gem" viewBox="0 0 32 32" aria-hidden="true">
+          <defs>
+            <linearGradient id="bjg" gradientUnits="userSpaceOnUse" x1="7" y1="3" x2="25" y2="29">
+              <stop offset="0" stop-color="#5ff5a6" />
+              <stop offset=".55" stop-color="#1fd172" />
+              <stop offset="1" stop-color="#0c8d49" />
+            </linearGradient>
+          </defs>
+          <path d="M16.27 15.53L16.27 3.07L27.06 9.30Z" fill="url(#bjg)" />
+          <path d="M16.54 16.00L27.33 9.77L27.33 22.23Z" fill="url(#bjg)" />
+          <path d="M16.27 16.47L27.06 22.70L16.27 28.93Z" fill="url(#bjg)" />
+          <path d="M15.73 16.47L15.73 28.93L4.94 22.70Z" fill="url(#bjg)" />
+          <path d="M15.46 16.00L4.67 22.23L4.67 9.77Z" fill="url(#bjg)" />
+          <path d="M15.73 15.53L4.94 9.30L15.73 3.07Z" fill="url(#bjg)" />
+          <path d="M16.27 15.53L16.27 3.07L27.06 9.30Z" fill="#fff" opacity="0.2" />
+          <path d="M16.54 16.00L27.33 9.77L27.33 22.23Z" fill="#fff" opacity="0.06" />
+          <path d="M15.46 16.00L4.67 22.23L4.67 9.77Z" fill="#fff" opacity="0.05" />
+          <path d="M15.73 15.53L4.94 9.30L15.73 3.07Z" fill="#fff" opacity="0.16" />
+          <path class="lit" d="M16.27 15.53L16.27 3.07L27.06 9.30Z" fill="#fff" fill-opacity=".38" />
+          <path class="lit" d="M16.54 16.00L27.33 9.77L27.33 22.23Z" fill="#fff" fill-opacity=".38" style="animation-delay: 0.4s" />
+          <path class="lit" d="M16.27 16.47L27.06 22.70L16.27 28.93Z" fill="#fff" fill-opacity=".38" style="animation-delay: 0.8s" />
+          <path class="lit" d="M15.73 16.47L15.73 28.93L4.94 22.70Z" fill="#fff" fill-opacity=".38" style="animation-delay: 1.2s" />
+          <path class="lit" d="M15.46 16.00L4.67 22.23L4.67 9.77Z" fill="#fff" fill-opacity=".38" style="animation-delay: 1.6s" />
+          <path class="lit" d="M15.73 15.53L4.94 9.30L15.73 3.07Z" fill="#fff" fill-opacity=".38" style="animation-delay: 2.0s" />
+          <path d="M10.3 8.5h6.4c3.1 0 5 1.55 5 4 0 1.5-.8 2.6-2.1 3.1 1.75.5 2.75 1.85 2.75 3.65 0 2.7-2.1 4.25-5.4 4.25H10.3Zm3.4 2.7v3.4h2.6c1.2 0 1.9-.62 1.9-1.7s-.7-1.7-1.9-1.7Zm0 6.1v3.6h2.9c1.35 0 2.15-.68 2.15-1.8s-.8-1.8-2.15-1.8Z" fill="#04260f" fill-rule="evenodd" />
+        </svg>
+        <div class="word" aria-hidden="true"><b>boje</b><i>casino</i></div>
       </div>
     </div>
     <div id="root"></div>

@@ -941,7 +941,7 @@ export default function RoboRiot() {
         {!ready && (
           <motion.div
             key="loading"
-            className="absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(ellipse_at_50%_35%,#2fc6e8_0%,#2a2a8a_45%,#0a0b26_100%)]"
+            className="absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(ellipse_at_50%_42%,#171b46_0%,#0a0b26_72%)]"
             exit={{ opacity: 0, transition: { duration: 0.45 } }}
           >
             {failed ? (

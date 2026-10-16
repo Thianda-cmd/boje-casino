@@ -13,6 +13,7 @@ import { Rocket } from '../art/Rocket'
 import { RouletteWheel } from '../art/RouletteWheel'
 import { PrizeWheel } from '../art/PrizeWheel'
 import { wheelSegments } from '../games/wheel/rules'
+import { CrateArt, ItemArt } from '../games/cases/art'
 
 /* Lobby art. Chicken Road keeps its pixel look; everything else is clean vector art on a bold gradient. */
 
@@ -49,6 +50,10 @@ export function GameCover({ id }: { id: GameId }) {
       return <RouletteCover />
     case 'chompers':
       return <ChompersCover />
+    case 'cases':
+      return <CasesCover />
+    case 'baccarat':
+      return <BaccaratCover />
     case 'roboriot':
       return <RoboRiotCover />
     case 'popparty':
@@ -1100,6 +1105,158 @@ function RoboRiotCover() {
       <Sparkle x={190} y={60} r={4.5} />
       <Sparkle x={14} y={98} r={3.5} />
       <Sparkle x={150} y={18} r={3} />
+    </Scene>
+  )
+}
+
+/** Cases: the obsidian crate thrown open, gold light pouring out and the loot rising on it: a grand diamond, a crown,
+ *  gold coins and a ring. */
+function CasesCover() {
+  const u = useUid()
+  return (
+    <Scene from="#ffb547" to="#4a1804">
+      <defs>
+        <linearGradient id={`${u}beam`} x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#fff3c4" stopOpacity=".75" />
+          <stop offset=".55" stopColor="#ffe08a" stopOpacity=".22" />
+          <stop offset="1" stopColor="#ffe08a" stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id={`${u}glow`} cx=".5" cy=".5" r=".5">
+          <stop offset="0" stopColor="#fff6d6" stopOpacity=".95" />
+          <stop offset=".45" stopColor="#ffc94a" stopOpacity=".55" />
+          <stop offset="1" stopColor="#ffb547" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      {Array.from({ length: 9 }, (_, i) => (
+        <path key={i} d="M100 150 L94 -60 L106 -60 Z" fill="#fff" opacity=".07" transform={`rotate(${(i - 4) * 17} 100 150)`} />
+      ))}
+      <path d="M52 146 L4 -10 H196 L148 146 Z" fill={`url(#${u}beam)`} />
+      <ellipse cx="100" cy="142" rx="86" ry="56" fill={`url(#${u}glow)`} />
+      {/* the crate, its lid thrown up and back */}
+      <g style={{ filter: 'drop-shadow(0 10px 12px rgba(40,10,0,.45))' }}>
+        <CrateArt tier="extreme" part="body" size={146} x={27} y={92} />
+      </g>
+      <ellipse cx="100" cy="144" rx="44" ry="7" fill="#fff4cf" opacity=".85" />
+      <g transform="translate(0 -26) rotate(-10 100 120)">
+        <CrateArt tier="extreme" part="lid" size={146} x={27} y={92} />
+      </g>
+      {/* the loot */}
+      <g transform="rotate(-16 40 86)">
+        <ItemArt kind="crown" size={50} x={15} y={60} />
+      </g>
+      <g transform="rotate(12 160 92)">
+        <ItemArt kind="coins" size={46} x={137} y={68} />
+      </g>
+      <g transform="rotate(14 150 38)">
+        <ItemArt kind="ring" size={34} x={133} y={20} />
+      </g>
+      <g style={{ filter: 'drop-shadow(0 8px 10px rgba(60,20,0,.35))' }}>
+        <ItemArt kind="diamond" size={78} x={61} y={22} />
+      </g>
+      <Sparkle x={40} y={30} r={5} />
+      <Sparkle x={176} y={128} r={4} />
+      <Sparkle x={22} y={128} r={3} />
+    </Scene>
+  )
+}
+
+/** Baccarat: a natural nine and a card being squeezed, its corner peeled back to the first pip, over the curved
+ *  Player and Banker zones with chips on them. */
+function BaccaratCover() {
+  const u = useUid()
+  // the layout's arcs, concentric with the dealer far above
+  const cx = 100
+  const cy = -175
+  const pt = (r: number, deg: number) => {
+    const a = (deg * Math.PI) / 180
+    return `${(cx + r * Math.sin(a)).toFixed(1)} ${(cy + r * Math.cos(a)).toFixed(1)}`
+  }
+  const band = (ri: number, ro: number, a0: number, a1: number) => `M${pt(ro, a0)} A${ro} ${ro} 0 0 0 ${pt(ro, a1)} L${pt(ri, a1)} A${ri} ${ri} 0 0 1 ${pt(ri, a0)}Z`
+  const arc = (r: number, a0: number, a1: number) => `M${pt(r, a0)} A${r} ${r} 0 0 0 ${pt(r, a1)}`
+  // the squeezed card: 66 × 92 at (98, 34), peeled from its bottom-left corner along 35°
+  const [x0, y0, w, h] = [98, 34, 66, 92]
+  const nx = Math.cos((35 * Math.PI) / 180)
+  const ny = Math.sin((35 * Math.PI) / 180)
+  const cut = (s: number) => [`${x0} ${(y0 + h - s / ny).toFixed(1)}`, `${(x0 + s / nx).toFixed(1)} ${y0 + h}`]
+  const [a1, b1] = cut(30)
+  const [a2, b2] = cut(39)
+  const [a3, b3] = cut(46)
+  const along = (s: number) => [x0 + nx * s, y0 + h - ny * s]
+  const [g0x, g0y] = along(30)
+  const [g1x, g1y] = along(39)
+  const [g2x, g2y] = along(46)
+  return (
+    <Scene from="#ecc56a" to="#2d0f3f">
+      <defs>
+        <clipPath id={`${u}rest`}>
+          <path d={`M${a1} L${x0} ${y0} H${x0 + w} V${y0 + h} H${b1.split(' ')[0]}Z`} />
+        </clipPath>
+        <linearGradient id={`${u}lip`} gradientUnits="userSpaceOnUse" x1={g0x} y1={g0y} x2={g1x} y2={g1y}>
+          <stop offset="0" stopColor="#8995a3" />
+          <stop offset=".3" stopColor="#eef1f5" />
+          <stop offset=".52" stopColor="#ffffff" />
+          <stop offset=".8" stopColor="#dce2e9" />
+          <stop offset="1" stopColor="#97a2ae" />
+        </linearGradient>
+        <linearGradient id={`${u}shade`} gradientUnits="userSpaceOnUse" x1={g1x} y1={g1y} x2={g2x} y2={g2y}>
+          <stop offset="0" stopColor="#000" stopOpacity=".42" />
+          <stop offset="1" stopColor="#000" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={`${u}pl`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#2f7cf6" stopOpacity=".28" />
+          <stop offset="1" stopColor="#2f7cf6" stopOpacity=".5" />
+        </linearGradient>
+        <linearGradient id={`${u}bk`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#e8344e" stopOpacity=".28" />
+          <stop offset="1" stopColor="#e8344e" stopOpacity=".5" />
+        </linearGradient>
+      </defs>
+      {/* the layout */}
+      <path d={band(296, 361, -24, 24)} fill="#0b0716" opacity=".35" />
+      <path d={band(301, 326, -22, -6.6)} fill="#fff" fillOpacity=".06" stroke="#f7c548" strokeOpacity=".7" strokeWidth="1.1" />
+      <path d={band(301, 326, -6, 6)} fill="#22d36f" fillOpacity=".22" stroke="#f7c548" strokeOpacity=".7" strokeWidth="1.1" />
+      <path d={band(301, 326, 6.6, 22)} fill="#fff" fillOpacity=".06" stroke="#f7c548" strokeOpacity=".7" strokeWidth="1.1" />
+      <path d={band(330, 357, -22, -0.4)} fill={`url(#${u}pl)`} stroke="#f7c548" strokeOpacity=".8" strokeWidth="1.2" />
+      <path d={band(330, 357, 0.4, 22)} fill={`url(#${u}bk)`} stroke="#f7c548" strokeOpacity=".8" strokeWidth="1.2" />
+      <path id={`${u}tp`} d={arc(348, -22, -0.4)} fill="none" />
+      <path id={`${u}tb`} d={arc(348, 0.4, 22)} fill="none" />
+      <path id={`${u}tt`} d={arc(309, -6, 6)} fill="none" />
+      <text fontSize="10.5" fontWeight="900" letterSpacing="2" fill="#cfe1ff" fontFamily="Manrope, system-ui, sans-serif">
+        <textPath href={`#${u}tp`} startOffset="50%" textAnchor="middle">
+          PLAYER
+        </textPath>
+      </text>
+      <text fontSize="10.5" fontWeight="900" letterSpacing="2" fill="#ffd0d7" fontFamily="Manrope, system-ui, sans-serif">
+        <textPath href={`#${u}tb`} startOffset="50%" textAnchor="middle">
+          BANKER
+        </textPath>
+      </text>
+      <text fontSize="8" fontWeight="900" letterSpacing="1.6" fill="#b6f7d2" fontFamily="Manrope, system-ui, sans-serif">
+        <textPath href={`#${u}tt`} startOffset="50%" textAnchor="middle">
+          TIE
+        </textPath>
+      </text>
+      {/* chips on Banker, one on Player */}
+      <Chip value={100} size={24} x={112} y={153} />
+      <Chip value={500} size={24} x={112} y={148.5} />
+      <Chip value={25} size={24} x={112} y={144} />
+      <Chip value={10} size={21} x={68} y={154} />
+      {/* a natural nine, face up */}
+      <g transform="rotate(-11 70 80)" style={{ filter: 'drop-shadow(0 8px 10px rgba(0,0,0,.35))' }}>
+        <CardFace rank="9" suit="♥" x={38} y={36} width={66} height={92} />
+      </g>
+      {/* the squeeze: the back peels from the corner to show the first pip */}
+      <g transform="rotate(10 131 80)">
+        <rect x={x0} y={y0} width={w} height={h} rx={6} fill="#000" opacity=".3" transform="translate(2 7)" />
+        <CardFace rank="8" suit="♦" x={x0} y={y0} width={w} height={h} />
+        <g clipPath={`url(#${u}rest)`}>
+          <CardBack x={x0} y={y0} width={w} height={h} />
+        </g>
+        <path d={`M${a1} L${b1} L${b2} L${a2}Z`} fill={`url(#${u}lip)`} />
+        <path d={`M${a2} L${b2} L${b3} L${a3}Z`} fill={`url(#${u}shade)`} />
+      </g>
+      <Sparkle x={182} y={30} r={4} />
+      <Sparkle x={22} y={118} r={3} />
     </Scene>
   )
 }

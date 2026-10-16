@@ -875,7 +875,7 @@ export default function PopParty() {
         {!ready && (
           <motion.div
             key="loading"
-            className="absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(ellipse_at_50%_35%,#ff9fd6_0%,#7a3fc0_45%,#2a1450_100%)]"
+            className="absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(ellipse_at_50%_42%,#3b1c60_0%,#2a1450_72%)]"
             exit={{ opacity: 0, transition: { duration: 0.45 } }}
           >
             {failed ? (

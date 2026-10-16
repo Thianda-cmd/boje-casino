@@ -187,6 +187,7 @@ export function Segmented<T extends string | number>({
             {active && (
               <motion.span
                 layoutId={id}
+                layoutDependency={value}
                 className="absolute inset-0 -z-10 rounded-full bg-raised shadow-[0_2px_6px_rgba(0,0,0,.25),inset_0_1px_0_rgba(255,255,255,.06)]"
                 transition={{ type: 'spring', stiffness: 500, damping: 38 }}
               />
@@ -251,7 +252,12 @@ export function Toggle({ on, onChange, disabled, label }: { on: boolean; onChang
       aria-pressed={on}
       className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? 'bg-accent' : 'bg-raised'} disabled:opacity-50`}
     >
-      <motion.span layout transition={{ type: 'spring', stiffness: 600, damping: 34 }} className="absolute top-1 h-4 w-4 rounded-full bg-white shadow" style={{ left: on ? 24 : 4 }} />
+      <motion.span
+        initial={false}
+        animate={{ x: on ? 20 : 0 }}
+        transition={{ type: 'spring', stiffness: 600, damping: 34 }}
+        className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow"
+      />
     </button>
   )
 }
@@ -306,6 +312,8 @@ export function HistoryPills({
   items: { key: string | number; label: ReactNode; tone: PillTone; style?: React.CSSProperties; onClick?: () => void }[]
   className?: string
 }) {
+  // pills re-measure their layout only when a result arrives, not on every render of the game around them
+  const head = items[0]?.key
   return (
     <div className={`no-scrollbar flex gap-1.5 overflow-hidden ${className}`}>
       <AnimatePresence initial={false}>
@@ -315,6 +323,7 @@ export function HistoryPills({
             <Tag
               key={it.key}
               layout
+              layoutDependency={head}
               initial={{ opacity: 0, scale: 0.6, x: -12 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.6 }}
