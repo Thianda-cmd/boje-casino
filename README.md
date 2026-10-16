@@ -1,7 +1,8 @@
 # Boje Casino (play money)
 
 A Stake-style casino with sixteen games. Originals: Chicken Road, Crash, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo
-and Wheel. Table and machine games: Blackjack, Live Blackjack, Roulette, Video Poker, Slots, Chompers and Pop Party.
+and Wheel. Table and machine games: Blackjack, Live Blackjack, Roulette, Video Poker, Chompers, Pop Party and Robo
+Riot.
 Vault Heist is a free skill game that pays coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
 
@@ -13,7 +14,8 @@ browser (localStorage); signed-in players have it saved to their account.
 
 ## Stack
 Vite + React 19 + TypeScript, Tailwind CSS v4, Framer Motion, Zustand, supabase-js. Plinko and Crash draw on
-canvas; Slots is a three.js scene, loaded only when the game opens. Hash routing and relative asset paths mean `dist/` works as-is inside Capacitor:
+canvas; the slots (Chompers, Pop Party and Robo Riot) are three.js scenes, loaded only when the game opens. Hash
+routing and relative asset paths mean `dist/` works as-is inside Capacitor:
 
     npm i @capacitor/core @capacitor/cli && npx cap init "Boje Casino" com.example.boje --web-dir dist
     npm i @capacitor/ios @capacitor/android && npx cap add ios && npx cap add android
@@ -26,8 +28,8 @@ Chicken Road is the only pixel-art game (src/lib/pixel.ts, sprites in `src/games
 of palette keys rendered once to tiny canvases and scaled up with `image-rendering: pixelated`.
 Every other game and the site UI use a modern casino style. Its art is vector SVG drawn in React components in
 `src/art/` (cards, chips, gems, bomb, rocket, roulette wheel, prize wheel, vault, avatars, VIP badges) and the lobby
-covers in `src/components/covers.tsx`. The Slots symbols are 3D models built in code (`src/games/slots/models.ts`):
-faceted gems lofted from outlines, a gold crown and Boje coin, the star and the multiplier orbs. No image files ship.
+covers in `src/components/covers.tsx`. The slot symbols are 3D models built in code (`models.ts` in
+`src/games/chompers/`, `src/games/popparty/` and `src/games/roboriot/`). No image files ship.
 
 Brand: the Boje mark (a cut gem with a B) and its loaders are in `src/components/Loader.tsx`: the big loader for
 pages and games, a small spinner for buttons, and a plain-CSS copy of the big one in `index.html` that shows
@@ -103,12 +105,6 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
 - Hi-Lo: endless deck, each correct call multiplies by 0.99 / P(call).
 - Wheel: 10 to 50 segments, three risks; every table sums to 0.99 × segments.
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
-- Slots: 6 × 5 grid that pays anywhere: 8+ of a symbol win, winners shatter and the rest tumble down until nothing
-  more wins. 4+ stars pay 3×, 5× or 100× and start 10 free spins (3+ stars in free spins add 5). In free spins,
-  multiplier orbs (2× to 100×) add up and multiply any spin that wins. Buy free spins for 100× the bet; max win
-  5,000×. Simulated return about 96.5% for the base game and for bought free spins
-  (`node --experimental-strip-types tools/slots-sim.ts 2000000 100000`). The whole round is drawn when the bet
-  is placed (`rules.ts`) and the screen plays it back through the 3D scene (`scene.ts`).
 - Pop Party: 7 × 7 floor; 5+ touching balloons pay, winners pop and the rest float up until nothing wins. Every
   pop lights the tile underneath, and each further pop doubles it up to ×128; a win is multiplied by the sum of
   the tiles under it. 3+ disco balls pay 2× to 100× and start 10 to 30 free spins (Disco Night), where the floor
@@ -116,5 +112,22 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   (every tile starts at ×2) for 525×; Party Mode costs 1.25× and starts Disco Night about 1.6× as often. Max win
   10,000×. Simulated return 96.0% for paid spins and for Party Mode, 96.1% for the 100× buy and 95.8% for Super,
   each within ±0.12 at 95% confidence (`node --experimental-strip-types tools/popparty-sim.ts`).
+- Chompers: 5 × 4 reels, 1,024 ways; wilds land on reels 2 to 5 and each one eats every donut on the screen.
+  3, 4 or 5 eggs pay 2×, 5× or 20× and start 10, 15 or 20 free spins (1 in 247 paid spins), where every fourth
+  wild adds 10 spins and lifts the donut multiplier to 2×, 3× and then 10×. Each feature opens with a Feast Pick
+  modifier: hungry (starts at 2×) 28%, donut rain 32%, wild crowd 15% or +5 spins 25%. Buy 10 free spins for
+  100×, Super Feast (starts at 2× and adds a second modifier) for 175×; Hungry Mode costs 1.25× and starts free
+  spins about 1.55× as often (1 in 159). Max win 10,000×. Simulated return 96.1% for paid spins, Hungry Mode,
+  the 100× buy and Super, each within ±0.07 at 95% confidence (`node --experimental-strip-types tools/chompers-sim.ts`).
+- Robo Riot: 5 × 5 tubes, 3,125 ways from the left (wilds on reels 2 to 5; hit rate 58%). Power cells and Magnet,
+  Zap and Boost bots carry values from 1× to 50×; 6+ start the Power Grid (1 in 233 paid spins, 23% of them through
+  Volt's Power Surge when 4 or 5 land): they lock on 25 sockets, every empty socket respins on its own and any
+  arrival resets the respins to 3. Bots work on the power cells only, never on each other: Zap bots double 3 random
+  cells, Boost bots add their value to every cell, Magnet bots collect every cell's value, and each bot pays its own
+  value too. Gold bots land only on respins (13% of Power Grids) and fire again whenever a new cell clamps in; a
+  full board (1 in 259) doubles the total. Buy the Power Grid for 100×, Super (a gold bot from the start) for 425×;
+  Overclock costs 1.25× and starts the Power Grid 1.63× as often (1 in 143). Max win 20,000×. Simulated return
+  96.0% for paid spins, 96.1% for Overclock, the 100× buy and Super, each within ±0.07 at 95% confidence
+  (`node --experimental-strip-types tools/roboriot-sim.ts`; tests in `tools/roboriot-test.ts`).
 - Video Poker: Jacks or Better, 9/6 full pay (about 99.5% with perfect play); "Best hold" picks the hold with
   the highest expected return.

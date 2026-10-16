@@ -34,9 +34,9 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   wheel: lazy(() => import('./games/wheel/Wheel')),
   blackjack: lazy(() => import('./games/blackjack/Blackjack')),
   roulette: lazy(() => import('./games/roulette/Roulette')),
-  slots: lazy(() => import('./games/slots/Slots')),
   chompers: lazy(() => import('./games/chompers/Chompers')),
   popparty: lazy(() => import('./games/popparty/PopParty')),
+  roboriot: lazy(() => import('./games/roboriot/RoboRiot')),
   livebj: lazy(() => import('./games/livebj/LiveBlackjack')),
   videopoker: lazy(() => import('./games/videopoker/VideoPoker')),
 }

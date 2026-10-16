@@ -111,7 +111,7 @@ const SLIDES: Slide[] = [
     cta: 'Play Pop Party',
     to: '/game/popparty',
     bg: 'linear-gradient(110deg,#251236 0%,#3a1748 55%,#552058 100%)',
-    art: <HeroFan ids={['chompers', 'slots', 'popparty', 'blackjack', 'mines']} />,
+    art: <HeroFan ids={['chompers', 'roboriot', 'popparty', 'videopoker', 'mines']} />,
   },
   {
     key: 'livebj',
@@ -129,6 +129,23 @@ const SLIDES: Slide[] = [
     to: '/game/livebj',
     bg: 'linear-gradient(110deg,#0b241d 0%,#0e3027 55%,#2a2812 100%)',
     art: <HeroLiveTable />,
+  },
+  {
+    key: 'roboriot',
+    eyebrow: 'New slot',
+    tone: 'text-[#5cf2ff] bg-[#5cf2ff]/15',
+    title: (
+      <>
+        Charge the
+        <br />
+        Power Grid
+      </>
+    ),
+    text: 'Toy robots charge the Power Grid: zappers double cells, boosters pump them all, magnets grab the lot. A full grid pays double.',
+    cta: 'Play Robo Riot',
+    to: '/game/roboriot',
+    bg: 'linear-gradient(110deg,#0b0d30 0%,#141850 55%,#2a1260 100%)',
+    art: <HeroRobo />,
   },
   {
     key: 'heist',
@@ -149,7 +166,7 @@ const SLIDES: Slide[] = [
   },
   {
     key: 'chompers',
-    eyebrow: 'New slot',
+    eyebrow: 'New: Feast Pick',
     tone: 'text-[#2ee87f] bg-[#2ee87f]/15',
     title: (
       <>
@@ -158,28 +175,11 @@ const SLIDES: Slide[] = [
         Chompers
       </>
     ),
-    text: 'Cartoon monsters gobble every donut on the reels. Fill the meter for up to 10× in free spins.',
+    text: "Monsters gobble every donut on the reels. Big Mama's Feast Pick cracks open free spins with a treat.",
     cta: 'Play Chompers',
     to: '/game/chompers',
-    bg: 'linear-gradient(110deg,#0f2a26 0%,#123528 55%,#173f2c 100%)',
-    art: <HeroFan ids={['slots', 'blackjack', 'chompers', 'videopoker', 'mines']} />,
-  },
-  {
-    key: 'new',
-    eyebrow: 'New',
-    tone: 'text-accent bg-accent/15',
-    title: (
-      <>
-        Slots, now
-        <br />
-        in 3D
-      </>
-    ),
-    text: 'Gems that pay anywhere, tumbling wins and multiplier orbs up to 100× in free spins.',
-    cta: 'Spin Slots',
-    to: '/game/slots',
-    bg: 'linear-gradient(110deg,#1f1338 0%,#24164a 55%,#2f1a5a 100%)',
-    art: <HeroFan />,
+    bg: 'linear-gradient(110deg,#170b31 0%,#241050 55%,#33166a 100%)',
+    art: <HeroFan ids={['blackjack', 'popparty', 'chompers', 'roboriot', 'mines']} />,
   },
 ]
 
@@ -447,7 +447,208 @@ function HeroVault() {
   )
 }
 
-function HeroFan({ ids = ['blackjack', 'videopoker', 'slots', 'roulette', 'mines'] }: { ids?: GameId[] }) {
+/* Robo Riot: Volt peeking over the top of his machine, its Power Grid lit with power cells and a zap bot crackling
+   lightning into two of them, the neon city behind. */
+const ROBO_SKY: [number, number, number][] = [
+  [30, 150, 26], [58, 118, 22], [82, 162, 18], [100, 100, 26], [128, 138, 20], [376, 92, 30], [356, 150, 18],
+]
+const ROBO_LIT = ROBO_SKY.flatMap(([x, y, w], b) =>
+  Array.from({ length: 6 }, (_, i) => ({ x: x + 4 + ((b * 5 + i * 3) % 3) * ((w - 8) / 3), y: y + 8 + ((b * 3 + i * 5) % 7) * 12, c: ['#ffe14a', '#5cf2ff', '#ff6fd8'][(b + i) % 3] })),
+)
+/** what the hero's sockets hold, by [col, row]: a value and its colour, or the zap bot */
+const ROBO_GRID: Record<string, [string, string]> = {
+  '0,0': ['5', '#5cf2ff'],
+  '2,0': ['zap', '#ffe14a'],
+  '4,0': ['25', '#ff4fd8'],
+  '1,1': ['20', '#ff4fd8'],
+  '3,1': ['50', '#ffcf3a'],
+  '0,2': ['2', '#5cf2ff'],
+  '2,2': ['8', '#3d8bff'],
+  '4,2': ['10', '#b56bff'],
+}
+const BUTTONS = ['#ff4b3e', '#ffc21a', '#4dff8f', '#3ea2ff', '#ff3fd2']
+
+function HeroRobo() {
+  const u = useUid()
+  const sx = (c: number) => 183 + c * 36
+  const sy = (r: number) => 118 + r * 35
+  const ink = '#0b1033'
+  const mid = (c: number, r: number) => [sx(c) + 15, sy(r) + 15] as const
+  const [zx, zy] = mid(2, 0)
+  const arc = (tx: number, ty: number) => `${zx},${zy} ${(zx + tx) / 2 - 6},${(zy + ty) / 2 - 4} ${(zx + tx) / 2 + 5},${(zy + ty) / 2 + 3} ${tx},${ty}`
+  const [ax, ay] = mid(1, 1)
+  const [bx, by] = mid(3, 1)
+  return (
+    <div className="absolute inset-y-0 right-0 hidden w-[58%] sm:block [mask-image:linear-gradient(to_right,transparent,black_26%)]">
+      <svg className="h-full w-full" viewBox="0 0 400 270" preserveAspectRatio="xMaxYMid slice" aria-hidden>
+        <defs>
+          <linearGradient id={`${u}m`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#ffffff" />
+            <stop offset="1" stopColor="#b3bfd1" />
+          </linearGradient>
+          <linearGradient id={`${u}t`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#6ff5ea" />
+            <stop offset="1" stopColor="#0f9c93" />
+          </linearGradient>
+          <radialGradient id={`${u}s`} cx=".4" cy=".35" r=".8">
+            <stop offset="0" stopColor="#17386a" />
+            <stop offset="1" stopColor="#060d24" />
+          </radialGradient>
+          <linearGradient id={`${u}k`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#2a2170" />
+            <stop offset="1" stopColor="#100a30" />
+          </linearGradient>
+          <linearGradient id={`${u}b`} x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stopColor="#ff4a4a" stopOpacity=".45" />
+            <stop offset="1" stopColor="#ff4a4a" stopOpacity="0" />
+          </linearGradient>
+          <radialGradient id={`${u}g`}>
+            <stop offset="0" stopColor="#5cf2ff" stopOpacity=".5" />
+            <stop offset="1" stopColor="#5cf2ff" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id={`${u}r`} cx=".35" cy=".3" r=".8">
+            <stop offset="0" stopColor="#ff8a8a" />
+            <stop offset="1" stopColor="#c8121f" />
+          </radialGradient>
+          <filter id={`${u}f`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.6" />
+          </filter>
+        </defs>
+
+        {/* the city through the workshop window: searchlights, the moon, the skyline */}
+        <path d="M70 270 L130 -10 L152 -10 Z M396 270 L330 -10 L350 -10 Z" fill="#fff" opacity=".06" />
+        <circle cx="128" cy="44" r="30" fill="#fff6dc" opacity=".12" />
+        <circle cx="128" cy="44" r="14" fill="#fff3d1" />
+        <circle cx="124" cy="41" r="3" fill="#ecdcae" />
+        <circle cx="133" cy="49" r="2" fill="#ecdcae" />
+        <g fill="#1a1050" opacity=".9">
+          {ROBO_SKY.map(([x, y, w]) => (
+            <rect key={x} x={x} y={y} width={w} height={270 - y} />
+          ))}
+        </g>
+        {ROBO_LIT.map((w, i) => (
+          <rect key={i} x={w.x} y={w.y} width="3" height="3.5" fill={w.c} opacity=".8" />
+        ))}
+        <ellipse cx="270" cy="266" rx="150" ry="20" fill={`url(#${u}g)`} />
+
+        {/* Volt behind his machine: the beacon's red sweep, antennae, the screen face and his claws on the frame */}
+        <path d="M270 26 L196 -10 L236 -10 Z M270 26 L310 -10 L352 -10 Z" fill={`url(#${u}b)`} />
+        <g stroke={ink} strokeWidth="3" strokeLinejoin="round">
+          <rect x="222" y="80" width="96" height="30" rx="14" fill={`url(#${u}m)`} />
+          <circle cx="222" cy="94" r="12" fill={`url(#${u}t)`} />
+          <circle cx="318" cy="94" r="12" fill={`url(#${u}t)`} />
+          <path d="M252 34 L244 14 M288 34 L296 14" fill="none" strokeLinecap="round" />
+        </g>
+        <circle cx="244" cy="12" r="10" fill={`url(#${u}g)`} />
+        <circle cx="296" cy="12" r="10" fill={`url(#${u}g)`} />
+        <g stroke={ink} strokeWidth="2.5">
+          <circle cx="244" cy="12" r="4.4" fill="#8ff8ff" />
+          <circle cx="296" cy="12" r="4.4" fill="#8ff8ff" />
+          <rect x="258" y="26" width="24" height="7" rx="2" fill="#6f7c94" />
+          <path d="M261 27 A9 9 0 0 1 279 27 Z" fill={`url(#${u}r)`} />
+          <circle cx="234" cy="56" r="8.5" fill={`url(#${u}t)`} strokeWidth="3" />
+          <circle cx="306" cy="56" r="8.5" fill={`url(#${u}t)`} strokeWidth="3" />
+          <rect x="236" y="31" width="68" height="54" rx="14" fill={`url(#${u}m)`} strokeWidth="3" />
+          <rect x="244" y="38" width="52" height="39" rx="9" fill={`url(#${u}s)`} />
+        </g>
+        <g fill="none" stroke="#5cf2ff" strokeLinecap="round">
+          <path d="M253 59 Q258 51 263 59 M277 59 Q282 51 287 59 M262 66 Q270 73 278 66" strokeWidth="7" opacity=".45" filter={`url(#${u}f)`} />
+          <path d="M253 59 Q258 51 263 59 M277 59 Q282 51 287 59" strokeWidth="3.6" />
+          <path d="M262 66 Q270 73 278 66" strokeWidth="3.2" />
+        </g>
+        <ellipse cx="252" cy="68" rx="3.4" ry="2.1" fill="#ff5fb0" opacity=".9" />
+        <ellipse cx="288" cy="68" rx="3.4" ry="2.1" fill="#ff5fb0" opacity=".9" />
+
+        {/* the machine: bulbs along the top, the Power Grid behind neon glass, the tube buttons */}
+        <rect x="166" y="96" width="208" height="186" rx="14" fill={`url(#${u}k)`} stroke={ink} strokeWidth="3" />
+        <g filter={`url(#${u}f)`} opacity=".9">
+          {Array.from({ length: 16 }, (_, i) => (
+            <circle key={i} cx={180 + i * 12} cy="104" r="3" fill={i % 3 === 1 ? '#ff8fd8' : '#ffe9a8'} />
+          ))}
+        </g>
+        {Array.from({ length: 16 }, (_, i) => (
+          <circle key={i} cx={180 + i * 12} cy="104" r="2" fill="#fffaf0" />
+        ))}
+        <rect x="176" y="111" width="188" height="116" rx="8" fill="#060918" stroke="#5cf2ff" strokeWidth="2" />
+        {Array.from({ length: 15 }, (_, k) => {
+          const c = k % 5
+          const r = Math.floor(k / 5)
+          const cell = ROBO_GRID[`${c},${r}`]
+          const [x, y] = [sx(c), sy(r)]
+          if (!cell)
+            return (
+              <g key={k} fill="none" stroke="#ff6a3d" opacity=".45">
+                <rect x={x} y={y} width="30" height="30" rx="6" fill="#120c2c" strokeWidth="1.5" />
+                <circle cx={x + 15} cy={y + 15} r="9" strokeWidth="1.4" />
+                <circle cx={x + 15} cy={y + 15} r="4.5" strokeWidth="1.4" />
+              </g>
+            )
+          const [t, col] = cell
+          return (
+            <g key={k}>
+              <rect x={x - 1} y={y - 1} width="32" height="32" rx="7" fill={col} opacity=".5" filter={`url(#${u}f)`} />
+              <rect x={x} y={y} width="30" height="30" rx="6" fill="#0b1235" stroke={col} strokeWidth="2.2" />
+              {t === 'zap' ? (
+                <path d={`M${x + 17} ${y + 5} ${x + 9} ${y + 17}h5l-2 8 8-12h-5l2-8Z`} fill="#ffe14a" stroke="#fff6c0" strokeWidth=".8" strokeLinejoin="round" />
+              ) : (
+                <text x={x + 15} y={y + 20} textAnchor="middle" fontSize="13" fontWeight="900" fill="#fff" stroke={col} strokeWidth="2.4" paintOrder="stroke" fontFamily={HERO_FONT}>
+                  {t}
+                </text>
+              )}
+            </g>
+          )
+        })}
+        {[arc(ax, ay), arc(bx, by)].map((pts) => (
+          <g key={pts}>
+            <polyline points={pts} fill="none" stroke="#ffe14a" strokeWidth="7" strokeLinejoin="round" opacity=".5" filter={`url(#${u}f)`} />
+            <polyline points={pts} fill="none" stroke="#fffbe0" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+          </g>
+        ))}
+        {[
+          [ax - 4, ay - 18],
+          [bx + 6, by - 18],
+        ].map(([x, y]) => (
+          <text key={x} x={x} y={y} textAnchor="middle" fontSize="12" fontWeight="900" fill="#ffe14a" stroke={ink} strokeWidth="3" paintOrder="stroke" fontFamily={HERO_FONT}>
+            ×2
+          </text>
+        ))}
+        {BUTTONS.map((c, i) => (
+          <g key={c}>
+            <circle cx={sx(i) + 15} cy="246" r="9" fill={c} opacity=".45" filter={`url(#${u}f)`} />
+            <circle cx={sx(i) + 15} cy="246" r="6" fill={c} stroke={ink} strokeWidth="2" />
+          </g>
+        ))}
+        {/* Volt's claws grip the top of the frame */}
+        <g fill="none" strokeLinecap="round">
+          {[
+            'M214 108 Q206 98 214 90',
+            'M226 108 Q232 98 225 90',
+            'M314 108 Q308 98 315 90',
+            'M326 108 Q334 98 326 90',
+          ].map((d) => (
+            <g key={d}>
+              <path d={d} stroke={ink} strokeWidth="8" />
+              <path d={d} stroke="#dfe7f1" strokeWidth="3.5" />
+            </g>
+          ))}
+        </g>
+        {/* his lever */}
+        <path d="M374 160 L390 112" stroke={ink} strokeWidth="7" strokeLinecap="round" />
+        <path d="M374 160 L390 112" stroke="#c9d3e2" strokeWidth="3.5" strokeLinecap="round" />
+        <circle cx="391" cy="108" r="8" fill={`url(#${u}r)`} stroke={ink} strokeWidth="2.5" />
+        {[
+          [198, 62, 4],
+          [352, 70, 3.5],
+          [160, 122, 3],
+        ].map(([x, y, r]) => (
+          <path key={x} d={`M${x} ${y - r} Q${x + r * 0.2} ${y - r * 0.2} ${x + r} ${y} Q${x + r * 0.2} ${y + r * 0.2} ${x} ${y + r} Q${x - r * 0.2} ${y + r * 0.2} ${x - r} ${y} Q${x - r * 0.2} ${y - r * 0.2} ${x} ${y - r}Z`} fill="#fff" />
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function HeroFan({ ids =['blackjack', 'videopoker', 'popparty', 'roulette', 'mines'] }: { ids?: GameId[] }) {
   return (
     <div className="absolute inset-y-0 right-0 hidden w-[55%] sm:block">
       {ids.map((id, i) => {

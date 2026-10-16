@@ -47,10 +47,10 @@ export function GameCover({ id }: { id: GameId }) {
       return <BlackjackCover />
     case 'roulette':
       return <RouletteCover />
-    case 'slots':
-      return <SlotsCover />
     case 'chompers':
       return <ChompersCover />
+    case 'roboriot':
+      return <RoboRiotCover />
     case 'popparty':
       return <PopPartyCover />
     case 'livebj':
@@ -371,49 +371,6 @@ function RouletteCover() {
   )
 }
 
-function SlotsCover() {
-  const u = useUid()
-  const rows = [
-    ['violet', 'gold', 'sky', 'pink'],
-    ['green', 'pink', 'violet', 'gold'],
-    ['sky', 'violet', 'green', 'sky'],
-  ] as const
-  return (
-    <Scene from="#9b4dff" to="#170736">
-      <defs>
-        <linearGradient id={`${u}f`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fff3c4" />
-          <stop offset="1" stopColor="#e8a10f" />
-        </linearGradient>
-        <radialGradient id={`${u}o`} cx=".35" cy=".3" r=".75">
-          <stop offset="0" stopColor="#ffe7ff" />
-          <stop offset=".45" stopColor="#c86bff" />
-          <stop offset="1" stopColor="#5a1aa8" />
-        </radialGradient>
-      </defs>
-      <g style={{ filter: 'drop-shadow(0 12px 16px rgba(0,0,0,.45))' }}>
-        <rect x="16" y="66" width="168" height="132" rx="16" fill={`url(#${u}f)`} />
-        <rect x="21" y="71" width="158" height="122" rx="12" fill="#150a33" />
-        {rows.map((row, r) => row.map((t, c) => <Gem key={`${r}${c}`} tone={t} size={36} x={26 + c * 38} y={76 + r * 38} glow={false} />))}
-      </g>
-      <g transform="translate(30 18) rotate(-14)">
-        <Gem tone="pink" size={42} />
-      </g>
-      <g transform="translate(122 6) rotate(10)">
-        <Gem tone="gold" size={34} />
-      </g>
-      <g transform="translate(152 200)" style={{ filter: 'drop-shadow(0 8px 12px rgba(0,0,0,.45))' }}>
-        <circle r="25" fill={`url(#${u}o)`} />
-        <circle r="25" fill="none" stroke="#fff" strokeOpacity=".5" strokeWidth="1.5" />
-        <ellipse cx="-8" cy="-11" rx="8" ry="4.5" fill="#fff" opacity=".55" transform="rotate(-30 -8 -11)" />
-        <text y="6" textAnchor="middle" fontSize="17" fontWeight="800" fill="#fff" fontFamily="Manrope, system-ui, sans-serif" stroke="#2a0b5e" strokeWidth="3" paintOrder="stroke">
-          50×
-        </text>
-      </g>
-    </Scene>
-  )
-}
-
 const INK = '#1d0f30'
 
 /** A cartoon donut seen from above: dough ring, icing and sprinkles. */
@@ -450,57 +407,221 @@ function CoverDonut({ x, y, r, icing, rot = 0 }: { x: number; y: number; r: numb
   )
 }
 
+/** Big Mama Chomp's furry outline: an ellipse whose edge breaks into curling tufts, longest on top */
+const MAMA_FUR = (() => {
+  const [cx, cy, rx, ry, n] = [100, 112, 60, 54, 30]
+  const at = (a: number, out: number) => `${(cx + Math.cos(a) * (rx + out)).toFixed(1)} ${(cy + Math.sin(a) * (ry + out)).toFixed(1)}`
+  const step = (Math.PI * 2) / n
+  let d = `M${at(-Math.PI / 2, 0)}`
+  for (let i = 0; i < n; i++) {
+    const a0 = -Math.PI / 2 + i * step
+    const tip = a0 + step * 0.62
+    const up = Math.max(0, -Math.sin(tip))
+    const len = 1.2 + up ** 1.6 * 12 + (i % 3) * up * 1.6
+    d += ` Q${at(a0 + step * 0.2, len * 0.9)} ${at(tip, len)} Q${at(tip + step * 0.12, len * 0.35)} ${at(a0 + step, 0)}`
+  }
+  return d + 'Z'
+})()
+
+/** The slime along the top of the machine: a band with drips hanging from it (x, length) */
+const SLIME_DRIPS: [number, number][] = [
+  [168, 14],
+  [138, 22],
+  [112, 10],
+  [84, 18],
+  [56, 12],
+  [26, 20],
+]
+const SLIME = (() => {
+  let d = 'M-6 168 Q50 163 100 167 T206 166 V184'
+  for (const [x, len] of SLIME_DRIPS) d += ` H${x + 4.5} V${184 + len - 4.5} A4.5 4.5 0 0 1 ${x - 4.5} ${184 + len - 4.5} V184`
+  return d + ' H-6 Z'
+})()
+
+/** Chompers: Big Mama Chomp rises over the slimy machine in her party hat, chomping a donut, with a Feast Pick egg and snacks on the reels. */
 function ChompersCover() {
   const u = useUid()
-  const teeth = [62, 78, 94, 110, 126]
+  const eyes = [78, 122]
+  const teeth = [86, 93, 100, 107, 114]
   return (
-    <Scene from="#3fe08a" to="#122a5c">
+    <Scene from="#b35cff" to="#1c0a45">
       <defs>
-        <radialGradient id={`${u}b`} cx=".36" cy=".26" r=".85">
-          <stop offset="0" stopColor="#a6ffb2" />
-          <stop offset=".5" stopColor="#35d873" />
-          <stop offset="1" stopColor="#0f8a4c" />
+        <radialGradient id={`${u}f`} cx=".38" cy=".3" r=".8">
+          <stop offset="0" stopColor="#ff9fd2" />
+          <stop offset=".55" stopColor="#ff4fa3" />
+          <stop offset="1" stopColor="#c4237a" />
         </radialGradient>
-        <linearGradient id={`${u}c`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fff2ad" />
-          <stop offset="1" stopColor="#f0a514" />
+        <linearGradient id={`${u}h`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff6dc" />
+          <stop offset="1" stopColor="#e7b46a" />
         </linearGradient>
-        <radialGradient id={`${u}m`} cx=".5" cy=".2" r=".9">
+        <radialGradient id={`${u}m`} cx=".5" cy=".15" r=".95">
           <stop offset="0" stopColor="#7a1846" />
           <stop offset="1" stopColor="#2c0620" />
         </radialGradient>
+        <radialGradient id={`${u}e`} cx=".4" cy=".35" r=".7">
+          <stop offset="0" stopColor="#8dffb9" />
+          <stop offset="1" stopColor="#13a755" />
+        </radialGradient>
+        <linearGradient id={`${u}s`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#8cffbd" />
+          <stop offset=".5" stopColor="#2ee87f" />
+          <stop offset="1" stopColor="#17b45e" />
+        </linearGradient>
+        <linearGradient id={`${u}w`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#2a0f55" />
+          <stop offset="1" stopColor="#14072e" />
+        </linearGradient>
+        <radialGradient id={`${u}g`}>
+          <stop offset="0" stopColor="#fff6c8" stopOpacity=".55" />
+          <stop offset="1" stopColor="#fff6c8" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${u}b`} cx=".4" cy=".35" r=".75">
+          <stop offset="0" stopColor="#b6ffd4" />
+          <stop offset="1" stopColor="#14a854" />
+        </radialGradient>
       </defs>
-      <CoverDonut x={34} y={86} r={20} icing="#ff8ad0" rot={-18} />
-      <CoverDonut x={166} y={46} r={17} icing="#59c8ff" rot={24} />
-      <CoverDonut x={176} y={126} r={13} icing="#ffcf3a" rot={-6} />
-      <g style={{ filter: 'drop-shadow(0 14px 18px rgba(0,0,0,.4))' }}>
-        <g stroke={INK} strokeWidth="4" strokeLinejoin="round">
-          <path d="M26 266 C 22 168, 50 100, 100 100 C 150 100, 178 168, 174 266 Z" fill={`url(#${u}b)`} />
-          <path d="M70 108 L64 74 L84 92 L100 64 L116 92 L136 74 L130 108 Q100 116 70 108 Z" fill={`url(#${u}c)`} />
-          <circle cx="100" cy="96" r="6.5" fill="#2ee87f" strokeWidth="3" />
-          <ellipse cx="77" cy="140" rx="15" ry="16" fill="#fff" />
-          <ellipse cx="123" cy="140" rx="15" ry="16" fill="#fff" />
-          <path d="M50 172 Q100 182 150 172 Q150 238 100 240 Q50 238 50 172 Z" fill={`url(#${u}m)`} />
-        </g>
-        <circle cx="80" cy="143" r="7.5" fill={INK} />
-        <circle cx="120" cy="143" r="7.5" fill={INK} />
-        <circle cx="82.5" cy="140" r="2.6" fill="#fff" />
-        <circle cx="122.5" cy="140" r="2.6" fill="#fff" />
-        <path d="M60 122 Q72 114 88 120" stroke={INK} strokeWidth="4" strokeLinecap="round" fill="none" />
-        <path d="M112 120 Q128 114 140 122" stroke={INK} strokeWidth="4" strokeLinecap="round" fill="none" />
-        <ellipse cx="100" cy="228" rx="30" ry="10" fill="#ff6f9a" />
-        {teeth.map((x) => (
-          <path key={x} d={`M${x} ${174 + (x === 94 ? 2 : 0)} l6 13 l6 -13`} fill="#fff" stroke={INK} strokeWidth="2.5" strokeLinejoin="round" />
-        ))}
-        <path d="M44 152 Q36 150 34 160" stroke="#fff" strokeOpacity=".45" strokeWidth="4" strokeLinecap="round" fill="none" />
-        <ellipse cx="66" cy="114" rx="7" ry="3.5" fill="#fff" opacity=".55" transform="rotate(-20 66 114)" />
-      </g>
-      <g transform="translate(100 206)">
-        <CoverDonut x={0} y={0} r={15} icing="#ff5b6e" rot={10} />
-      </g>
-      {[[56, 196, 3], [146, 200, 2.5], [138, 186, 2], [62, 208, 2]].map(([x, y, r], i) => (
-        <circle key={i} cx={x} cy={y} r={r} fill="#e39a4b" stroke={INK} strokeWidth="1.5" />
+
+      {/* the night sky: a big moon with a bat across it, and stars */}
+      <circle cx="38" cy="50" r="34" fill={`url(#${u}g)`} />
+      <circle cx="38" cy="50" r="21" fill="#fff3c4" />
+      <circle cx="31" cy="45" r="4" fill="#f1dc9a" />
+      <circle cx="44" cy="58" r="3" fill="#f1dc9a" />
+      <path d="M30 34c3 1 4 4 6 3s2-4 5-4c-1 2 0 4 2 4s3-3 5-2c-3 1-3 5-6 5s-3-2-6-2-3 3-6 2 1-4 0-6Z" fill={INK} opacity=".85" />
+      {[[16, 92, 1.6], [70, 22, 1.4], [150, 16, 1.8], [186, 96, 1.4], [174, 128, 1.2], [12, 130, 1.2]].map(([x, y, r], i) => (
+        <circle key={i} cx={x} cy={y} r={r} fill="#fff" opacity=".85" />
       ))}
+      <Sparkle x={186} y={30} r={5} />
+      <Sparkle x={12} y={112} r={4} />
+
+      {/* the machine under her: the reel window with snacks peeking up, the frame and the dripping slime */}
+      <rect x="-6" y="176" width="212" height="80" fill="#6a2bd0" />
+      <rect x="14" y="186" width="172" height="70" rx="10" fill={`url(#${u}w)`} stroke="#ff7ac8" strokeWidth="2.5" />
+      {/* a cupcake */}
+      <g transform="translate(46 222)" stroke={INK} strokeWidth="2.5" strokeLinejoin="round">
+        <path d="M-15 0 L15 0 L11 22 L-11 22 Z" fill="#ffc94d" />
+        <path d="M-7 1 L-6 21 M0 1 V21 M7 1 L6 21" stroke="#e39a2b" strokeWidth="2" />
+        <path d="M-17 2 Q-19 -8 -10 -10 Q-10 -20 0 -20 Q10 -20 10 -10 Q19 -8 17 2 Z" fill="#ff8cc6" />
+        <circle cx="2" cy="-23" r="5" fill="#ff3b5c" strokeWidth="2" />
+        <path d="M3 -28 Q5 -33 9 -34" fill="none" strokeWidth="2" />
+        <circle cx="-4" cy="10" r="1.6" fill={INK} stroke="none" />
+        <circle cx="4" cy="10" r="1.6" fill={INK} stroke="none" />
+        <path d="M-3 14 Q0 16.5 3 14" fill="none" strokeWidth="1.8" strokeLinecap="round" />
+        {[[-9, -6, '#fff'], [-2, -13, '#ffe35a'], [6, -7, '#5be3ff'], [10, -2, '#fff']].map(([x, y, c], i) => (
+          <rect key={i} x={(x as number) - 2} y={(y as number) - 0.8} width="4" height="1.6" rx=".8" fill={c as string} stroke="none" transform={`rotate(${i * 40 - 30} ${x} ${y})`} />
+        ))}
+      </g>
+      {/* a rainbow lollipop */}
+      <g transform="translate(154 220)">
+        <rect x="-2" y="10" width="4" height="30" rx="2" fill="#fff" stroke={INK} strokeWidth="2" />
+        <circle r="17" fill="#fff" stroke={INK} strokeWidth="3" />
+        <circle r="13.5" fill="none" stroke="#ff5b6e" strokeWidth="3.5" />
+        <circle r="9.5" fill="none" stroke="#ffd23f" strokeWidth="3.5" />
+        <circle r="5.5" fill="none" stroke="#2fd3c4" strokeWidth="3.5" />
+        <circle cx="-4" cy="1" r="1.7" fill={INK} />
+        <circle cx="4" cy="1" r="1.7" fill={INK} />
+        <path d="M-3 5 Q0 7.5 3 5" fill="none" stroke={INK} strokeWidth="1.8" strokeLinecap="round" />
+        <ellipse cx="-7" cy="-8" rx="3" ry="4.5" fill="#fff" opacity=".7" transform="rotate(35 -7 -8)" />
+      </g>
+      <CoverDonut x={100} y={232} r={18} icing="#ffcf3a" rot={-8} />
+
+      {/* her arms reach down to the corners of the machine */}
+      <g fill="none" strokeLinecap="round">
+        <path d="M54 136 Q30 140 28 172" stroke={INK} strokeWidth="25" />
+        <path d="M146 136 Q170 140 172 172" stroke={INK} strokeWidth="25" />
+        <path d="M54 136 Q30 140 28 172" stroke="#e8398f" strokeWidth="18" />
+        <path d="M146 136 Q170 140 172 172" stroke="#e8398f" strokeWidth="18" />
+      </g>
+
+      {/* Big Mama Chomp */}
+      <g style={{ filter: 'drop-shadow(0 10px 14px rgba(20,0,40,.45))' }}>
+        {/* horns */}
+        <g stroke={INK} strokeWidth="3" strokeLinejoin="round" fill={`url(#${u}h)`}>
+          <path d="M60 72 Q44 60 46 36 Q58 50 74 60 Z" />
+          <path d="M140 72 Q156 60 154 36 Q142 50 126 60 Z" />
+        </g>
+        <path d="M52 50 Q58 56 64 58 M148 50 Q142 56 136 58" stroke="#c98d48" strokeWidth="2" fill="none" />
+        <path d={MAMA_FUR} fill={`url(#${u}f)`} stroke={INK} strokeWidth="3.5" strokeLinejoin="round" />
+        {/* spots and a soft shine */}
+        {[[64, 78, 5], [146, 100, 4], [136, 70, 3.5], [56, 130, 3]].map(([x, y, r], i) => (
+          <ellipse key={i} cx={x} cy={y} rx={r} ry={r * 0.8} fill="#a43be0" opacity=".55" />
+        ))}
+        <ellipse cx="76" cy="70" rx="15" ry="7" fill="#fff" opacity=".28" transform="rotate(-24 76 70)" />
+        {/* party hat */}
+        <g transform="rotate(14 104 52)">
+          <path d="M90 64 L104 26 L118 64 Z" fill="#ffd23f" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
+          <path d="M96 48 L112 48 M93 56 L115 56 M100 38 L108 38" stroke="#2ee87f" strokeWidth="4" />
+          <path d="M90 64 L104 26 L118 64 Z" fill="none" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
+          <circle cx="104" cy="25" r="5" fill="#ff5fa2" stroke={INK} strokeWidth="2.5" />
+        </g>
+        {/* eyes: big green ones, looking at the donut she's about to eat */}
+        {eyes.map((x) => (
+          <g key={x}>
+            <ellipse cx={x} cy="94" rx="16.5" ry="17.5" fill="#fff" stroke={INK} strokeWidth="3" />
+            <circle cx={x + 3.5} cy="97" r="10" fill={`url(#${u}e)`} />
+            <circle cx={x + 4.5} cy="98" r="5.2" fill={INK} />
+            <circle cx={x + 1.5} cy="93.5" r="2.6" fill="#fff" />
+            <circle cx={x + 8} cy="102" r="1.3" fill="#fff" opacity=".8" />
+          </g>
+        ))}
+        <path d="M64 82 l-7 -5 M68 78.5 l-4 -7 M74 77 l-1.5 -7 M136 82 l7 -5 M132 78.5 l4 -7 M126 77 l1.5 -7" stroke={INK} strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M62 70 Q76 62 90 70 M110 70 Q124 62 138 70" stroke="#8c1858" strokeWidth="4.5" strokeLinecap="round" fill="none" />
+        {/* cheeks and nose */}
+        <ellipse cx="58" cy="118" rx="9" ry="6" fill="#ffb8dc" opacity=".85" />
+        <ellipse cx="142" cy="118" rx="9" ry="6" fill="#ffb8dc" opacity=".85" />
+        <ellipse cx="100" cy="114" rx="5.5" ry="3.8" fill="#c4237a" stroke={INK} strokeWidth="2" />
+        {/* the huge open mouth, fangs, teeth and tongue */}
+        <path d="M64 124 Q100 133 136 124 Q134 170 100 172 Q66 170 64 124 Z" fill={`url(#${u}m)`} stroke={INK} strokeWidth="3.5" strokeLinejoin="round" />
+        <ellipse cx="100" cy="160" rx="21" ry="10" fill="#ff6f9a" />
+        <path d="M100 153 V164" stroke="#d94a78" strokeWidth="2" strokeLinecap="round" />
+        <g fill="#fff" stroke={INK} strokeWidth="2.2" strokeLinejoin="round">
+          <path d="M70 126 L80 128.5 L75 143 Z" />
+          <path d="M130 126 L120 128.5 L125 143 Z" />
+          {teeth.map((x) => (
+            <path key={x} d={`M${x - 3.2} ${129.6 + Math.abs(x - 100) * -0.05} h6.4 v4.5 a3.2 3.2 0 0 1 -6.4 0 Z`} />
+          ))}
+        </g>
+      </g>
+
+      {/* the slime band over the machine's top edge, and her hands gripping it */}
+      <path d={SLIME} fill={`url(#${u}s)`} stroke={INK} strokeWidth="3" strokeLinejoin="round" />
+      <path d="M8 171 Q50 167 92 170 M110 170 Q150 167 192 169" stroke="#fff" strokeOpacity=".6" strokeWidth="3" strokeLinecap="round" fill="none" />
+      {SLIME_DRIPS.map(([x, len]) => (
+        <circle key={x} cx={x - 1.5} cy={184 + len - 6} r="1.4" fill="#fff" opacity=".7" />
+      ))}
+      {[28, 172].map((x, s) => (
+        <g key={x} transform={`translate(${x} 174) scale(${s ? -1 : 1} 1)`} stroke={INK} strokeWidth="2.6" strokeLinejoin="round">
+          <ellipse cx="0" cy="-2" rx="15" ry="11" fill="#ff5fae" />
+          {[-9, -2, 6].map((fx, i) => (
+            <g key={fx}>
+              <path d={`M${fx - 2} 10 l${i === 2 ? 5 : 3} 8 l3 -8`} fill="#fff" strokeWidth="2" />
+              <ellipse cx={fx + 1} cy="6" rx="5" ry="6.5" fill="#ff5fae" />
+            </g>
+          ))}
+          <ellipse cx="-4" cy="-6" rx="5" ry="2.6" fill="#fff" opacity=".45" stroke="none" />
+        </g>
+      ))}
+
+      {/* the donut she's about to eat, flying in with crumbs */}
+      <path d="M176 116 L194 110 M178 126 L198 124 M174 136 L190 140" stroke="#fff" strokeOpacity=".55" strokeWidth="2.5" strokeLinecap="round" />
+      <CoverDonut x={160} y={128} r={13} icing="#ff8ad0" rot={30} />
+      {[[140, 146, 2.4], [148, 112, 2], [136, 120, 1.6], [150, 150, 1.8]].map(([x, y, r], i) => (
+        <circle key={i} cx={x} cy={y} r={r} fill="#e39a4b" stroke={INK} strokeWidth="1.2" />
+      ))}
+
+      {/* the Feast Pick: a cracked egg hatching a ×2 badge */}
+      <g transform="translate(170 64) rotate(10)" style={{ filter: 'drop-shadow(0 6px 8px rgba(0,0,0,.35))' }}>
+        <path d="M-15 4 C-15 -10 -8 -22 0 -22 C8 -22 15 -10 15 4 C15 15 8 21 0 21 C-8 21 -15 15 -15 4 Z" fill="#fff4dc" stroke={INK} strokeWidth="2.6" />
+        <path d="M-15 0 l5 4 l4 -5 l5 5 l5 -5 l4 4 l6 -3" fill="none" stroke={INK} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx="-7" cy="11" r="2.4" fill="#a55bff" />
+        <circle cx="8" cy="13" r="2" fill="#2ee87f" />
+        <circle cx="0" cy="-30" r="14" fill={`url(#${u}b)`} stroke={INK} strokeWidth="2.6" />
+        <text x="0" y="-25" textAnchor="middle" fontSize="14" fontWeight="900" fill="#fff" stroke={INK} strokeWidth="3" paintOrder="stroke" fontFamily="Manrope, system-ui, sans-serif">
+          2×
+        </text>
+        <Sparkle x={-17} y={-40} r={4} />
+        <Sparkle x={17} y={-20} r={3} />
+      </g>
     </Scene>
   )
 }
@@ -756,6 +877,229 @@ function LiveBlackjackCover() {
           </g>
         </g>
       ))}
+    </Scene>
+  )
+}
+
+const RINK = '#0b1033'
+const ROBO_FONT = 'Manrope, system-ui, sans-serif'
+/** the city behind the workshop window: [x, roof y, width] */
+const ROBO_CITY: [number, number, number][] = [
+  [-4, 128, 20], [14, 106, 18], [30, 138, 16], [44, 96, 18], [60, 120, 14], [140, 112, 16], [154, 90, 20], [172, 124, 14], [184, 100, 20],
+]
+/** lit windows: a few per building, picked deterministically, in neon colours */
+const ROBO_WINDOWS = ROBO_CITY.flatMap(([x, y, w], b) =>
+  Array.from({ length: 5 }, (_, i) => {
+    const col = (b * 7 + i * 3) % 3
+    const row = (b * 5 + i * 7) % 6
+    return { x: x + 3 + col * ((w - 6) / 3), y: y + 6 + row * 9, c: ['#ffe14a', '#5cf2ff', '#ff6fd8'][(b + i) % 3] }
+  }).filter((p) => p.y < 172),
+)
+/** the Power Grid sockets on the machine's sign: [label, colour] */
+const ROBO_SOCKETS: [string, string][] = [
+  ['5', '#5cf2ff'],
+  ['×2', '#ffe14a'],
+  ['25', '#ff4fd8'],
+  ['50', '#ffcf3a'],
+]
+
+/** A glass power cell like the game's: chrome caps, a glowing core, and a value tag under it when given. (x, y) is its top centre. */
+function CoverCell({ x, y, core, glow, tag, gold = false, rot = 0 }: { x: number; y: number; core: string; glow: string; tag?: string; gold?: boolean; rot?: number }) {
+  const cap = gold ? '#ffd45a' : '#e3eaf3'
+  return (
+    <g transform={`rotate(${rot} ${x} ${y + 18})`}>
+      <circle cx={x} cy={y + 18} r={gold ? 19 : 24} fill={glow} />
+      <rect x={x - 10} y={y + 4} width="20" height="28" rx="5" fill={gold ? '#7a4a00' : '#5cf2ff'} fillOpacity={gold ? 0.55 : 0.25} stroke={RINK} strokeWidth="2.5" />
+      <rect x={x - 5} y={y + 8} width="10" height="20" rx="5" fill={core} />
+      <rect x={x - 2.4} y={y + 10} width="3.6" height="15" rx="1.8" fill="#fff" opacity=".9" />
+      <rect x={x - 12.5} y={y} width="25" height="7" rx="2.5" fill={cap} stroke={RINK} strokeWidth="2.5" />
+      <rect x={x - 12.5} y={y + 29} width="25" height="7" rx="2.5" fill={cap} stroke={RINK} strokeWidth="2.5" />
+      {tag && (
+        <g>
+          <rect x={x - 16} y={y + 39} width="32" height="16" rx="4" fill="#060a1c" stroke={gold ? '#ffcf3a' : '#aab4c8'} strokeWidth="2" />
+          <text x={x} y={y + 51.5} textAnchor="middle" fontSize="12" fontWeight="900" fill={core} fontFamily={ROBO_FONT}>
+            {tag}
+          </text>
+        </g>
+      )}
+    </g>
+  )
+}
+
+/** Robo Riot: Volt, the big toy robot, behind his machine's marquee in a neon workshop at night, a power cell held high
+ *  and lightning crackling from his other claw. */
+function RoboRiotCover() {
+  const u = useUid()
+  const arm = (d: string) => (
+    <>
+      <path d={d} fill="none" stroke={RINK} strokeWidth="15" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke={`url(#${u}a)`} strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  )
+  const pincer = (d: string) => (
+    <>
+      <path d={d} fill="none" stroke={RINK} strokeWidth="8" strokeLinecap="round" />
+      <path d={d} fill="none" stroke="#dfe7f1" strokeWidth="3.5" strokeLinecap="round" />
+    </>
+  )
+  const bolt = '166,60 175,44 169,42 181,25 175,23 188,4'
+  return (
+    <Scene from="#2fd3ff" to="#2a1366">
+      <defs>
+        <linearGradient id={`${u}m`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset=".55" stopColor="#e2e8f1" />
+          <stop offset="1" stopColor="#a9b5c8" />
+        </linearGradient>
+        <linearGradient id={`${u}a`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#f2f5fa" />
+          <stop offset="1" stopColor="#a9b5c8" />
+        </linearGradient>
+        <linearGradient id={`${u}t`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#6ff5ea" />
+          <stop offset=".6" stopColor="#19d3c5" />
+          <stop offset="1" stopColor="#0d958c" />
+        </linearGradient>
+        <radialGradient id={`${u}s`} cx=".4" cy=".35" r=".8">
+          <stop offset="0" stopColor="#17386a" />
+          <stop offset="1" stopColor="#060d24" />
+        </radialGradient>
+        <linearGradient id={`${u}r`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ff8a8a" />
+          <stop offset="1" stopColor="#d81e2c" />
+        </linearGradient>
+        <linearGradient id={`${u}k`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#2b2170" />
+          <stop offset="1" stopColor="#120b36" />
+        </linearGradient>
+        <radialGradient id={`${u}gc`}>
+          <stop offset="0" stopColor="#5cf2ff" stopOpacity=".75" />
+          <stop offset="1" stopColor="#5cf2ff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${u}gy`}>
+          <stop offset="0" stopColor="#ffd34a" stopOpacity=".8" />
+          <stop offset="1" stopColor="#ffd34a" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${u}b`} x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#ff4a4a" stopOpacity=".5" />
+          <stop offset="1" stopColor="#ff4a4a" stopOpacity="0" />
+        </linearGradient>
+        <filter id={`${u}f`} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.4" />
+        </filter>
+      </defs>
+
+      {/* the window onto the city: searchlights, the moon, the skyline with its lit windows */}
+      <path d="M20 250 L64 -4 L84 -4 Z M188 250 L128 -4 L146 -4 Z" fill="#fff" opacity=".07" />
+      <g fill="#1a0e4c" opacity=".8">
+        {ROBO_CITY.map(([x, y, w]) => (
+          <rect key={x} x={x} y={y} width={w} height={190 - y} />
+        ))}
+      </g>
+      {ROBO_WINDOWS.map((w, i) => (
+        <rect key={i} x={w.x} y={w.y} width="2.6" height="3" fill={w.c} opacity=".85" />
+      ))}
+
+      {/* Volt's beacon swings its red light up through the room */}
+      <path d="M100 30 L34 -6 L76 -6 Z M100 30 L150 -6 L188 -6 Z" fill={`url(#${u}b)`} />
+
+      {/* the body, with the chest panel, its power core and LEDs */}
+      <g stroke={RINK} strokeWidth="3" strokeLinejoin="round">
+        <rect x="66" y="106" width="68" height="84" rx="13" fill={`url(#${u}m)`} />
+        <rect x="80" y="116" width="40" height="44" rx="8" fill={`url(#${u}t)`} strokeWidth="2.5" />
+        <circle cx="100" cy="136" r="12" fill={`url(#${u}s)`} strokeWidth="2.5" />
+      </g>
+      <circle cx="100" cy="136" r="16" fill={`url(#${u}gy)`} />
+      <path d="M102.5 127 95 138h5l-2.5 8.5 8-11.5h-5l2-8Z" fill="#ffe14a" stroke="#fff6c0" strokeWidth=".8" strokeLinejoin="round" />
+      {['#ff4fd8', '#ffe14a', '#59ff7a', '#5cf2ff'].map((c, i) => (
+        <circle key={c} cx={88 + i * 8} cy="154" r="2" fill={c} />
+      ))}
+      <rect x="91" y="100" width="18" height="10" rx="2" fill="#6f7c94" stroke={RINK} strokeWidth="2.5" />
+
+      {/* arms up: a gold power cell held high on the left, lightning from the open claw on the right */}
+      {arm('M70 118 L46 104 L38 84')}
+      {arm('M130 118 L154 104 L164 82')}
+      <g stroke={RINK} strokeWidth="2.5" fill={`url(#${u}t)`}>
+        <circle cx="66" cy="117" r="11" strokeWidth="3" />
+        <circle cx="134" cy="117" r="11" strokeWidth="3" />
+        <circle cx="46" cy="104" r="5.5" />
+        <circle cx="154" cy="104" r="5.5" />
+      </g>
+      <CoverCell x={37} y={40} core="#ffb21f" glow={`url(#${u}gy)`} gold rot={-8} />
+      {pincer('M31 88 Q25 82 30 74')}
+      {pincer('M44 88 Q50 81 44 73')}
+
+      <polyline points={bolt} fill="none" stroke="#5cf2ff" strokeWidth="9" strokeLinejoin="round" strokeLinecap="round" opacity=".45" filter={`url(#${u}f)`} />
+      <polyline points={bolt} fill="none" stroke="#bff9ff" strokeWidth="3.2" strokeLinejoin="round" strokeLinecap="round" />
+      <polyline points="166,60 158,46 162,42 152,32" fill="none" stroke="#bff9ff" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" opacity=".85" />
+      <circle cx="166" cy="62" r="13" fill={`url(#${u}gc)`} />
+      {pincer('M160 84 Q154 74 160 66')}
+      {pincer('M171 84 Q178 74 171 66')}
+
+      {/* the head: antennae with glowing bulbs, the beacon, ear discs and the screen face (^ ^ and a grin) */}
+      <g stroke={RINK} strokeWidth="3" strokeLinecap="round">
+        <path d="M76 44 L68 20 M124 44 L132 20" />
+      </g>
+      <circle cx="68" cy="18" r="11" fill={`url(#${u}gc)`} />
+      <circle cx="132" cy="18" r="11" fill={`url(#${u}gc)`} />
+      <g stroke={RINK} strokeWidth="2.5">
+        <circle cx="68" cy="18" r="4.6" fill="#8ff8ff" />
+        <circle cx="132" cy="18" r="4.6" fill="#8ff8ff" />
+        <rect x="87" y="35" width="26" height="7" rx="2" fill="#6f7c94" />
+        <path d="M90 36 A10 10 0 0 1 110 36 Z" fill={`url(#${u}r)`} />
+      </g>
+      <ellipse cx="96" cy="30" rx="2.4" ry="1.6" fill="#fff" opacity=".8" />
+      <g stroke={RINK} strokeWidth="3">
+        <circle cx="58" cy="72" r="10" fill={`url(#${u}t)`} />
+        <circle cx="142" cy="72" r="10" fill={`url(#${u}t)`} />
+        <rect x="60" y="40" width="80" height="64" rx="16" fill={`url(#${u}m)`} />
+        <rect x="69" y="48" width="62" height="47" rx="10" fill={`url(#${u}s)`} strokeWidth="2.5" />
+      </g>
+      <path d="M73 54 Q73 51 77 51 H100 L88 64 H73 Z" fill="#fff" opacity=".08" />
+      <g fill="none" stroke="#5cf2ff" strokeLinecap="round">
+        <g strokeWidth="9" opacity=".5" filter={`url(#${u}f)`}>
+          <path d="M80 75 Q87 64 94 75 M106 75 Q113 64 120 75 M88 82 Q100 93 112 82" />
+        </g>
+        <path d="M80 75 Q87 64 94 75 M106 75 Q113 64 120 75" strokeWidth="4.5" />
+        <path d="M88 82 Q100 93 112 82" strokeWidth="4" />
+      </g>
+      <ellipse cx="78.5" cy="84" rx="4.2" ry="2.6" fill="#ff5fb0" opacity=".9" />
+      <ellipse cx="121.5" cy="84" rx="4.2" ry="2.6" fill="#ff5fb0" opacity=".9" />
+
+      {/* a power cell with its value hovers by his side */}
+      <CoverCell x={176} y={118} core="#ff4fd8" glow={`url(#${u}gc)`} tag="25" rot={10} />
+
+      {/* the machine's marquee: chasing bulbs, and the Power Grid sockets lit with values */}
+      <path d="M4 254 V186 Q4 172 18 172 H182 Q196 172 196 186 V254 Z" fill={`url(#${u}k)`} stroke={RINK} strokeWidth="3" />
+      <g filter={`url(#${u}f)`} opacity=".9">
+        {Array.from({ length: 15 }, (_, i) => (
+          <circle key={i} cx={16 + i * 12} cy="180" r="3.2" fill={i % 3 === 1 ? '#ff8fd8' : '#ffe9a8'} />
+        ))}
+      </g>
+      {Array.from({ length: 15 }, (_, i) => (
+        <circle key={i} cx={16 + i * 12} cy="180" r="2.2" fill="#fffaf0" />
+      ))}
+      <rect x="14" y="190" width="172" height="70" rx="9" fill="#070a20" stroke="#5cf2ff" strokeWidth="2" />
+      {ROBO_SOCKETS.map(([t, c], i) => (
+        <g key={t}>
+          <rect x={22 + i * 41} y="198" width="33" height="28" rx="6" fill={c} opacity=".35" filter={`url(#${u}f)`} />
+          <rect x={22 + i * 41} y="198" width="33" height="28" rx="6" fill="#0b1235" stroke={c} strokeWidth="2.2" />
+          <text x={38.5 + i * 41} y="217" textAnchor="middle" fontSize="14" fontWeight="900" fill="#fff" stroke={c} strokeWidth="2.6" paintOrder="stroke" fontFamily={ROBO_FONT}>
+            {t}
+          </text>
+        </g>
+      ))}
+
+      {/* ZAP! */}
+      <g transform="translate(30 150) rotate(-12)" style={{ filter: 'drop-shadow(0 6px 8px rgba(0,0,0,.35))' }}>
+        <polygon points={burst(12, 25, 15)} fill="#ffe14a" stroke={RINK} strokeWidth="3" strokeLinejoin="round" />
+        <text y="5.5" textAnchor="middle" fontSize="15" fontWeight="900" fill="#2a6cff" stroke="#fff" strokeWidth="3" paintOrder="stroke" fontFamily={ROBO_FONT}>
+          ZAP!
+        </text>
+      </g>
+      <Sparkle x={190} y={60} r={4.5} />
+      <Sparkle x={14} y={98} r={3.5} />
+      <Sparkle x={150} y={18} r={3} />
     </Scene>
   )
 }

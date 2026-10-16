@@ -207,15 +207,6 @@ export const CHALLENGES: Challenge[] = [
     step: (e, p) => (e.game === 'roulette' && e.meta?.straight === true ? 1 : p),
   },
   {
-    id: 'slots-feature',
-    game: 'slots',
-    title: 'Star Struck',
-    desc: 'Trigger free spins in Slots.',
-    reward: 1500,
-    goal: 1,
-    step: (e, p) => (e.game === 'slots' && e.meta?.feature === true ? 1 : p),
-  },
-  {
     id: 'chompers-max',
     game: 'chompers',
     title: 'Monster Mash',
@@ -232,6 +223,15 @@ export const CHALLENGES: Challenge[] = [
     reward: 3500,
     goal: 1,
     step: (e, p) => (e.game === 'popparty' && Number(e.meta?.maxTile) >= 128 ? 1 : p),
+  },
+  {
+    id: 'roboriot-full',
+    game: 'roboriot',
+    title: 'Full Grid',
+    desc: 'Fill all 25 sockets in the Robo Riot Power Grid.',
+    reward: 4000,
+    goal: 1,
+    step: (e, p) => (e.game === 'roboriot' && e.meta?.full === true ? 1 : p),
   },
   {
     id: 'poker-quads',

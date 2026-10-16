@@ -81,16 +81,6 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
           <path d="m10 1.8 2 2.6 2-2.6Z" fill="currentColor" />
         </svg>
       )
-    case 'slots':
-      return (
-        <svg {...p}>
-          <rect x="2.5" y="5" width="15" height="14" rx="2.5" />
-          <path d="M5.5 9.5h9v5h-9z" />
-          <path d="M10 9.5v5" opacity=".55" />
-          <path d="M17.5 12H20V6.5" />
-          <circle cx="20" cy="5" r="1.4" fill="currentColor" stroke="none" />
-        </svg>
-      )
     case 'chompers':
       return (
         <svg {...p}>
@@ -99,6 +89,17 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
           <circle cx="9.3" cy="11" r="1.3" fill="currentColor" stroke="none" />
           <circle cx="14.7" cy="11" r="1.3" fill="currentColor" stroke="none" />
           <path d="M7.5 15h9M9 15l1 1.6 1-1.6 1 1.6 1-1.6 1 1.6 1-1.6" />
+        </svg>
+      )
+    case 'roboriot':
+      return (
+        <svg {...p}>
+          <path d="M12 2.5v3" />
+          <circle cx="12" cy="2.5" r="1" fill="currentColor" stroke="none" />
+          <rect x="4" y="6" width="16" height="12" rx="4" />
+          <circle cx="9" cy="12" r="1.6" fill="currentColor" stroke="none" />
+          <circle cx="15" cy="12" r="1.6" fill="currentColor" stroke="none" />
+          <path d="M2 10.5v3M22 10.5v3M9 21h6" />
         </svg>
       )
     case 'popparty':
@@ -142,6 +143,16 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
           <path d="M3 20c7 0 11-3 15-13" />
           <path d="M14 6l4.5 1 1-4.5" />
           <path d="M3 3v17h18" opacity=".45" />
+        </svg>
+      )
+    default:
+      return (
+        <svg {...p}>
+          <rect x="2.5" y="5" width="15" height="14" rx="2.5" />
+          <path d="M5.5 9.5h9v5h-9z" />
+          <path d="M10 9.5v5" opacity=".55" />
+          <path d="M17.5 12H20V6.5" />
+          <circle cx="20" cy="5" r="1.4" fill="currentColor" stroke="none" />
         </svg>
       )
   }

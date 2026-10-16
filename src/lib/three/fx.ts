@@ -261,49 +261,10 @@ export function ring(ow: number, oh: number, or: number, iw: number, ih: number,
 /**
  * Keeps a 3D scene smooth on slower devices. While the scene draws every frame it watches the time between frames,
  * steps the render resolution down when frames run long, and creeps back up (never to a level that was too slow)
- * when there is headroom. `q` multiplies the device pixel ratio.
- */
-export class AutoQuality {
-  q = 1
-  private ceil = 1
-  private prev = 0
-  private n = 0
-  private sum = 0
-  private good = 0
-  constructor(private readonly min = 0.5) {}
-
-  /** Call on every drawn frame with the frame timestamp; `chained` says the frame before was drawn too.
-   *  Returns true when `q` changed. */
-  frame(now: number, chained: boolean) {
-    const gap = now - this.prev
-    this.prev = now
-    if (!chained || gap > 1000 || document.hidden) return false
-    this.sum += gap
-    if (++this.n < 40) return false
-    const avg = this.sum / this.n
-    this.sum = this.n = 0
-    if (avg > 23 && this.q > this.min) {
-      this.ceil = this.q
-      this.q = Math.max(this.min, this.q * 0.78)
-      this.good = 0
-      return true
-    }
-    if (avg < 18.5 && this.q < this.ceil * 0.9) {
-      if (++this.good < 6) return false
-      this.good = 0
-      this.q = Math.min(this.ceil * 0.9, this.q * 1.12)
-      return true
-    }
-    this.good = 0
-    return false
-  }
-}
-
-/**
- * AutoQuality that copes with frame-rate caps. It judges each window of 40 frames by its median gap, so a GC pause
- * or a late shader compile costs no resolution. And when two steps down in a row buy no faster frames, the gap is
- * not the GPU's doing but a cap (iOS Low Power Mode or a browser's energy saver: 30 Hz) or the CPU: it gives the
- * resolution back and from then on judges against the gap it gets anyway. Used like AutoQuality.
+ * when there is headroom; `q` multiplies the device pixel ratio. It judges each window of 40 frames by its median
+ * gap, so a GC pause or a late shader compile costs no resolution. And when two steps down in a row buy no faster
+ * frames, the gap is not the GPU's doing but a cap (iOS Low Power Mode or a browser's energy saver: 30 Hz) or the
+ * CPU: it gives the resolution back and from then on judges against the gap it gets anyway.
  */
 export class PacedQuality {
   q = 1

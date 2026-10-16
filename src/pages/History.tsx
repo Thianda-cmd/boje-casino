@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { useWallet } from '../store/wallet'
-import { GAMES, gameById, type GameId } from '../store/games'
+import { GAMES, gameInfo, type GameId } from '../store/games'
 import { GameIcon } from '../components/GameIcon'
 import { Coin, IconChart, IconTrophy } from '../components/icons'
 import { fmt } from '../lib/format'
@@ -134,7 +134,7 @@ export function BetsTable({ limit, game }: { limit?: number; game?: GameId }) {
         </thead>
         <tbody>
           {bets.map((b, i) => {
-            const g = gameById(b.game)
+            const g = gameInfo(b.game)
             const mult = b.bet ? b.payout / b.bet : 0
             const win = b.payout > b.bet
             const push = b.payout === b.bet
@@ -145,7 +145,7 @@ export function BetsTable({ limit, game }: { limit?: number; game?: GameId }) {
                 animate={{ opacity: 1 }}
                 transition={{ delay: Math.min(i, 12) * 0.015 }}
                 className={`${i % 2 ? '' : 'bg-panel2/50'} cursor-pointer transition-colors hover:bg-raised/60`}
-                onClick={() => navigate(`/game/${b.game}`)}
+                onClick={() => !g.retired && navigate(`/game/${b.game}`)}
               >
                 <td className="px-2.5 py-2.5 sm:px-4">
                   <span className="flex items-center gap-2.5 font-semibold">
