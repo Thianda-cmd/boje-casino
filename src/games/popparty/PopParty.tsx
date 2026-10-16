@@ -165,6 +165,8 @@ export default function PopParty() {
   const [buying, setBuying] = useState<Buy | null>(null)
   const [thumbs, setThumbs] = useState<Partial<Record<Sym | 'host', string>>>({})
   const [hudTop, setHudTop] = useState(-100)
+  /** on a short, wide stage the caption sits beside the counters, which sit on the arch's bottom row */
+  const [hudInline, setHudInline] = useState(false)
 
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<PartyScene | null>(null)
@@ -231,9 +233,20 @@ export default function PopParty() {
         const fit = () => {
           const r = host.getBoundingClientRect()
           sc!.resize(r.width, r.height)
-          // the counters and caption sit in the space under the arch; DJ Bop has the space above it
+          // the counters and caption sit in the space under the arch (DJ Bop has the space above it); on a short, wide
+          // stage the counters sit on the arch's bottom row of balloons with the caption beside them, never over the
+          // floor itself
           const f = sc!.frameRect()
-          setHudTop(Math.round(Math.min(r.height - 70, f.bottom + (r.height - f.bottom) / 2 - 30)))
+          const floor = sc!.floorRect()
+          const inline = r.width >= 560 && r.height - floor.bottom < 110
+          setHudInline(inline)
+          setHudTop(
+            Math.round(
+              inline
+                ? Math.max(floor.bottom + 3, Math.min(r.height - 44, (floor.bottom + f.bottom) / 2 - 20))
+                : Math.max(floor.bottom + 3, Math.min(r.height - 68, f.bottom + (r.height - f.bottom) / 2 - 30)),
+            ),
+          )
         }
         ro = new ResizeObserver(fit)
         ro.observe(host)
@@ -748,8 +761,12 @@ export default function PopParty() {
     <div className="absolute inset-0 overflow-hidden bg-[#2a1450]" onPointerDown={() => busyRef.current && hurry()}>
       <div ref={hostRef} className="absolute inset-0" />
 
-      {/* counters and caption under the arch */}
-      <div className="pointer-events-none absolute inset-x-0 z-10 flex flex-col items-center gap-1.5 px-2" style={{ top: hudTop }}>
+      {/* counters and caption under the arch (or on its bottom row, the caption beside them) */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 z-10 px-2 ${hudInline ? 'grid grid-cols-[1fr_auto_1fr] items-center gap-3' : 'flex flex-col items-center gap-1.5'}`}
+        style={{ top: hudTop }}
+      >
+        {hudInline && <div />}
         <div className="flex items-center justify-center gap-1.5 sm:gap-2">
           <motion.div layout className={`${pillBase} gap-1 px-3 sm:px-4`} aria-label={`${hud.discos} disco ${hud.discos === 1 ? 'ball' : 'balls'}`}>
             {[0, 1, 2].map((i) => (
@@ -790,7 +807,7 @@ export default function PopParty() {
                       animate={{ scale: 1, rotate: 6 }}
                       exit={{ scale: 0, opacity: 0 }}
                       transition={{ type: 'spring', stiffness: 520, damping: 16 }}
-                      className="absolute -right-3 -top-3 rounded-full bg-[#ff4fb8] px-2 py-0.5 text-[11px] font-black uppercase leading-tight text-white shadow-[0_4px_12px_-2px_rgba(255,79,184,.7)] ring-2 ring-[#1d0f30]"
+                      className={`absolute -right-3 ${hudInline ? '-top-1.5' : '-top-3'} rounded-full bg-[#ff4fb8] px-2 py-0.5 text-[11px] font-black uppercase leading-tight text-white shadow-[0_4px_12px_-2px_rgba(255,79,184,.7)] ring-2 ring-[#1d0f30]`}
                     >
                       <motion.span key={hud.combo} initial={{ scale: 1.5 }} animate={{ scale: 1 }} className="tnum inline-block">
                         Combo ×{hud.combo}
@@ -816,18 +833,20 @@ export default function PopParty() {
             )}
           </AnimatePresence>
         </div>
-        <div className="relative h-5 w-full max-w-[560px]" aria-live="polite">
+        <div className={`relative ${hudInline ? 'h-10 w-full max-w-[300px]' : 'h-5 w-full max-w-[560px]'}`} aria-live="polite">
           <AnimatePresence initial={false}>
             {caption && (
               <motion.div
                 key={caption.id}
-                className="absolute inset-0 truncate text-center text-[13px] font-bold text-white/85 [text-shadow:0_1px_3px_rgba(0,0,0,.7)]"
+                className={`absolute text-[13px] font-bold text-white/85 [text-shadow:0_1px_3px_rgba(0,0,0,.7)] ${hudInline ? 'inset-y-0 left-0 flex max-w-full items-center' : 'inset-0 truncate text-center'}`}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.2 }}
               >
-                {caption.text}
+                {/* beside the counters the room left can be narrow (four pills in free spins): wrap to two lines there
+                    rather than cut the caption off */}
+                {hudInline ? <span className="line-clamp-2 rounded-2xl bg-[#1d0f30]/85 px-3 py-[3px] text-[12.5px] leading-[16px] ring-1 ring-white/10">{caption.text}</span> : caption.text}
               </motion.div>
             )}
           </AnimatePresence>
@@ -891,7 +910,7 @@ export default function PopParty() {
 
   return (
     <>
-      <GameShell panel={panel} stage={stage} stageClass="max-sm:h-[calc(100vw+170px)] max-sm:min-h-[480px]" />
+      <GameShell panel={panel} stage={stage} stageClass="max-sm:h-[calc(100vw+130px)] max-sm:min-h-[440px]" />
       <AnimatePresence>{paytable && <PaytableModal bet={bet} thumbs={thumbs} onClose={() => setPaytable(false)} />}</AnimatePresence>
       <AnimatePresence>
         {buying && (

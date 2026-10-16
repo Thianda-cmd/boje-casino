@@ -7,7 +7,7 @@ import { Bits, PacedQuality, Sparks, WHITE_HOT, glowTexture, ring, ringTexture, 
 import { T, VKit, toonRamp, vkMaterial } from '../../lib/three/toon'
 import { COLS, ROWS, colOf, rowOf, type Grid, type PaySym, type Sym, type TileUp } from './rules'
 import { LEVEL_COLOR, SYMBOL_COLOR, multColor } from './meta'
-import { BADGE_H, BADGE_W, INK, allMaterials, badgeAtlas, buildHost, buildMirrorBall, buildOctoHat, buildSymbol, castMaterial, discoMaterial, garlandGeometry, popCardTexture, recordGeometry, shredGeometry, symbolMaterials, warmUp, type HostRig } from './models'
+import { BADGE_H, BADGE_W, INK, allMaterials, badgeAtlas, buildHost, buildMirrorBall, buildOctoHat, buildSymbol, castMaterial, discoMaterial, garlandGeometry, popCardTexture, recordGeometry, shredGeometry, releaseModels, symbolMaterials, warmUp, type HostRig } from './models'
 
 /*
   The Pop Party stage: a 7 × 7 light-up disco floor inside a balloon arch, with DJ Bop at his decks on top.
@@ -28,13 +28,22 @@ export interface PumpChangeView {
 const IN_W = 3.56
 const IN_H = 3.56
 /**
- * The view fits FIT_W across and FIT_H up, centred CAM_Y above the floor: the arch (8.3 across and up), 2.15 above
- * it for DJ Bop and 1.6 under it for the counters. On narrow screens the width rules: 7.92 makes a cell 44 px on a
- * 375 px phone, the arch's sides tuck in to fit and any height to spare goes under the arch (see resize).
+ * The view fits FIT_W across and from VIEW_TOP down to VIEW_BOTTOM: the arch (a slim ring of balloons, 8 across and
+ * up), DJ Bop and his booth sitting on its top (his head about 1.1 over it) and HUD_PX under it; on a short stage the
+ * counters sit on the arch's bottom row of balloons, the caption beside them. So the floor gets the screen: a cell is
+ * about 85 px on a 1440 × 900 desktop. On narrow screens the width rules (7.52 makes a cell about 46 px on a 375 px
+ * phone), the arch's sides tuck in to fit and any height to spare goes under the arch (see resize).
  */
-const FIT_W = 7.92
-const FIT_H = 12.03
-const CAM_Y = 0.275
+const FIT_W = 7.52
+const VIEW_TOP = 5.2
+const VIEW_BOTTOM = -3.98
+const FIT_H = VIEW_TOP - VIEW_BOTTOM
+const CAM_Y = (VIEW_TOP + VIEW_BOTTOM) / 2
+/** the room the counters need under the arch on a short stage, in CSS px: they sit on the arch's bottom row and stick
+ *  out a little below it, the caption beside them (see PopParty's HUD) */
+const HUD_PX = 13
+/** how far the arch's backing ring reaches past the window (its two rows of balloons sit on it: see archLayout) */
+const RIM = 0.42
 const FOV = 30
 const CLIP = [new THREE.Plane(new THREE.Vector3(0, -1, 0), IN_H - 0.01), new THREE.Plane(new THREE.Vector3(0, 1, 0), IN_H - 0.01)]
 
@@ -56,19 +65,19 @@ const BADGE_CORNER = 0.49
 /** the cast is modelled to fill 0.9 of a cell; drawn this much bigger it fills the cell the way a slot symbol should */
 const CAST = 1.12
 /** DJ Bop is drawn this much bigger than modelled (his booth a little less), standing this much higher behind it */
-const HOST_SCALE = 1.4
-const BOOTH_SCALE = 1.12
-const HOST_LIFT = 0.05
+const HOST_SCALE = 0.94
+const BOOTH_SCALE = 0.75
+const HOST_LIFT = 0.04
 /** the arch's balloon colours by day, and the chrome they turn in Disco Night */
 const ARCH = ['#ff4fb8', '#ffcc29', '#3fc4ff', '#9a6bff', '#29d8c4']
 const ARCH_DAY = ARCH.map((c) => new THREE.Color(c))
 const ARCH_NIGHT = ['#dfe6ff', '#ffc93d', '#ff4fd8'].map((c) => new THREE.Color(c))
 /** the top of DJ Bop's booth, and where the mirror ball hangs in Disco Night (it waits MIRROR_UP higher by day) */
-const BOOTH = new THREE.Vector3(0, IN_H + 0.6, 0.35)
-const MIRROR = new THREE.Vector3(-IN_W + 0.3, IN_H + 1.25, -0.2)
+const BOOTH = new THREE.Vector3(0, IN_H + 0.5 * BOOTH_SCALE + 0.03, 0.35)
+const MIRROR = new THREE.Vector3(-IN_W + 0.3, IN_H + 1.05, -0.2)
 const MIRROR_UP = 7
 /** where DJ Bop blows up the Big Pop balloon: over the front of his booth, off to the side his snout points to */
-const BALLOON = new THREE.Vector3(0.95, IN_H + 1.05, 1)
+const BALLOON = new THREE.Vector3(0.68, BOOTH.y + 0.34, 1)
 const RAMP = [92, 165, 225, 255]
 /** each of DJ Bop's arms, shoulder to mitt, in the torso's frame (as built in models.ts) */
 const ARM_DIR = [new THREE.Vector3(-0.345, -0.34, 0.295).normalize(), new THREE.Vector3(0.345, -0.34, 0.295).normalize()]
@@ -951,12 +960,12 @@ export class PartyScene {
 
     // the arch: a toon backing ring with an ink outline, two rows of balloons, a neon lip and the pump strip
     const ramp = toonRamp(RAMP)
-    const backGeo = new THREE.ExtrudeGeometry(ring(IN_W + 0.5, IN_H + 0.5, 0.65, IN_W + 0.02, IN_H + 0.02, 0.2), { depth: 0.3, bevelEnabled: false, curveSegments: 14 })
+    const backGeo = new THREE.ExtrudeGeometry(ring(IN_W + RIM, IN_H + RIM, 0.6, IN_W + 0.02, IN_H + 0.02, 0.2), { depth: 0.3, bevelEnabled: false, curveSegments: 14 })
     const faceMat = new THREE.MeshToonMaterial({ color: '#3b1d6e', gradientMap: ramp })
     const wallMat = new THREE.MeshToonMaterial({ color: '#24104a', gradientMap: ramp })
     const backing = new THREE.Mesh(backGeo, [faceMat, wallMat])
     backing.position.z = -0.5
-    const inkGeo = new THREE.ShapeGeometry(ring(IN_W + 0.58, IN_H + 0.58, 0.72, IN_W + 0.02, IN_H + 0.02, 0.2), 14)
+    const inkGeo = new THREE.ShapeGeometry(ring(IN_W + RIM + 0.07, IN_H + RIM + 0.07, 0.67, IN_W + 0.02, IN_H + 0.02, 0.2), 14)
     const inkMat = new THREE.MeshBasicMaterial({ color: INK })
     const inkRing = new THREE.Mesh(inkGeo, inkMat)
     inkRing.position.z = -0.52
@@ -1246,18 +1255,21 @@ export class PartyScene {
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
     const tan = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
-    this.dist = Math.max(FIT_H / 2 / tan, FIT_W / 2 / (tan * this.camera.aspect))
-    this.camY = CAM_Y - (2 * tan * this.dist - FIT_H) / 2
+    // the counters need about HUD_PX under the arch whatever the size, so a short stage shows a little more below
+    const fitH = FIT_H / Math.max(0.5, 1 - HUD_PX / h)
+    this.dist = Math.max(fitH / 2 / tan, FIT_W / 2 / (tan * this.camera.aspect))
+    // the top of the view stays put; any height to spare goes under the arch
+    this.camY = VIEW_TOP - tan * this.dist
     this.placeCamera()
     this.sparks.mat.uniforms.scale.value = (h * this.dpr) / (2 * tan)
     this.backMat.uniforms.uAspect.value = w / h
     // on narrow screens the arch's sides tuck in and its balloons there shrink a little, to fit the width
     const room = tan * this.dist * this.camera.aspect - IN_W
-    const t = clamp01((room - 0.4) / 0.2)
+    const t = clamp01((room - 0.36) / 0.16)
     for (const b of this.arch) {
       const out = Math.abs(b.x0) - IN_W
-      b.x = out > 0 ? Math.sign(b.x0) * (IN_W + out * (0.55 + 0.45 * t)) : b.x0
-      b.r = b.r0 * (1 - (1 - t) * 0.14 * clamp01(out / 0.16))
+      b.x = out > 0 ? Math.sign(b.x0) * (IN_W + out * (0.3 + 0.7 * t)) : b.x0
+      b.r = b.r0 * (1 - (1 - t) * 0.2 * clamp01(out / 0.12))
     }
     // badges grow a little on small screens, so their numbers stay readable
     const scale = Math.min(1.15, Math.max(1, 14 / ((BADGE_Q * BADGE_H * h) / (2 * tan * this.dist))))
@@ -2458,10 +2470,17 @@ export class PartyScene {
     return this.project(new THREE.Vector3(cellX(colOf(pos)), cellY(rowOf(pos)), 0))
   }
 
+  /** the floor (the window inside the arch) on screen, so the overlay can keep clear of it */
+  floorRect() {
+    const a = this.project(new THREE.Vector3(-IN_W, IN_H, 0))
+    const b = this.project(new THREE.Vector3(IN_W, -IN_H, 0))
+    return { left: a.x, top: a.y, right: b.x, bottom: b.y }
+  }
+
   /** the outside of the balloon arch on screen, for laying out the overlay */
   frameRect() {
-    const a = this.project(new THREE.Vector3(-IN_W - 0.58, IN_H + 0.58, 0))
-    const b = this.project(new THREE.Vector3(IN_W + 0.58, -IN_H - 0.58, 0))
+    const a = this.project(new THREE.Vector3(-IN_W - RIM - 0.07, IN_H + RIM + 0.07, 0))
+    const b = this.project(new THREE.Vector3(IN_W + RIM + 0.07, -IN_H - RIM - 0.07, 0))
     return { left: a.x, top: a.y, right: b.x, bottom: b.y }
   }
 
@@ -3147,6 +3166,9 @@ export class PartyScene {
     this.flights = []
     for (const k of this.cones) k.mat.dispose()
     for (const o of this.own) o.dispose()
+    // the shared caches would otherwise keep this renderer alive after the game closes (see releaseModels)
+    releaseModels()
+    ringTexture().dispose()
     this.bloom.dispose()
     this.composer.dispose()
     this.renderer.dispose()
@@ -3262,19 +3284,19 @@ function archLayout() {
   const balloons: ArchBalloon[] = []
   let length = 0
   ;[
-    { off: 0.16, z: 0.06 },
-    { off: 0.38, z: -0.08 },
+    { off: 0.12, z: 0.06 },
+    { off: 0.3, z: -0.08 },
   ].forEach((row, k) => {
     const path = rrPath(IN_W + row.off, IN_H + row.off, 0.44 + row.off)
-    const n = Math.round(path.length / 0.33)
+    const n = Math.round(path.length / 0.29)
     const step = path.length / n
     if (k === 0) length = path.length
     for (let i = 0; i < n; i++) {
       const s = (i + k * 0.5) * step
       const [x, y] = path.at(s)
-      if (y > IN_H && Math.abs(x) < 1.3) continue
-      const bx = x + rnd(-0.03, 0.03)
-      const br = rnd(0.15, 0.19)
+      if (y > IN_H && Math.abs(x) < 1.05) continue
+      const bx = x + rnd(-0.025, 0.025)
+      const br = rnd(0.13, 0.165)
       balloons.push({
         x0: bx,
         r0: br,

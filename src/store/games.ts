@@ -1,4 +1,4 @@
-export type GameId = 'chicken' | 'crash' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
+export type GameId = 'chicken' | 'crash' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
 
 export type Category = 'originals' | 'table'
 
@@ -23,6 +23,8 @@ export const GAMES: GameInfo[] = [
   { id: 'hilo', name: 'Hi-Lo', category: 'originals', tagline: 'Higher or lower? Chain your calls.', accent: '#2fd6c3' },
   { id: 'wheel', name: 'Wheel', category: 'originals', tagline: 'Spin the wheel, pick your risk.', accent: '#ff7a45' },
   { id: 'cases', name: 'Cases', category: 'originals', tagline: 'Pick a crate and watch the loot reel glide to your prize.', accent: '#ffb547', tag: 'new' },
+  { id: 'battles', name: 'Case Battles', category: 'originals', tagline: 'Open crates head to head. The biggest haul takes the whole pot.', accent: '#ff7a3d', tag: 'live' },
+  { id: 'derby', name: 'Duck Derby', category: 'originals', tagline: 'Six rubber ducks, one wild river. Back a duck and cheer it home.', accent: '#ffd23f', tag: 'new' },
   { id: 'chompers', name: 'Chompers', category: 'originals', tagline: 'Cartoon monsters chomp every donut on the reels.', accent: '#2ee87f', tag: 'new' },
   { id: 'popparty', name: 'Pop Party', category: 'originals', tagline: 'Balloon animals pop on a light-up floor; every pop lights a multiplier.', accent: '#ff4fb8', tag: 'new' },
   { id: 'roboriot', name: 'Robo Riot', category: 'originals', tagline: 'Toy robots charge the Power Grid: magnets, zappers and boosters stack the cells.', accent: '#5cf2ff', tag: 'new' },

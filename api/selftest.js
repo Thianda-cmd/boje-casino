@@ -1,9 +1,10 @@
 import { auth, cfg, createAccount, deleteUser, rpc } from './_lib/supa.js'
 
 /*
-  End-to-end check of the live backend: Crash, Live Blackjack (on the hidden test table 99) and accounts: sign-up,
-  sign-in, profile and wallet saves, then removes the test account. Only answers when ?key= matches the SELFTEST_KEY
-  env var; reports pass/fail only.
+  End-to-end check of the live backend: Crash, Live Blackjack (on the hidden test table 99), Case Battles (on
+  battles of g_selftest guests, which the lobby lists leave out) and accounts: sign-up, sign-in, profile and wallet
+  saves, then removes the test account. Only answers when ?key= matches the SELFTEST_KEY env var; reports pass/fail
+  only.
 */
 
 export default async function handler(req, res) {
@@ -78,6 +79,61 @@ export default async function handler(req, res) {
       return { seat }
     }
     return { seat: null, note: 'test table full' }
+  })
+
+  // Case Battles: a g_selftest guest's battles are left out of the lobby lists, so no player sees or joins them
+  const cbGuest = () => 'g_selftest' + Math.random().toString(36).slice(2, 12).padEnd(10, '0')
+  const cbA = cbGuest()
+  const cbB = cbGuest()
+  const cbOk = (r, what) => must(r.ok && r.body?.ok, `${what}: status ${r.status} ${JSON.stringify(r.body).slice(0, 120)}`)
+  await step('cb_list as guest', async () => {
+    const r = await rpc('cb_list', { p_player: cbA })
+    must(r.ok && ['open', 'live', 'recent', 'mine'].every((k) => Array.isArray(r.body?.[k])) && r.body.mine.length === 0, `status ${r.status} ${JSON.stringify(r.body).slice(0, 120)}`)
+    return { open: r.body.open.length, live: r.body.live.length, recent: r.body.recent.length }
+  })
+  await step('direct read of cb_battle is blocked', async () => {
+    const r = await fetch(`${c.url}/rest/v1/cb_battle?select=results&limit=1`, { headers: { apikey: c.anon, ...(c.anon.startsWith('eyJ') ? { authorization: `Bearer ${c.anon}` } : {}) } })
+    must(r.status === 401 || r.status === 403 || r.status === 404, `status ${r.status}`)
+    return { status: r.status }
+  })
+  await step('internal cb function is blocked', async () => {
+    const r = await rpc('_cb_start', { p_battle: 0, now_ms: 0 })
+    must(!r.ok, `status ${r.status}`)
+    return { status: r.status }
+  })
+  await step('cb_create, cb_join, cb_leave on a hidden battle (cancelled)', async () => {
+    const made = await rpc('cb_create', { p_player: cbA, p_name: 'Selftest', p_avatar: 0, p_mode: '1v1v1', p_crazy: false, p_unit: 1, p_cases: ['low'] })
+    cbOk(made, 'create')
+    const id = made.body.battle.id
+    must(made.body.battle.status === 'open' && made.body.battle.seats[0]?.me === true && made.body.battle.cost === 1, 'created battle')
+    const lobby = await rpc('cb_list', { p_player: cbB })
+    must(lobby.ok && !lobby.body.open.some((b) => b.id === id), 'the selftest battle is listed')
+    const joined = await rpc('cb_join', { p_battle: id, p_player: cbB, p_name: 'Selftest', p_avatar: 1, p_seat: 3 })
+    cbOk(joined, 'join')
+    must(joined.body.battle.status === 'open' && joined.body.battle.seats[2]?.me === true, 'joined seat 3')
+    const left = await rpc('cb_leave', { p_battle: id, p_player: cbB })
+    must(left.body?.ok && left.body.cancelled === false, `leave ${JSON.stringify(left.body)}`)
+    must((await rpc('cb_result', { p_battle: id, p_player: cbB })).body?.state === 'none', 'result after leaving')
+    const cancelled = await rpc('cb_leave', { p_battle: id, p_player: cbA })
+    must(cancelled.body?.ok && cancelled.body.cancelled === true, `creator leave ${JSON.stringify(cancelled.body)}`)
+    must((await rpc('cb_result', { p_battle: id, p_player: cbA })).body?.state === 'cancelled', 'result after cancelling')
+    must((await rpc('cb_state', { p_battle: id, p_player: cbA })).body?.status === 'cancelled', 'state after cancelling')
+    must((await rpc('cb_join', { p_battle: id, p_player: cbB, p_name: 'Selftest', p_avatar: 1, p_seat: null })).body?.error === 'started', 'join a cancelled battle')
+    return { id }
+  })
+  await step('cb_bots plays a hidden battle', async () => {
+    const made = await rpc('cb_create', { p_player: cbA, p_name: 'Selftest', p_avatar: 0, p_mode: '1v1', p_crazy: false, p_unit: 1, p_cases: ['low', 'high'] })
+    cbOk(made, 'create')
+    const id = made.body.battle.id
+    const r = await rpc('cb_bots', { p_battle: id, p_player: cbA })
+    cbOk(r, 'bots')
+    const b = r.body.battle
+    const paid = (b.payouts ?? []).reduce((a, p) => a + p, 0)
+    must(b.status === 'running' && b.seats[1]?.bot === true && b.results?.length === 2 && b.results.every((row) => row.length === 2), 'battle started with results')
+    must(b.winners?.length >= 1 && paid > 0 && paid <= b.pot + 1e-9, 'winners and payouts')
+    must(!JSON.stringify(r.body).includes(cbA) && !JSON.stringify(r.body).includes('bot_'), 'player ids leaked')
+    must((await rpc('cb_result', { p_battle: id, p_player: cbA })).body?.state === 'running', 'result while running')
+    return { id, pot: b.pot }
   })
 
   const tag = Math.random().toString(36).slice(2, 8)

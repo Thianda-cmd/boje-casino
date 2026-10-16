@@ -16,6 +16,7 @@ import { Avatar } from '../art/Avatar'
 import { CardBack, CardFace } from '../art/Card'
 import { Chip } from '../art/Chip'
 import type { Suit } from '../art/suits'
+import { CrateArt, ItemArt } from '../games/cases/art'
 
 export default function Lobby() {
   return (
@@ -95,6 +96,23 @@ const SLIDES: Slide[] = [
     to: '/game/crash',
     bg: 'linear-gradient(110deg,#171338 0%,#1d1650 55%,#2b1f6e 100%)',
     art: <HeroCrash />,
+  },
+  {
+    key: 'battles',
+    eyebrow: 'Multiplayer',
+    tone: 'text-[#ffa36e] bg-[#ff7a3d]/15',
+    title: (
+      <>
+        Same crates.
+        <br />
+        Winner takes all.
+      </>
+    ),
+    text: 'Case Battles: open the same crates as other players or the bots. The biggest haul takes the pot.',
+    cta: 'Start a battle',
+    to: '/game/battles',
+    bg: 'linear-gradient(110deg,#1b1016 0%,#2a1512 55%,#3d1d0f 100%)',
+    art: <HeroBattles />,
   },
   {
     key: 'popparty',
@@ -643,6 +661,92 @@ function HeroRobo() {
         ].map(([x, y, r]) => (
           <path key={x} d={`M${x} ${y - r} Q${x + r * 0.2} ${y - r * 0.2} ${x + r} ${y} Q${x + r * 0.2} ${y + r * 0.2} ${x} ${y + r} Q${x - r * 0.2} ${y + r * 0.2} ${x - r} ${y} Q${x - r * 0.2} ${y - r * 0.2} ${x} ${y - r}Z`} fill="#fff" />
         ))}
+      </svg>
+    </div>
+  )
+}
+
+/* Case Battles: two players' reels face off under the row of crates being opened. The left reel has landed on a gold
+   watch and leads; the right has a copper coin; a stack of what each has pulled sits underneath. */
+function HeroBattles() {
+  const u = useUid()
+  const cols = [
+    { x: 168, avatar: 12, total: '128.40', tiles: ['coins', 'watch', 'bag'] as const, hit: '#4f9dff', stack: ['ring', 'cash', 'silver'] as const, lead: true },
+    { x: 292, avatar: 5, total: '36.20', tiles: ['silver', 'copper', 'cash'] as const, hit: '#8d9fb4', stack: ['coins', 'copper', 'bag'] as const, lead: false },
+  ]
+  const W = 94
+  const top = 64
+  const H = 150
+  const mid = top + H / 2
+  return (
+    <div className="absolute inset-y-0 right-0 hidden w-[60%] sm:block [mask-image:linear-gradient(to_right,transparent,black_24%)]">
+      <svg className="h-full w-full" viewBox="96 -4 312 278" preserveAspectRatio="xMaxYMid meet" aria-hidden>
+        <defs>
+          <radialGradient id={`${u}g`} cx=".5" cy=".5" r=".5">
+            <stop offset="0" stopColor="#ff9a52" stopOpacity=".45" />
+            <stop offset="1" stopColor="#ff7a3d" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id={`${u}f`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#0b1621" />
+            <stop offset=".26" stopColor="#0b1621" stopOpacity="0" />
+            <stop offset=".74" stopColor="#0b1621" stopOpacity="0" />
+            <stop offset="1" stopColor="#0b1621" />
+          </linearGradient>
+          {cols.map((c, i) => (
+            <clipPath key={i} id={`${u}c${i}`}>
+              <rect x={c.x} y={top} width={W} height={H} rx="12" />
+            </clipPath>
+          ))}
+        </defs>
+        <ellipse cx="276" cy={mid} rx="150" ry="120" fill={`url(#${u}g)`} />
+        {/* the crates, one per round; the second is being opened */}
+        {(['medium', 'high', 'extreme', 'high', 'low'] as const).map((t, i) => (
+          <g key={i} opacity={i === 0 ? 0.5 : 1}>
+            <rect x={196 + i * 38} y={10} width={34} height={32} rx="7" fill={i === 1 ? 'rgba(255,122,61,.18)' : 'rgba(255,255,255,.05)'} stroke={i === 1 ? '#ff7a3d' : 'none'} strokeWidth="1.6" />
+            <CrateArt tier={t} size={26} x={200 + i * 38} y={13} />
+          </g>
+        ))}
+        {cols.map((c, i) => (
+          <g key={i}>
+            <rect x={c.x - 6} y={top - 30} width={W + 12} height={H + 70} rx="14" fill="#0d1a26" opacity=".85" stroke={c.lead ? '#ff7a3d' : 'rgba(255,255,255,.06)'} strokeOpacity={c.lead ? 0.7 : 1} strokeWidth="1.4" />
+            <rect x={c.x} y={top} width={W} height={H} rx="12" fill="#08131c" />
+            <g clipPath={`url(#${u}c${i})`}>
+              {c.tiles.map((k, j) => {
+                const y = mid - 29 + (j - 1) * 64
+                const hit = j === 1
+                return (
+                  <g key={k} opacity={hit ? 1 : 0.5}>
+                    <rect x={c.x + 10} y={y} width={W - 20} height={58} rx="8" fill="#15283a" stroke={hit ? c.hit : '#ffffff'} strokeOpacity={hit ? 1 : 0.08} strokeWidth={hit ? 2.2 : 1} />
+                    {hit && <rect x={c.x + 10} y={y} width={W - 20} height={58} rx="8" fill={c.hit} opacity=".14" />}
+                    <ItemArt kind={k} size={42} x={c.x + W / 2 - 21} y={y + 6} />
+                  </g>
+                )
+              })}
+              <rect x={c.x} y={top} width={W} height={H} fill={`url(#${u}f)`} />
+            </g>
+            <path d={`M${c.x} ${mid - 5}v10l7-5Z`} fill={c.hit} />
+            <path d={`M${c.x + W} ${mid - 5}v10l-7-5Z`} fill={c.hit} />
+            {/* the player and their running total */}
+            <g transform={`translate(${c.x + 4} ${top - 25})`}>
+              <circle cx="10" cy="10" r="11.5" fill={c.lead ? '#ff7a3d' : '#2b475c'} />
+              <Avatar index={c.avatar} size={20} />
+            </g>
+            <text x={c.x + W - 4} y={top - 10} textAnchor="end" fontSize="13" fontWeight="900" fill={c.lead ? '#ffc23d' : '#eef4f9'} fontFamily="Manrope, system-ui, sans-serif">
+              {c.total}
+            </text>
+            {/* what they've pulled so far */}
+            {c.stack.map((k, j) => (
+              <g key={j}>
+                <rect x={c.x + j * 32 - 1} y={top + H + 8} width={30} height={30} rx="6" fill="#15283a" />
+                <ItemArt kind={k} size={22} x={c.x + j * 32 + 3} y={top + H + 12} />
+              </g>
+            ))}
+          </g>
+        ))}
+        <circle cx="280" cy={mid} r="15" fill="#0b1621" stroke="#ff7a3d" strokeWidth="2.4" />
+        <text x="280" y={mid + 4.5} textAnchor="middle" fontSize="12" fontWeight="900" fill="#fff" fontFamily="Manrope, system-ui, sans-serif">
+          VS
+        </text>
       </svg>
     </div>
   )

@@ -1,24 +1,27 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { toonRamp } from '../../lib/three/toon'
 import { isBonus, type BotKind, type Sym } from './rules'
 import { SYMBOL_COLOR, valueColor } from './meta'
 
 /*
-  The Robo Riot cast and machine: premium vinyl-toy robots, modelled in code and shaded physically (glossy plastic
-  with a clear coat, chrome, rubber, glowing LEDs) under a generated workshop environment map.
+  The Robo Riot cast and machine: chunky cartoon toy robots, modelled in code and toon shaded like the rest of the
+  site's cartoon slots: flat tones through a four-step ramp, a dark ink outline round every part, a hard white
+  shine where the key light catches a round surface, and bright, friendly colours.
 
   How a piece is drawn:
-  - Body: every solid part of a model is one mesh in the shared body material. Colour, roughness, metalness,
-    clear coat and glow are carried per vertex (attributes color, aSurf, aFx), so plastic, chrome and LEDs draw in
-    one call. aFx makes LEDs blink, pulse, chase or flicker on the shared clock (tickModels), each piece out of step
-    with its neighbours, so the board stays lively for free.
-  - Screen: faces, value displays and anything that glows in a piece's own colour are one mesh per piece in the
-    screen material, sampling one atlas (faces for four screen shapes, a glyph font and a solid block). Its red
-    channel glows in the vertex colour, green in pink and blue in white. setFace() and setValue() only rewrite a
-    few vertices of that piece's own copy of the screen geometry.
-  - Glass and plasma: additive layers for the power cell's capsule and the wild's core.
+  - Body: every solid part of a model is one mesh in the shared toon body material, its ink outline included (an
+    inverted hull merged into the same geometry). Colour, shine, metal and glow are carried per vertex (attributes
+    color, aSurf, aFx), so paint, metal, rubber and lamps draw in one call. Metal shades in cartoon bands (light
+    above, a darker band below the horizon); lamps are flat colour that blinks, pulses, chases or flickers on the
+    shared clock (tickModels), each piece out of step with its neighbours, so the board stays lively for free.
+  - Screen: faces, value displays and anything that lights in a piece's own colour are one mesh per piece in the
+    flat screen material, sampling one atlas (faces for four screen shapes, a glyph font and a solid block). Its red
+    channel shows the vertex colour, green pink and blue white, over a deep blue screen. setFace() and setValue()
+    only rewrite a few vertices of that piece's own copy of the screen geometry.
+  - Glass and plasma: cartoon glass (a faint tint with white highlight strips) for the power cell's capsule, and
+    a flat energy ball with crawling bands for the wild's core.
   So a piece draws in 2 to 4 calls. Each model fits a 0.9 cell and faces +z; animated parts are groups that turn
   about their joint, with their rest pose in userData.rest (like Pop Party).
 */
@@ -52,16 +55,26 @@ const dist = (a: P3, b: P3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
 /*  Palette and finishes                                                */
 /* ------------------------------------------------------------------ */
 
-const WHITE = '#f4f2ee'
-const GRAPH = '#2a2f3b'
-const INKY = '#15181f'
-const CHROME_C = '#eef2f8'
-const STEEL_C = '#a9b3c2'
-const GOLD_C = '#ffc65a'
-const COPPER_C = '#f08c5a'
-const HAZARD = '#ffc21a'
+/** the ink every outline is drawn in */
+export const INK = '#1b1634'
+const WHITE = '#fbf6ec'
+const GRAPH = '#434b6e'
+const INKY = '#252b4d'
+const CHROME_C = '#d6deef'
+const STEEL_C = '#a7b2cb'
+const GOLD_C = '#ffc84a'
+const COPPER_C = '#f39a5c'
+const HAZARD = '#ffd23f'
+/** the toon ramp: four flat tones, darkest first (as Pop Party) */
+const RAMP = [92, 165, 225, 255]
+/** outline thickness for the cast (they are drawn about a cell, 60 to 110 px, across) and for the stage pieces */
+const INK_W = 0.021
+const STAGE_INK = 0.026
 
-/** how a surface catches the light: roughness, metalness, clear coat, glow (emissive gain on its colour), fx */
+/**
+ * How a surface catches the light: `r` is unused (kept so the finishes read as before), `m` metal (cartoon chrome
+ * bands), `c` how strong its shine spot is, `g` glow (flat lamp colour), `fx` how a lamp animates.
+ */
 interface Finish {
   r: number
   m: number
@@ -70,32 +83,33 @@ interface Finish {
   fx: number
 }
 const fin = (r: number, m: number, c: number, g = 0, fx = 0): Finish => ({ r, m, c, g, fx })
-/** candy vinyl with a clear coat */
+/** shiny toy plastic */
 const GLOSS = fin(0.3, 0, 1)
 const SATIN = fin(0.5, 0, 0.35)
 /** painted sheet metal */
-const PAINT = fin(0.42, 0.2, 0.55)
-const RUBBER = fin(0.8, 0, 0.04)
-const CHROME = fin(0.16, 1, 0)
-const STEEL = fin(0.34, 1, 0)
-/** anodised aluminium: tinted metal under a clear coat */
-const ANOD = fin(0.4, 0.45, 0.35)
-const GOLD = fin(0.2, 1, 0.5)
-const COPPER = fin(0.24, 1, 0.3)
-/** an LED or a lit panel: `g` is how hard it glows (bloom starts near 1), `fx` how it animates */
-const lit = (g: number, fx = 0) => fin(0.35, 0, 0.3, g, fx)
-/** LED animations (aFx = mode + phase, phase in 0..0.95) */
+const PAINT = fin(0.42, 0, 0.55)
+const RUBBER = fin(0.8, 0, 0)
+const CHROME = fin(0.16, 1, 1)
+const STEEL = fin(0.34, 0.7, 0.6)
+const ANOD = fin(0.4, 0.3, 0.7)
+const GOLD = fin(0.2, 0.8, 1)
+const COPPER = fin(0.24, 0.7, 0.8)
+/** a lamp or a lit panel: `g` how much of it is flat lamp colour (0..1), `fx` how it animates */
+const lit = (g: number, fx = 0) => fin(0.35, 0, 0, g, fx)
+/** flat ink: drawn lines and the dark rims round plates and buttons (no outline of its own) */
+const INKF = fin(0, 0, 0, -1)
+/** lamp animations (aFx = mode + phase, phase in 0..0.95) */
 export const FX = { steady: 0, blink: 1, pulse: 2, chase: 3, flicker: 4, fill: 5 } as const
 
 /* ------------------------------------------------------------------ */
 /*  Materials                                                           */
 /* ------------------------------------------------------------------ */
 
-/** the clock every LED, plasma and screen runs on; tickModels() moves it */
+/** the clock every lamp, plasma and screen runs on; tickModels() moves it */
 const uTime = { value: 0 }
-const uPink = { value: new THREE.Color('#ff5aa5') }
-/** how strongly the body materials reflect the environment (the map itself is a dim night workshop) */
-const ENV = 1
+const uPink = { value: new THREE.Color('#ff7ab8') }
+/** the screens' deep blue, behind every face and value */
+const uScreen = { value: new THREE.Color('#17214a') }
 
 const BODY_VERT_PARS = /* glsl */ `
 attribute vec4 aSurf;
@@ -135,94 +149,115 @@ float fxGain() {
 }`
 
 /**
- * A punctual light caught in polished chrome or a clear coat is physically a pin-point thousands of times brighter
- * than white; one such pixel blooms into a square. Highlights are clamped to a bright sparkle instead.
+ * The toon body's last step, after the ramp lighting: outlines (aSurf.w = -1) are flat ink; metal shades in cartoon
+ * bands (lighter above, darker where it would mirror the floor); round surfaces facing the key light, up and to the
+ * left, get a hard white shine spot; lamps are their own colour, flat, animated by fxGain and red in the alarm.
  */
-const SPARKLE = '#include <lights_fragment_end>\nreflectedLight.directSpecular = min(reflectedLight.directSpecular, vec3(2.2));\nclearcoatSpecularDirect = min(clearcoatSpecularDirect, vec3(2.2));'
+const BODY_SHADE = /* glsl */ `
+{
+  if (vSurf.w < -0.5) {
+    outgoingLight = vColor.rgb;
+  } else {
+    vec3 nn = normalize(normal);
+    float metal = vSurf.y;
+    float up = nn.y * 0.85 + nn.z * 0.15;
+    outgoingLight *= mix(1.0, 0.66 + 0.42 * step(-0.12, up), metal);
+    float nh = dot(nn, vec3(-0.4, 0.55, 0.733));
+    float spot = step(0.945 - 0.035 * metal, nh) * vSurf.x;
+    outgoingLight = mix(outgoingLight, vec3(1.0), spot * 0.8);
+    if (vSurf.w > 0.0) {
+      vec3 g = vColor.rgb;
+      float lum = max(max(g.r, g.g), max(g.b, 1e-3));
+      // an over-bright colour (a flash) still reads flat: squeezed, so 2 shows as 1.25
+      g *= lum > 1.0 ? (1.0 + 0.25 * (lum - 1.0)) / lum : 1.0;
+      g = mix(g, vec3(1.0, 0.17, 0.1) * max(max(g.r, g.g), g.b), uAlert);
+      outgoingLight = mix(outgoingLight, g * (0.38 + 0.62 * fxGain()), min(1.0, vSurf.w));
+    }
+  }
+}
+#include <opaque_fragment>`
 
 /**
- * The body material: colour, roughness, metalness, clear coat and glow per vertex. `physical` adds the clear coat
- * (the cast and Volt); the machine uses the cheaper standard model. `uAlert` (userData.alert) turns its LEDs red.
+ * The body material: toon shading on the vertex colours through the shared ramp, then BODY_SHADE. `uAlert`
+ * (userData.alert) turns its lamps red. One for the cast, copies for the stage (unclipped).
  */
-function makeBody(physical: boolean) {
-  const m = physical
-    ? new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 1, metalness: 1, clearcoat: 1, clearcoatRoughness: 0.11 })
-    : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 1 })
-  m.envMapIntensity = ENV
+function makeBody() {
+  const m = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonRamp(RAMP) })
   const alert = { value: 0 }
   m.userData.alert = alert
   m.onBeforeCompile = (s) => {
     s.uniforms.uTime = uTime
     s.uniforms.uAlert = alert
     s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>\n${BODY_VERT_PARS}`).replace('#include <begin_vertex>', `#include <begin_vertex>\n${BODY_VERT}`)
-    s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', `#include <common>\n${BODY_FRAG_PARS}`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = vSurf.x;')
-      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = vSurf.y;')
-      .replace('#include <lights_physical_fragment>', THREE.ShaderChunk.lights_physical_fragment.replace('material.clearcoat = clearcoat;', 'material.clearcoat = clearcoat * vSurf.z;'))
-      .replace('#include <lights_fragment_end>', SPARKLE)
-      .replace(
-        '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>
-{
-  vec3 glowCol = vColor.rgb;
-  float lum = max(max(glowCol.r, glowCol.g), glowCol.b);
-  glowCol = mix(glowCol, vec3(1.0, 0.09, 0.05) * lum, uAlert);
-  totalEmissiveRadiance += glowCol * vSurf.w * fxGain();
-}`,
-      )
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\n${BODY_FRAG_PARS}`).replace('#include <opaque_fragment>', BODY_SHADE)
   }
-  m.customProgramCacheKey = () => (physical ? 'rr-body-p' : 'rr-body-s')
+  m.customProgramCacheKey = () => 'rr-toon-body'
   return m
 }
 
 /**
- * The screen material: dark glossy glass whose emission comes from the atlas: red glows in the vertex colour, green
- * in pink, blue in white (a face's cells carry a faint red backlight, so a screen glows softly in its tint).
- * userData.gain scales the glow.
+ * The screen material, flat (no lighting): a deep blue screen, the atlas drawing over it: red in the vertex colour,
+ * green in pink, blue in white (a face's cells carry a faint red, so a screen is tinted a little by its face).
+ * userData.gain scales the drawing's colour.
  */
 function makeScreen(map: THREE.Texture) {
-  const m = new THREE.MeshPhysicalMaterial({ color: '#04060a', roughness: 0.25, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08, emissive: '#ffffff', emissiveMap: map, vertexColors: true })
-  m.envMapIntensity = 0.45
-  const gain = { value: 1.55 }
+  const m = new THREE.MeshBasicMaterial({ map, vertexColors: true })
+  const gain = { value: 1 }
   m.userData.gain = gain
   m.onBeforeCompile = (s) => {
     s.uniforms.uPink = uPink
     s.uniforms.uGain = gain
+    s.uniforms.uScreen = uScreen
     s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uPink;\nuniform float uGain;')
-      .replace('#include <color_fragment>', '')
-      .replace('#include <lights_fragment_end>', SPARKLE)
+      .replace('#include <common>', '#include <common>\nuniform vec3 uPink;\nuniform float uGain;\nuniform vec3 uScreen;')
+      .replace('#include <map_fragment>', '')
       .replace(
-        '#include <emissivemap_fragment>',
-        `vec4 em = texture2D(emissiveMap, vEmissiveMapUv);
-totalEmissiveRadiance = (vColor.rgb * em.r + uPink * em.g + vec3(em.b)) * uGain;`,
+        '#include <color_fragment>',
+        `{
+  vec4 em = texture2D(map, vMapUv);
+  float on = clamp(max(em.r, em.g), 0.0, 1.0);
+  diffuseColor.rgb = uScreen * (1.0 - on) + (vColor.rgb * em.r + uPink * em.g) * uGain + vec3(em.b);
+}`,
       )
   }
-  m.customProgramCacheKey = () => 'rr-screen'
+  m.customProgramCacheKey = () => 'rr-toon-screen'
   return m
 }
 
-/** clear glass: only its reflections and a cool fresnel rim are added to what is behind it */
-function makeGlass(rim: THREE.ColorRepresentation = '#3fd9ff', strength = 0.55) {
-  const m = new THREE.MeshPhysicalMaterial({ color: '#000000', roughness: 0.05, metalness: 0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
-  m.envMapIntensity = 1.5
-  const uRim = { value: C(rim, strength) }
-  m.userData.rim = uRim
-  m.onBeforeCompile = (s) => {
-    s.uniforms.uRim = uRim
-    s.fragmentShader = s.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uRim;')
-      .replace('#include <lights_fragment_end>', SPARKLE)
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uRim * pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 2.5);')
+/** cartoon glass: no lighting, colour and alpha per vertex (a faint tint, and white strips of shine); see glassGeo */
+function makeGlass() {
+  return new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide })
+}
+
+/**
+ * Cartoon glass round the y axis: an open cylinder of faint tint from angle a0 to a1 (radians, 0 facing +z, +x at
+ * a quarter turn), and white strips of shine along it, each [angle, width, alpha]. RGBA vertex colours.
+ */
+function glassGeo(r: number, h: number, a0: number, a1: number, strips: [number, number, number][], tint = '#bfeeff', alpha = 0.1) {
+  const parts: Geo[] = []
+  const put = (g: Geo, c: THREE.Color, a: number) => {
+    const x = g.index ? g.toNonIndexed() : g
+    if (x !== g) g.dispose()
+    for (const k of Object.keys(x.attributes)) if (k !== 'position' && k !== 'normal') x.deleteAttribute(k)
+    const n = x.getAttribute('position').count
+    const col = new Float32Array(n * 4)
+    for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b, a], i * 4)
+    x.setAttribute('color', new THREE.BufferAttribute(col, 4))
+    parts.push(x)
   }
-  m.customProgramCacheKey = () => 'rr-glass'
-  return m
+  put(new THREE.CylinderGeometry(r, r, h, 40, 1, true, a0, a1 - a0), C(tint), alpha)
+  for (const [a, w, al] of strips) put(new THREE.CylinderGeometry(r * 1.006, r * 1.006, h * 0.86, 3, 1, true, a - w / 2, w), C('#ffffff'), al)
+  const g = mergeGeometries(parts)
+  for (const p of parts) p.dispose()
+  return g
 }
 
-/** the wild's plasma: an additive shell with a hot fresnel rim and tendrils that crawl on the clock */
+/**
+ * The wild's core: a flat energy ball. Bright bands crawl round it on the clock, white bolts flick across them, and
+ * a darker rim gives it a cartoon edge inside its cage.
+ */
 function makePlasma(color: THREE.ColorRepresentation) {
-  const m = new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
+  const m = new THREE.MeshBasicMaterial({ color })
   m.onBeforeCompile = (s) => {
     s.uniforms.uTime = uTime
     s.vertexShader = s.vertexShader
@@ -234,52 +269,43 @@ function makePlasma(color: THREE.ColorRepresentation) {
         '#include <opaque_fragment>',
         `{
   vec3 p = normalize(vObj);
-  float fres = 1.0 - abs(dot(normalize(vN), normalize(vVp)));
+  vec3 n = normalize(vN);
+  float fres = 1.0 - abs(dot(n, normalize(vVp)));
   float a = atan(p.y, p.x);
-  float w1 = sin(a * 5.0 + p.z * 7.0 + uTime * 2.1 + sin(p.y * 9.0 - uTime * 1.3) * 1.7);
-  float w2 = sin(a * 3.0 - p.z * 9.0 - uTime * 1.7 + sin(p.x * 8.0 + uTime) * 2.0);
-  float tendril = pow(smoothstep(0.82, 1.0, abs(w1)), 2.0) + pow(smoothstep(0.86, 1.0, abs(w2)), 2.0);
-  outgoingLight = diffuseColor.rgb * (0.12 + 1.5 * pow(fres, 2.2) + 2.2 * tendril * (1.0 - 0.6 * fres));
+  float w1 = sin(a * 4.0 + p.z * 6.0 + uTime * 2.1 + sin(p.y * 7.0 - uTime * 1.3) * 1.5);
+  float w2 = sin(a * 3.0 - p.z * 7.0 - uTime * 1.7 + sin(p.x * 6.0 + uTime) * 1.8);
+  vec3 c = mix(diffuseColor.rgb, mix(diffuseColor.rgb, vec3(1.0), 0.5), step(0.62, abs(w1)));
+  c = mix(c, vec3(1.0, 0.94, 1.0), step(0.95, abs(w2)) * (1.0 - step(0.7, fres)));
+  c = mix(c, diffuseColor.rgb * 0.5, step(0.8, fres));
+  c = mix(c, vec3(1.0), step(0.93, dot(n, vec3(-0.4, 0.55, 0.733))) * 0.85);
+  outgoingLight = c;
 }
 #include <opaque_fragment>`,
       )
   }
-  m.customProgramCacheKey = () => 'rr-plasma'
+  m.customProgramCacheKey = () => 'rr-toon-plasma'
   return m
 }
 
 interface Mats {
-  body: THREE.MeshPhysicalMaterial
-  screen: THREE.MeshPhysicalMaterial
-  glass: THREE.MeshPhysicalMaterial
+  body: THREE.MeshToonMaterial
+  screen: THREE.MeshBasicMaterial
+  glass: THREE.MeshBasicMaterial
   plasma: THREE.MeshBasicMaterial
 }
 let gridMats: Mats | null = null
-let stageMats: { body: THREE.MeshPhysicalMaterial; frame: THREE.MeshStandardMaterial; glass: THREE.MeshPhysicalMaterial } | null = null
-let envTex: THREE.Texture | null = null
-let envRenderer: THREE.WebGLRenderer | null = null
+let stageMats: { body: THREE.MeshToonMaterial; frame: THREE.MeshToonMaterial; glass: THREE.MeshBasicMaterial } | null = null
 
-const pbr = (m: THREE.Material): m is THREE.MeshStandardMaterial => m instanceof THREE.MeshStandardMaterial
-/** gives the environment map (if made yet) to a new set of materials */
-function withEnv<S extends object>(set: S): S {
-  if (envTex) for (const m of Object.values(set) as THREE.Material[]) if (pbr(m)) m.envMap = envTex
-  return set
-}
 function grid(): Mats {
-  return (gridMats ??= withEnv({ body: makeBody(true) as THREE.MeshPhysicalMaterial, screen: makeScreen(atlas()), glass: makeGlass(), plasma: makePlasma(C(SYMBOL_COLOR.wild, 1.25)) }))
+  return (gridMats ??= { body: makeBody(), screen: makeScreen(atlas()), glass: makeGlass(), plasma: makePlasma(C(SYMBOL_COLOR.wild)) })
 }
 function stage() {
-  return (stageMats ??= withEnv({
-    body: makeBody(true) as THREE.MeshPhysicalMaterial,
-    frame: makeBody(false) as THREE.MeshStandardMaterial,
-    glass: makeGlass('#57e8ff', 0.35),
-  }))
+  return (stageMats ??= { body: makeBody(), frame: makeBody(), glass: makeGlass() })
 }
-/** materials made outside the shared sets (Volt's screen, per-tube neon, the beacon...) that disposeModels() frees */
+/** materials made outside the shared sets (Volt's screen, per-tube rings, the beacon...) that disposeModels() frees */
 const extraMats = new Set<THREE.Material>()
 const keep = <M extends THREE.Material>(m: M) => {
   extraMats.add(m)
-  if (envTex && pbr(m)) m.envMap = envTex
   return m
 }
 
@@ -298,75 +324,31 @@ export function symbolMaterials(o: THREE.Object3D) {
   return [...out]
 }
 
-/** moves the shared clock (seconds): blinking LEDs, plasma, chase lights; call once per frame */
+/** moves the shared clock (seconds): blinking lamps, plasma, chase lights; call once per frame */
 export function tickModels(t: number) {
   uTime.value = t
 }
 
-/** turns the stage LEDs (machine frame, Volt, lever) red for the Power Grid alarm, 0..1; sockets keep their colours */
+/** turns the stage lamps (machine frame, Volt, lever) red for the Power Grid alarm, 0..1; sockets keep their colours */
 export function setAlert(a: number) {
   const s = stage()
   s.body.userData.alert.value = a
   s.frame.userData.alert.value = a
 }
 
-/* ------------------------------------------------------------------ */
-/*  The workshop environment                                            */
-/* ------------------------------------------------------------------ */
-
 /**
- * The reflection map: three's RoomEnvironment with neon strips added (magenta to the left, cyan to the right, a warm
- * work lamp overhead), through PMREM. Made once per renderer and given to every PBR material this module makes, so
- * the scene does not need to set scene.environment (it may, with the returned texture). Freed by disposeModels().
- */
-export function useEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture {
-  if (envTex && envRenderer === renderer) return envTex
-  envTex?.dispose()
-  const room = new RoomEnvironment()
-  // night in the workshop: the room's lamps turned well down (chrome reflects them without blooming everywhere)
-  room.traverse((o) => {
-    if (o instanceof THREE.PointLight) o.intensity *= 0.45
-    // the panel behind the camera would mirror as a white sheet on every screen: it is nearly off
-    if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshLambertMaterial) o.material.emissiveIntensity *= o.position.z > 10 ? 0.012 : 0.07
-  })
-  const box = new THREE.BoxGeometry()
-  const neon = (color: string, power: number, p: P3, s: P3) => {
-    const m = new THREE.Mesh(box, new THREE.MeshLambertMaterial({ color: 0x000000, emissive: color, emissiveIntensity: power }))
-    m.position.set(...p)
-    m.scale.set(...s)
-    room.add(m)
-  }
-  neon('#ff3fd2', 3.2, [-15.6, 7, -4], [0.12, 1.4, 9])
-  neon('#5cf2ff', 3.4, [14.4, 6, 3.5], [0.12, 1.6, 8])
-  neon('#ffb45e', 3, [-3, 19.5, 5], [6, 0.1, 1.6])
-  neon('#7a5cff', 2.5, [2, 3, -13.6], [9, 1, 0.1])
-  const pm = new THREE.PMREMGenerator(renderer)
-  envTex = pm.fromScene(room, 0.03).texture
-  pm.dispose()
-  room.dispose()
-  envRenderer = renderer
-  const all: THREE.Material[] = [...(gridMats ? Object.values(gridMats) : []), ...(stageMats ? Object.values(stageMats) : []), ...extraMats]
-  for (const m of all)
-    if (pbr(m)) {
-      m.envMap = envTex
-      m.needsUpdate = true
-    }
-  return envTex
-}
-
-/**
- * Lights that suit the cast: a warm key from the upper left, a cyan rim from behind on the right and a magenta one
- * on the left, and a little ambient. The scene may use them or its own.
+ * Lights that suit the toon cast: a warm key from the upper left and a soft cool fill all round, like Pop Party.
+ * The rims are kept faint (in toon shading every light tints the whole lit side); the scene reddens them in the alarm.
  */
 export function makeLights() {
   const g = new THREE.Group()
-  const key = new THREE.DirectionalLight('#ffe7cc', 2.4)
+  const key = new THREE.DirectionalLight('#fff4e0', 2)
   key.position.set(-4, 6, 8)
-  const rim = new THREE.DirectionalLight('#5ce8ff', 3.2)
+  const rim = new THREE.DirectionalLight('#a8f0ff', 0.3)
   rim.position.set(6, 3, -6)
-  const rim2 = new THREE.DirectionalLight('#ff4fd8', 2.2)
+  const rim2 = new THREE.DirectionalLight('#ffb8ea', 0.22)
   rim2.position.set(-6, 2, -5)
-  const amb = new THREE.AmbientLight('#b8c8ff', 0.25)
+  const amb = new THREE.AmbientLight('#dbe3ff', 0.95)
   key.name = 'key'
   rim.name = 'rim'
   rim2.name = 'rim2'
@@ -387,7 +369,7 @@ const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d)
  * sphere. The cast is built at 1 (a cell is ~45 to 140 px); Volt and the machine, much bigger on screen, at STAGE_LOD.
  */
 let lod = 1
-const STAGE_LOD = 2.4
+const STAGE_LOD = 1.6
 const segs = (n: number, want: number, min: number) => Math.max(min, Math.min(n, Math.round(want * lod)))
 const cyl = (rt: number, rb: number, h: number, n = 24, open = false) => new THREE.CylinderGeometry(rt, rb, h, segs(n, Math.max(rt, rb) * 170, 6), 1, open)
 const sph = (r: number, w = 24, h = 16) => new THREE.SphereGeometry(r, segs(w, r * 115, 8), segs(h, r * 80, 6))
@@ -536,13 +518,119 @@ function hazard(k: Kit, w: number, h: number, m: THREE.Matrix4, pitch = 0.09, de
 }
 
 /**
- * Bakes a model's solids into one indexed geometry: position, normal, color (may exceed 1 for glow), aSurf
- * (roughness, metalness, clear coat, glow) and aFx.
+ * How thick a part's outline is when not given: the kit's ink, but thinner on slim parts (a hull thicker than the
+ * part itself would swallow it): about half the radius of a rod, ring or ball, a sixth of a slab's middle size.
+ */
+function autoInk(geo: Geo, ink: number, scale = 1) {
+  const p = (geo as Geo & { parameters?: Record<string, number> }).parameters
+  let est: number
+  switch (geo.type) {
+    case 'TorusGeometry':
+      est = p!.tube * 0.55
+      break
+    case 'TubeGeometry':
+      est = p!.radius * 0.55
+      break
+    case 'CapsuleGeometry':
+      est = p!.radius * 0.45
+      break
+    case 'SphereGeometry':
+      est = p!.radius * 0.4
+      break
+    case 'CylinderGeometry':
+      est = Math.max(p!.radiusTop, p!.radiusBottom) * 0.4
+      break
+    default: {
+      geo.computeBoundingBox()
+      const s = geo.boundingBox!.getSize(V())
+      est = [s.x, s.y, s.z].sort((a, b) => a - b)[1] * 0.16
+    }
+  }
+  return Math.min(ink, est * scale)
+}
+
+const _hullKey = (x: number, y: number, z: number) => `${Math.round(x * 2e4)},${Math.round(y * 2e4)},${Math.round(z * 2e4)}`
+
+/**
+ * The ink outline of an indexed part: its surface pushed out by `t` along normals averaged over every corner at the
+ * same place (so hard edges stay closed), turned inside out, so only its back shows round the part. aSurf.w = -1
+ * marks it as ink for the body shader.
+ */
+function hullOf(g: Geo, t: number) {
+  const p = g.getAttribute('position')
+  const n = g.getAttribute('normal')
+  const count = p.count
+  const sum = new Map<string, THREE.Vector3>()
+  const keys: string[] = new Array(count)
+  for (let i = 0; i < count; i++) {
+    const k = (keys[i] = _hullKey(p.getX(i), p.getY(i), p.getZ(i)))
+    let s = sum.get(k)
+    if (!s) sum.set(k, (s = V()))
+    s.x += n.getX(i)
+    s.y += n.getY(i)
+    s.z += n.getZ(i)
+  }
+  const pos = new Float32Array(count * 3)
+  const nrm = new Float32Array(count * 3)
+  const ink = new THREE.Color(INK)
+  const col = new Float32Array(count * 3)
+  const surf = new Float32Array(count * 4)
+  const d = V()
+  for (let i = 0; i < count; i++) {
+    d.copy(sum.get(keys[i])!)
+    if (d.lengthSq() < 1e-8) d.set(n.getX(i), n.getY(i), n.getZ(i))
+    d.normalize()
+    pos.set([p.getX(i) + d.x * t, p.getY(i) + d.y * t, p.getZ(i) + d.z * t], i * 3)
+    nrm.set([-d.x, -d.y, -d.z], i * 3)
+    col.set([ink.r, ink.g, ink.b], i * 3)
+    surf.set([0, 0, 0, -1], i * 4)
+  }
+  const h = new THREE.BufferGeometry()
+  h.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  h.setAttribute('normal', new THREE.BufferAttribute(nrm, 3))
+  h.setAttribute('color', new THREE.BufferAttribute(col, 3))
+  h.setAttribute('aSurf', new THREE.BufferAttribute(surf, 4))
+  h.setAttribute('aFx', new THREE.BufferAttribute(new Float32Array(count), 1))
+  const src = g.index!
+  const idx = new (count > 65535 ? Uint32Array : Uint16Array)(src.count)
+  for (let i = 0; i < src.count; i += 3) {
+    idx[i] = src.getX(i)
+    idx[i + 1] = src.getX(i + 2)
+    idx[i + 2] = src.getX(i + 1)
+  }
+  h.setIndex(new THREE.BufferAttribute(idx, 1))
+  return h
+}
+
+/**
+ * Bakes a model's solids into one indexed geometry: position, normal, color (may exceed 1 for a flash), aSurf
+ * (shine, metal, unused, glow; -1 glow is ink) and aFx, with every part's ink outline merged in.
  */
 class Kit {
   private readonly parts: Geo[] = []
+  private readonly hulls: Geo[] = []
 
-  add(geo: Geo, color: THREE.ColorRepresentation, m?: THREE.Matrix4, f: Finish = GLOSS, phase = 0) {
+  /** `ink`: the outline thickness for parts that do not give their own */
+  constructor(private readonly ink = INK_W) {}
+
+  /** adds a solid; `ink` is its outline thickness (0 for none, -1 for the kit's, thinner on slim parts) */
+  add(geo: Geo, color: THREE.ColorRepresentation, m?: THREE.Matrix4, f: Finish = GLOSS, phase = 0, ink = -1) {
+    const t = ink >= 0 ? ink : autoInk(geo, this.ink, m ? Math.cbrt(Math.abs(m.determinant())) || 1 : 1)
+    const g = this.prep(geo, color, m, f, phase)
+    this.parts.push(g)
+    if (t > 0) this.hulls.push(hullOf(g, t))
+    return this
+  }
+
+  /** only the ink outline of a solid (for one drawn in another material, like a glass dome or a screen) */
+  outline(geo: Geo, m: THREE.Matrix4 | undefined, t: number) {
+    const g = this.prep(geo, INK, m, INKF, 0)
+    this.hulls.push(hullOf(g, t))
+    g.dispose()
+    return this
+  }
+
+  private prep(geo: Geo, color: THREE.ColorRepresentation, m: THREE.Matrix4 | undefined, f: Finish, phase: number) {
     for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'normal') geo.deleteAttribute(k)
     const g = geo.index ? geo : mergeVertices(geo, 1e-5)
     if (g !== geo) geo.dispose()
@@ -553,9 +641,9 @@ class Kit {
       if (m.determinant() < 0) {
         const ix = g.index!
         for (let i = 0; i < ix.count; i += 3) {
-          const t = ix.getX(i + 1)
+          const j = ix.getX(i + 1)
           ix.setX(i + 1, ix.getX(i + 2))
-          ix.setX(i + 2, t)
+          ix.setX(i + 2, j)
         }
       }
     }
@@ -568,17 +656,16 @@ class Kit {
       col[i * 3] = c.r
       col[i * 3 + 1] = c.g
       col[i * 3 + 2] = c.b
-      surf[i * 4] = f.r
+      surf[i * 4] = f.c
       surf[i * 4 + 1] = f.m
-      surf[i * 4 + 2] = f.c
+      surf[i * 4 + 2] = 0
       surf[i * 4 + 3] = f.g
       fx[i] = f.fx ? f.fx + Math.min(0.95, phase) : 0
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3))
     g.setAttribute('aSurf', new THREE.BufferAttribute(surf, 4))
     g.setAttribute('aFx', new THREE.BufferAttribute(fx, 1))
-    this.parts.push(g)
-    return this
+    return g
   }
 
   get empty() {
@@ -586,9 +673,11 @@ class Kit {
   }
 
   geometry() {
-    const g = mergeGeometries(this.parts)
-    for (const p of this.parts) p.dispose()
+    const all = [...this.parts, ...this.hulls]
+    const g = mergeGeometries(all)
+    for (const p of all) p.dispose()
     this.parts.length = 0
+    this.hulls.length = 0
     return g
   }
 
@@ -1123,13 +1212,31 @@ function drawFace(g: CanvasRenderingContext2D, e: Expr, v: Variant, x: number, y
   g.rect(x, y, w, h)
   g.clip()
   g.translate(x, y)
+  // the screen: a touch of the face's colour in the middle, flat towards the edges
   const back = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.62)
-  back.addColorStop(0, 'rgb(24, 0, 0)')
-  back.addColorStop(1, 'rgb(6, 0, 0)')
+  back.addColorStop(0, 'rgb(34, 0, 0)')
+  back.addColorStop(0.7, 'rgb(14, 0, 0)')
+  back.addColorStop(1, 'rgb(10, 0, 0)')
   g.fillStyle = back
   g.fillRect(0, 0, w, h)
   if (v === 'eye') cyclops(g, e, w, h)
   else twoEyes(g, e, v, w, h)
+  // a cartoon glint across the glass: two white strips in the top left corner
+  g.globalCompositeOperation = 'lighter'
+  g.fillStyle = 'rgba(0, 0, 255, 0.2)'
+  const s = Math.min(w, h)
+  for (const [o, t] of [
+    [0.08, 0.13],
+    [0.27, 0.05],
+  ]) {
+    g.beginPath()
+    g.moveTo(o * s, 0)
+    g.lineTo((o + t) * s, 0)
+    g.lineTo(0, (o + t) * s)
+    g.lineTo(0, o * s)
+    g.closePath()
+    g.fill()
+  }
   g.restore()
 }
 
@@ -1402,15 +1509,15 @@ function writeText(geo: Geo, d: Display, text: string, color: THREE.Color) {
 /*  The cast                                                            */
 /* ------------------------------------------------------------------ */
 
-/** how much the face colours glow (the tint is multiplied up in the shader by the screen gain) */
+/** the colour each face is drawn in on its deep blue screen */
 const FACE_TINT: Record<string, string> = {
   rex: '#8ff6ff',
   dot: '#ffffff',
-  clank: '#7dff9a',
-  zip: '#ffb444',
+  clank: '#8dffa6',
+  zip: '#ffc061',
   nut: '#7cf1ff',
-  gear: '#fff1d6',
-  battery: '#eafff2',
+  gear: '#fff0cf',
+  battery: '#d9ffe6',
   chip: '#9fe3ff',
   magnet: '#8ff6ff',
   zap: '#fff2a8',
@@ -1418,61 +1525,70 @@ const FACE_TINT: Record<string, string> = {
   gold: '#ffe3a0',
 }
 
-/** Rex, the top pay: a chunky red toy robot with a big screen head, a blinking antenna and chrome cheek bolts */
+/** an ink rim round a w × h plate: a rounded slab `t` bigger all round, centred at m (put it just behind the plate's face) */
+function inkPlate(k: Kit, w: number, h: number, r: number, m: THREE.Matrix4, t = 0.014, d = 0.012) {
+  k.add(rbox(w + 2 * t, h + 2 * t, d, Math.min(r + t, (w + 2 * t) / 2, (h + 2 * t) / 2), 2), INK, m, INKF, 0, 0)
+}
+/** an ink disc facing +z under a round button of radius r */
+function inkDisc(k: Kit, r: number, m: THREE.Matrix4, t = 0.012) {
+  k.add(cyl(r + t, r + t, 0.006, 20), INK, mul(m, T([0, 0, 0], [Math.PI / 2, 0, 0])), INKF, 0, 0)
+}
+/** a candy button facing +z: a dome on an ink disc */
+function button(k: Kit, r: number, color: THREE.ColorRepresentation, m: THREE.Matrix4, f: Finish = GLOSS, phase = 0) {
+  inkDisc(k, r, m)
+  k.add(dome(r, 0.75, 14, 6), color, mul(m, T([0, 0, 0.002])), f, phase, 0)
+}
+
+/** Rex, the top pay: a chunky red toy robot with a big screen head, a blinking antenna bulb and round ear caps */
 function buildRex() {
   const red = SYMBOL_COLOR.rex
-  const deep = '#c92a22'
+  const deep = '#cf2e2a'
   const m = grid()
   const k = new Kit()
   const HY = 0.085
-  const HW = 0.6
-  const HH = 0.42
+  const HW = 0.62
+  const HH = 0.44
   const HD = 0.36
-  k.add(rbox(HW, HH, HD, 0.085, 3), red, T([0, HY, 0]))
-  // a recessed screen in a glossy black bezel
-  const SW = 0.44
-  const SH = 0.285
-  k.add(extrude(frameShape(rrOutline(SW + 0.06, SH + 0.06, 0.085), rrOutline(SW, SH, 0.06)), 0.024, 0.01), GRAPH, T([0, HY, HD / 2 + 0.002]), GLOSS)
-  k.add(extrude(shapeOf(rrOutline(SW + 0.01, SH + 0.01, 0.065)), 0.01), INKY, T([0, HY, HD / 2 + 0.001]), GLOSS)
-  // cheek bolts on the face plate, and big chrome ear bolts
+  k.add(rbox(HW, HH, HD, 0.12, 4), red, T([0, HY, 0]))
+  // a fat dark bezel round the screen
+  const SW = 0.46
+  const SH = 0.3
+  k.add(extrude(frameShape(rrOutline(SW + 0.07, SH + 0.07, 0.11), rrOutline(SW, SH, 0.075)), 0.03, 0.01), INKY, T([0, HY, HD / 2 + 0.004]), SATIN)
+  // cream ear caps with a red hub
   for (const s of [-1, 1]) {
-    for (const y of [HY + 0.13, HY - 0.13]) k.add(dome(0.015), CHROME_C, T([s * 0.27, y, HD / 2 + 0.002]), CHROME)
-    k.add(cyl(0.07, 0.075, 0.05, 28), CHROME_C, T([s * (HW / 2 + 0.018), HY, 0], [0, 0, Math.PI / 2]), CHROME)
-    k.add(cyl(0.04, 0.04, 0.03, 6), STEEL_C, T([s * (HW / 2 + 0.05), HY, 0], [0, 0, Math.PI / 2]), STEEL)
-    k.add(tor(0.07, 0.008, 6, 28), deep, T([s * (HW / 2 + 0.006), HY, 0], [0, Math.PI / 2, 0]), GLOSS)
+    k.add(cyl(0.085, 0.09, 0.07, 24), WHITE, T([s * (HW / 2 + 0.02), HY, 0], [0, 0, Math.PI / 2]))
+    k.add(cyl(0.045, 0.045, 0.03, 16), deep, T([s * (HW / 2 + 0.065), HY, 0], [0, 0, Math.PI / 2]))
   }
-  // antenna: a chrome stalk with a blinking bulb
+  // antenna: a short stalk and a blinking yellow bulb
   const top = HY + HH / 2
-  k.add(cyl(0.045, 0.055, 0.03, 20), CHROME_C, T([0, top + 0.012, 0]), CHROME)
-  k.add(cyl(0.011, 0.011, 0.1, 10), CHROME_C, T([0, top + 0.07, 0]), CHROME)
-  k.add(sph(0.036, 16, 12), C('#ffcf3a', 2.2), T([0, top + 0.13, 0]), lit(1, FX.blink))
-  k.add(tor(0.02, 0.006, 6, 16), CHROME_C, T([0, top + 0.1, 0], [Math.PI / 2, 0, 0]), CHROME)
-  // the neck and a small body with a white chest panel and three buttons
-  k.add(cyl(0.075, 0.085, 0.05, 24), STEEL_C, T([0, HY - HH / 2 - 0.02, 0]), STEEL)
+  k.add(cyl(0.05, 0.06, 0.035, 20), deep, T([0, top + 0.01, 0]))
+  k.add(cyl(0.015, 0.015, 0.08, 8), STEEL_C, T([0, top + 0.065, 0]), STEEL)
+  k.add(sph(0.047, 16, 12), C('#ffd23a'), T([0, top + 0.13, 0]), lit(1, FX.blink))
+  // the neck and a small body with a cream chest plate and three candy buttons
+  k.add(cyl(0.075, 0.085, 0.05, 20), GRAPH, T([0, HY - HH / 2 - 0.02, 0]), SATIN)
   const BY = -0.235
-  k.add(rbox(0.38, 0.2, 0.28, 0.06), red, T([0, BY, 0]))
-  k.add(rbox(0.25, 0.115, 0.03, 0.025), WHITE, T([0, BY + 0.005, 0.135]), GLOSS)
-  ;['#5cf2ff', '#ffd23a', '#ff5aa5'].forEach((c, i) => k.add(dome(0.019, 0.7), C(c, 1.8), T([-0.07 + i * 0.07, BY + 0.005, 0.15]), lit(1, FX.pulse), i * 0.3))
-  // stubby legs and rubber feet
+  k.add(rbox(0.4, 0.22, 0.29, 0.09, 3), red, T([0, BY, 0]))
+  inkPlate(k, 0.26, 0.125, 0.05, T([0, BY + 0.005, 0.147]))
+  k.add(rbox(0.26, 0.125, 0.04, 0.05, 2), WHITE, T([0, BY + 0.005, 0.135]), GLOSS, 0, 0)
+  ;['#4fe3ff', '#ffd23a', '#ff6fb5'].forEach((c, i) => button(k, 0.024, C(c), T([-0.075 + i * 0.075, BY + 0.005, 0.156]), lit(1, FX.pulse), i * 0.3))
+  // stubby legs and round boots
   for (const s of [-1, 1]) {
-    k.add(cyl(0.045, 0.05, 0.06, 16), STEEL_C, T([s * 0.1, -0.365, 0]), STEEL)
-    k.add(rbox(0.15, 0.065, 0.2, 0.028), GRAPH, T([s * 0.1, -0.41, 0.02]), RUBBER)
-    k.add(rbox(0.152, 0.03, 0.06, 0.014), deep, T([s * 0.1, -0.392, 0.105]), GLOSS)
+    k.add(cyl(0.045, 0.05, 0.06, 14), GRAPH, T([s * 0.1, -0.365, 0]), SATIN)
+    k.add(rbox(0.165, 0.078, 0.21, 0.036, 2), deep, T([s * 0.1, -0.412, 0.02]))
   }
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
   const sk = new ScreenKit()
-  sk.face(panel(rrOutline(SW, SH, 0.06), 4, bulge(SW, SH, 0.012)), 'box', FACE_TINT.rex, T([0, HY, HD / 2 + 0.007]))
+  sk.face(panel(rrOutline(SW, SH, 0.075), 4, bulge(SW, SH, 0.012)), 'box', FACE_TINT.rex, T([0, HY, HD / 2 + 0.007]))
   root.add(sk.mesh('rex', m.screen))
   // arms, each its own part (they wave on wins)
   for (const s of [-1, 1]) {
     const a = new Kit()
     const sh: P3 = [s * 0.205, -0.19, 0]
     const hand: P3 = [s * 0.3, -0.31, 0.04]
-    a.add(sph(0.05, 18, 12), CHROME_C, T(sh), CHROME)
-    a.add(capsule(0.042, dist(sh, hand) - 0.03, 4, 14), red, aim(sh, hand))
-    a.add(sph(0.055, 18, 12), WHITE, T(hand))
-    a.add(tor(0.044, 0.01, 6, 18), GRAPH, mul(aim(sh, hand), T([0, -0.03 + dist(sh, hand) / 2 - 0.05, 0], [Math.PI / 2, 0, 0])), GLOSS)
+    a.add(sph(0.05, 14, 10), GRAPH, T(sh), SATIN)
+    a.add(capsule(0.044, dist(sh, hand) - 0.03, 3, 12), red, aim(sh, hand))
+    a.add(sph(0.06, 14, 10), WHITE, T(hand))
     root.add(joint(s < 0 ? 'armL' : 'armR', sh, a.mesh('arm', m.body)))
   }
   return root
@@ -1481,34 +1597,31 @@ function buildRex() {
 /** Dot: a round teal ball robot on one wheel, arms out for balance, a glass dome head with a screen face */
 function buildDot() {
   const teal = SYMBOL_COLOR.dot
-  const deep = '#0b9d92'
+  const deep = '#0d9c92'
   const m = grid()
   const k = new Kit()
   const BY = -0.1
   const BR = 0.2
-  k.add(sph(BR, 32, 22), teal, T([0, BY, 0]))
-  k.add(tor(BR * 0.995, 0.012, 8, 48), CHROME_C, T([0, BY + 0.02, 0], [Math.PI / 2, 0, 0]), CHROME)
-  // a round white power button on the belly, ringed with light
+  k.add(sph(BR, 28, 18), teal, T([0, BY, 0]))
+  // a cream belly button with a light ring round it
   const belly = T([0, BY - 0.045, 0], [-0.22, 0, 0])
-  k.add(cyl(0.066, 0.066, 0.03, 28), WHITE, mul(belly, T([0, 0, BR - 0.008], [Math.PI / 2, 0, 0])))
-  k.add(tor(0.068, 0.011, 8, 28), C('#7ffff0', 2.2), mul(belly, T([0, 0, BR + 0.004])), lit(1, FX.pulse))
-  k.add(dome(0.034, 0.5), deep, mul(belly, T([0, 0, BR + 0.006])))
+  inkDisc(k, 0.07, mul(belly, T([0, 0, BR - 0.002])))
+  k.add(cyl(0.066, 0.066, 0.03, 24), WHITE, mul(belly, T([0, 0, BR - 0.008], [Math.PI / 2, 0, 0])), GLOSS, 0, 0)
+  k.add(tor(0.06, 0.011, 6, 24), C('#8ffff3'), mul(belly, T([0, 0, BR + 0.008])), lit(1, FX.pulse), 0, 0)
+  k.add(dome(0.032, 0.5), deep, mul(belly, T([0, 0, BR + 0.007])), GLOSS, 0, 0)
   // collar
-  k.add(cyl(0.1, 0.13, 0.05, 32), STEEL_C, T([0, BY + BR - 0.01, 0]), STEEL)
-  k.add(tor(0.105, 0.012, 8, 32), deep, T([0, BY + BR + 0.015, 0], [Math.PI / 2, 0, 0]), GLOSS)
+  k.add(cyl(0.1, 0.13, 0.05, 24), deep, T([0, BY + BR - 0.01, 0]))
   // ear muffs joined by a band over the head
   const HY = 0.205
   const HR = 0.165
   for (const s of [-1, 1]) {
-    k.add(cyl(0.058, 0.058, 0.05, 28), teal, T([s * (HR + 0.012), HY, 0], [0, 0, Math.PI / 2]))
-    k.add(tor(0.042, 0.01, 6, 24), C('#7ffff0', 2), T([s * (HR + 0.038), HY, 0], [0, Math.PI / 2, 0]), lit(1, FX.pulse), 0.5)
-    k.add(dome(0.03, 0.5), CHROME_C, T([s * (HR + 0.04), HY, 0], [0, (s * Math.PI) / 2, 0]), CHROME)
+    k.add(cyl(0.062, 0.062, 0.055, 24), teal, T([s * (HR + 0.014), HY, 0], [0, 0, Math.PI / 2]))
+    k.add(cyl(0.036, 0.036, 0.02, 16), C('#8ffff3'), T([s * (HR + 0.045), HY, 0], [0, 0, Math.PI / 2]), lit(1, FX.pulse), 0.5)
   }
-  k.add(tor(HR + 0.03, 0.017, 8, 40, Math.PI), deep, T([0, HY, -0.01]), GLOSS)
-  // the fork the wheel turns in: a yoke under the ball and an arm down to the axle in front of the wheel
-  k.add(rbox(0.13, 0.05, 0.12, 0.022), deep, T([0, -0.285, -0.01]))
-  k.add(capsule(0.024, 0.07, 3, 10), deep, T([0, -0.33, 0.05]))
-  k.add(cyl(0.03, 0.03, 0.02, 16), CHROME_C, T([0, -0.375, 0.064], [Math.PI / 2, 0, 0]), CHROME)
+  k.add(tor(HR + 0.032, 0.02, 8, 32, Math.PI), deep, T([0, HY, -0.01]))
+  // the fork the wheel turns in
+  k.add(rbox(0.14, 0.055, 0.12, 0.025), deep, T([0, -0.285, -0.01]))
+  k.add(capsule(0.026, 0.07, 3, 10), deep, T([0, -0.33, 0.05]))
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
   // arms out to the sides, one mesh
@@ -1516,22 +1629,20 @@ function buildDot() {
   for (const s of [-1, 1]) {
     const sh: P3 = [s * 0.18, BY + 0.02, 0.02]
     const hand: P3 = [s * 0.31, BY + 0.1, 0.05]
-    a.add(sph(0.032, 14, 10), CHROME_C, T(sh), CHROME)
-    a.add(capsule(0.026, dist(sh, hand) - 0.02, 3, 12), teal, aim(sh, hand))
-    a.add(sph(0.042, 16, 12), WHITE, T(hand))
+    a.add(capsule(0.028, dist(sh, hand) - 0.02, 3, 10), teal, aim(sh, hand))
+    a.add(sph(0.046, 14, 10), WHITE, T(hand))
   }
   root.add(joint('arms', [0, BY, 0], a.mesh('arms', m.body)))
-  // the wheel (spins about z)
+  // the wheel (spins about z): a fat tyre, a cream hub with spokes that show the turn
   const w = new Kit()
   const WY = -0.375
-  w.add(tor(0.072, 0.034, 10, 36), GRAPH, T([0, WY, 0]), RUBBER)
-  w.add(cyl(0.056, 0.056, 0.05, 28), CHROME_C, T([0, WY, 0], [Math.PI / 2, 0, 0]), CHROME)
-  w.add(cyl(0.042, 0.042, 0.054, 24), teal, T([0, WY, 0], [Math.PI / 2, 0, 0]))
-  for (let i = 0; i < 4; i++) w.add(box(0.012, 0.075, 0.01), CHROME_C, T([0, WY, 0.03], [0, 0, (i * TAU) / 8]), CHROME)
+  w.add(tor(0.066, 0.036, 10, 28), GRAPH, T([0, WY, 0]), RUBBER)
+  w.add(cyl(0.05, 0.05, 0.06, 20), WHITE, T([0, WY, 0], [Math.PI / 2, 0, 0]), GLOSS, 0, 0)
+  for (let i = 0; i < 2; i++) w.add(box(0.016, 0.08, 0.012), deep, T([0, WY, 0.032], [0, 0, (i * Math.PI) / 2]), SATIN, 0, 0)
   root.add(joint('wheel', [0, WY, 0], w.mesh('wheel', m.body)))
-  // the head: a dark glass dome, its face on the front
+  // the head: a glass dome screen, its face on the front, ringed in ink
   const sk = new ScreenKit()
-  const head = sph(HR, 32, 24)
+  const head = sph(HR, 28, 20)
   const p = head.getAttribute('position')
   const uv = head.getAttribute('uv')
   for (let i = 0; i < p.count; i++) {
@@ -1542,11 +1653,13 @@ function buildDot() {
     else uv.setXY(i, Math.min(0.98, Math.max(0.02, 0.5 + x / (1.72 * HR))), Math.min(0.98, Math.max(0.02, 0.5 + y / (1.72 * HR))))
   }
   sk.face(head, 'round', FACE_TINT.dot, T([0, HY, 0]))
-  root.add(joint('head', [0, HY - 0.06, 0], sk.mesh('dot', m.screen)))
+  const hk = new Kit()
+  hk.outline(sph(HR, 24, 16), T([0, HY, 0]), INK_W)
+  root.add(joint('head', [0, HY - 0.06, 0], sk.mesh('dot', m.screen), hk.mesh('rim', m.body)))
   return root
 }
 
-/** Clank: a stout yellow worker bot on a caterpillar track, hazard stripes, claw hands and a visor face */
+/** Clank: a stout yellow worker bot on a caterpillar track, a hazard band, claw hands and a visor face */
 function buildClank() {
   const yel = SYMBOL_COLOR.clank
   const deep = '#e39a00'
@@ -1556,61 +1669,57 @@ function buildClank() {
   const BW = 0.6
   const BH = 0.38
   const BD = 0.38
-  k.add(rbox(BW, BH, BD, 0.08, 3), yel, T([0, BY, 0]))
-  // visor
+  k.add(rbox(BW, BH, BD, 0.11, 4), yel, T([0, BY, 0]))
+  // the visor
   const VW = 0.43
   const VH = 0.195
   const VY = BY + 0.06
-  k.add(extrude(frameShape(rrOutline(VW + 0.055, VH + 0.055, 0.09), rrOutline(VW, VH, 0.08)), 0.024, 0.01), GRAPH, T([0, VY, BD / 2 + 0.002]), GLOSS)
-  k.add(extrude(shapeOf(rrOutline(VW + 0.01, VH + 0.01, 0.085)), 0.01), INKY, T([0, VY, BD / 2 + 0.001]), GLOSS)
-  // hazard band across the bottom of the front
-  const band = T([0, BY - 0.125, BD / 2 + 0.004])
-  k.add(extrude(shapeOf(rrOutline(0.5, 0.075, 0.012)), 0.006), yel, band, GLOSS)
-  hazard(k, 0.48, 0.062, mul(band, T([0, 0, 0.005])), 0.075, 0.006)
-  // corner bolts
-  for (const sx of [-1, 1]) for (const sy of [-1, 1]) k.add(dome(0.016), CHROME_C, T([sx * 0.265, BY + sy * 0.15, BD / 2 + 0.002]), CHROME)
+  k.add(extrude(frameShape(rrOutline(VW + 0.06, VH + 0.06, 0.1), rrOutline(VW, VH, 0.085)), 0.03, 0.01), INKY, T([0, VY, BD / 2 + 0.004]), SATIN)
+  // a hazard band across the bottom of the front: four fat stripes
+  const band = T([0, BY - 0.125, BD / 2 + 0.008])
+  inkPlate(k, 0.46, 0.07, 0.02, mul(band, T([0, 0, -0.004])), 0.012, 0.01)
+  k.add(rbox(0.46, 0.07, 0.012, 0.02, 2), WHITE, band, SATIN, 0, 0)
+  hazard(k, 0.44, 0.06, mul(band, T([0, 0, 0.007])), 0.11, 0.006)
   // a blinking amber beacon on top
   const top = BY + BH / 2
-  k.add(cyl(0.06, 0.07, 0.03, 24), GRAPH, T([0, top + 0.01, 0]), GLOSS)
-  k.add(sph(0.05, 20, 14, ).applyMatrix4(T([0, 0, 0], [0, 0, 0], [1, 1.1, 1])), C('#ffa21f', 2.4), T([0, top + 0.05, 0]), lit(1, FX.blink))
-  k.add(tor(0.052, 0.007, 6, 24), CHROME_C, T([0, top + 0.035, 0], [Math.PI / 2, 0, 0]), CHROME)
-  // chassis and the track, broadside, with three chrome hubs
+  k.add(cyl(0.065, 0.075, 0.035, 20), GRAPH, T([0, top + 0.01, 0]), SATIN)
+  k.add(sph(0.056, 18, 12).applyMatrix4(T([0, 0, 0], [0, 0, 0], [1, 1.1, 1])), C('#ffa21f'), T([0, top + 0.055, 0]), lit(1, FX.blink))
+  // chassis and the track, broadside, with three cream hubs
   const TY = -0.27
   k.add(rbox(0.42, 0.08, 0.26, 0.03), GRAPH, T([0, BY - BH / 2 - 0.02, 0]), SATIN)
   const TW = 0.64
-  const TH = 0.16
-  k.add(extrude(frameShape(rrOutline(TW, TH, TH / 2, 10), rrOutline(TW - 0.07, TH - 0.07, (TH - 0.07) / 2, 10)), 0.26, 0.012, 12, 2), GRAPH, T([0, TY, 0]), RUBBER)
-  k.add(extrude(shapeOf(rrOutline(TW - 0.06, TH - 0.06, (TH - 0.06) / 2, 10)), 0.2), '#3b414e', T([0, TY, 0]), SATIN)
+  const TH = 0.17
+  k.add(extrude(shapeOf(rrOutline(TW, TH, TH / 2, 8)), 0.26, 0.014, 10, 2), GRAPH, T([0, TY, 0]), RUBBER)
   for (const x of [-0.21, 0, 0.21]) {
-    k.add(cyl(0.05, 0.05, 0.03, 24), CHROME_C, T([x, TY, 0.13], [Math.PI / 2, 0, 0]), CHROME)
-    k.add(cyl(0.022, 0.022, 0.034, 16), yel, T([x, TY, 0.135], [Math.PI / 2, 0, 0]))
+    inkDisc(k, 0.05, T([x, TY, 0.142]), 0.01)
+    k.add(cyl(0.05, 0.05, 0.03, 20), WHITE, T([x, TY, 0.13], [Math.PI / 2, 0, 0]), GLOSS, 0, 0)
+    k.add(cyl(0.022, 0.022, 0.034, 12), deep, T([x, TY, 0.135], [Math.PI / 2, 0, 0]), GLOSS, 0, 0)
   }
   // cleats round the loop
-  const loop = rrOutline(TW + 0.012, TH + 0.012, (TH + 0.012) / 2, 10)
-  for (let i = 0; i < loop.length; i += 2) {
+  const loop = rrOutline(TW + 0.014, TH + 0.014, (TH + 0.014) / 2, 8)
+  for (let i = 0; i < loop.length; i += 3) {
     const [x, y] = loop[i]
     const [nx, ny] = loop[(i + 1) % loop.length]
-    const a = Math.atan2(ny - y, nx - x)
-    k.add(box(0.034, 0.018, 0.27), '#1c2028', T([x, TY + y, 0], [0, 0, a]), RUBBER)
+    k.add(box(0.036, 0.022, 0.27), '#2b3150', T([x, TY + y, 0], [0, 0, Math.atan2(ny - y, nx - x)]), RUBBER, 0, 0)
   }
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
   const sk = new ScreenKit()
-  sk.face(panel(rrOutline(VW, VH, 0.08), 4, bulge(VW, VH, 0.01)), 'wide', FACE_TINT.clank, T([0, VY, BD / 2 + 0.007]))
+  sk.face(panel(rrOutline(VW, VH, 0.085), 4, bulge(VW, VH, 0.01)), 'wide', FACE_TINT.clank, T([0, VY, BD / 2 + 0.008]))
   root.add(sk.mesh('clank', m.screen))
   // claw arms
   for (const s of [-1, 1]) {
     const a = new Kit()
     const sh: P3 = [s * 0.3, BY - 0.04, 0]
     const wr: P3 = [s * 0.37, BY - 0.15, 0.05]
-    a.add(sph(0.052, 18, 12), CHROME_C, T(sh), CHROME)
-    a.add(capsule(0.034, dist(sh, wr) - 0.02, 3, 12), GRAPH, aim(sh, wr), SATIN)
-    a.add(cyl(0.05, 0.045, 0.05, 20), deep, mul(T(wr), T([0, -0.01, 0])))
-    // two pincers curling in, open, with rubber tips
+    a.add(sph(0.054, 14, 10), GRAPH, T(sh), SATIN)
+    a.add(capsule(0.036, dist(sh, wr) - 0.02, 3, 10), deep, aim(sh, wr))
+    a.add(cyl(0.052, 0.046, 0.05, 16), GRAPH, mul(T(wr), T([0, -0.01, 0])), SATIN)
+    // two fat pincers curling in
     for (const f of [-1, 1]) {
       const q = (x: number, y: number): P3 => [wr[0] + f * x, wr[1] + y, wr[2]]
-      const pts = [q(0.012, -0.03), q(0.05, -0.075), q(0.045, -0.125), q(0.016, -0.15)]
-      for (let i = 0; i < pts.length - 1; i++) a.add(capsule(0.017 - i * 0.002, dist(pts[i], pts[i + 1]), 2, 8), i === 2 ? deep : CHROME_C, aim(pts[i], pts[i + 1]), i === 2 ? GLOSS : CHROME)
+      const pts = [q(0.012, -0.03), q(0.05, -0.078), q(0.042, -0.128), q(0.014, -0.15)]
+      for (let i = 0; i < pts.length - 1; i++) a.add(capsule(0.021 - i * 0.002, dist(pts[i], pts[i + 1]), 2, 8), i === 2 ? deep : CHROME_C, aim(pts[i], pts[i + 1]), i === 2 ? GLOSS : CHROME)
     }
     root.add(joint(s < 0 ? 'armL' : 'armR', sh, a.mesh('arm', m.body)))
   }
@@ -1624,44 +1733,41 @@ function buildZip() {
   const m = grid()
   const k = new Kit()
   const BY = -0.06
-  k.add(sph(0.2, 32, 22).applyMatrix4(T([0, 0, 0], [0, 0, 0], [1.3, 0.92, 1.05])), pur, T([0, BY, 0]))
-  k.add(new THREE.SphereGeometry(0.2, 32, 8, 0, TAU, Math.PI * 0.62, Math.PI * 0.38).applyMatrix4(T([0, 0, 0], [0, 0, 0], [1.31, 0.93, 1.06])), WHITE, T([0, BY, 0]))
-  // the lens: a chrome barrel with a rubber grip ring
-  const LY = BY + 0.0
+  k.add(sph(0.2, 28, 18).applyMatrix4(T([0, 0, 0], [0, 0, 0], [1.3, 0.92, 1.05])), pur, T([0, BY, 0]))
+  k.add(new THREE.SphereGeometry(0.2, 28, 7, 0, TAU, Math.PI * 0.62, Math.PI * 0.38).applyMatrix4(T([0, 0, 0], [0, 0, 0], [1.31, 0.93, 1.06])), WHITE, T([0, BY, 0]), GLOSS, 0, 0)
+  // the lens: a fat cream barrel with a dark grip ring
+  const LY = BY
   const LZ = 0.2
-  k.add(cyl(0.135, 0.15, 0.09, 48), CHROME_C, T([0, LY, LZ - 0.035], [Math.PI / 2, 0, 0]), CHROME)
-  k.add(tor(0.14, 0.02, 10, 48), GRAPH, T([0, LY, LZ + 0.01]), RUBBER)
-  k.add(tor(0.118, 0.008, 8, 48), CHROME_C, T([0, LY, LZ + 0.012]), CHROME)
+  k.add(cyl(0.14, 0.152, 0.09, 36), WHITE, T([0, LY, LZ - 0.035], [Math.PI / 2, 0, 0]))
+  k.add(tor(0.138, 0.022, 10, 36), GRAPH, T([0, LY, LZ + 0.01]), RUBBER, 0, 0.008)
   // rotor struts and ducts, tipped towards the camera so they read from the front
   for (const s of [-1, 1]) {
     const hub: P3 = [s * 0.28, 0.24, 0.0]
-    k.add(capsule(0.024, 0.15, 3, 10), GRAPH, aim([s * 0.13, 0.08, 0], hub), SATIN)
+    k.add(capsule(0.026, 0.15, 3, 10), GRAPH, aim([s * 0.13, 0.08, 0], hub), SATIN)
     const duct = T(hub, [0.42, 0, 0])
-    k.add(tor(0.125, 0.017, 10, 40), pur, duct)
-    k.add(tor(0.125, 0.006, 6, 40), CHROME_C, mul(duct, T([0, 0.016, 0], [Math.PI / 2, 0, 0])), CHROME)
-    for (let i = 0; i < 3; i++) k.add(rbox(0.12, 0.012, 0.012, 0.005), GRAPH, mul(duct, T([0, -0.005, 0], [Math.PI / 2, 0, (i * TAU) / 3]), T([0.062, 0, 0])), SATIN)
-    k.add(cyl(0.028, 0.034, 0.03, 16), CHROME_C, mul(duct, T([0, -0.01, 0], [0, 0, 0])), CHROME)
+    k.add(tor(0.125, 0.024, 10, 32), pur, duct)
+    k.add(cyl(0.03, 0.036, 0.03, 14), WHITE, mul(duct, T([0, -0.01, 0])), GLOSS)
     // nav lights: red to the left, green to the right
-    k.add(sph(0.016, 10, 8), C(s < 0 ? '#ff3b4a' : '#3bff7a', 2.4), mul(duct, T([s * 0.0, 0, 0.14])), lit(1, FX.blink), s < 0 ? 0 : 0.5)
+    k.add(sph(0.02, 10, 8), C(s < 0 ? '#ff4b5a' : '#4bff86'), mul(duct, T([0, 0, 0.145])), lit(1, FX.blink), s < 0 ? 0 : 0.5)
   }
-  // a hover jet underneath
-  k.add(cyl(0.06, 0.075, 0.04, 24), GRAPH, T([0, BY - 0.19, 0]), SATIN)
-  k.add(tor(0.05, 0.012, 8, 24), C('#d68bff', 2.4), T([0, BY - 0.212, 0], [Math.PI / 2, 0, 0]), lit(1, FX.pulse))
-  // two little antennae
+  // a hover jet underneath with a pink glow ring
+  k.add(cyl(0.062, 0.078, 0.045, 20), GRAPH, T([0, BY - 0.19, 0]), SATIN)
+  k.add(tor(0.05, 0.014, 6, 20), C('#e3a0ff'), T([0, BY - 0.214, 0], [Math.PI / 2, 0, 0]), lit(1, FX.pulse), 0, 0)
+  // two little antennae with round tips
   for (const s of [-1, 1]) {
-    k.add(cyl(0.007, 0.007, 0.07, 8), CHROME_C, T([s * 0.06, BY + 0.2, -0.02], [0, 0, -s * 0.3]), CHROME)
-    k.add(sph(0.017, 10, 8), deep, T([s * 0.072, BY + 0.235, -0.02]))
+    k.add(cyl(0.009, 0.009, 0.07, 6), STEEL_C, T([s * 0.06, BY + 0.2, -0.02], [0, 0, -s * 0.3]), STEEL)
+    k.add(sph(0.022, 10, 8), deep, T([s * 0.072, BY + 0.24, -0.02]))
   }
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
   const sk = new ScreenKit()
-  sk.face(panel(circle(0.118, 44), 4, (x, y) => 0.03 * Math.max(0, 1 - (x * x + y * y) / 0.118 ** 2)), 'eye', FACE_TINT.zip, T([0, LY, LZ + 0.012]))
+  sk.face(panel(circle(0.118, 40), 4, (x, y) => 0.03 * Math.max(0, 1 - (x * x + y * y) / 0.118 ** 2)), 'eye', FACE_TINT.zip, T([0, LY, LZ + 0.012]))
   root.add(sk.mesh('zip', m.screen))
   for (const s of [-1, 1]) {
     const r = new Kit()
     const hub: P3 = [s * 0.28, 0.24, 0.0]
-    for (const b of [0, Math.PI]) r.add(capsule(0.016, 0.09, 3, 8).applyMatrix4(T([0, 0, 0], [0, 0, Math.PI / 2], [1, 1, 0.35])), '#e9e4ff', mul(T(hub, [0.42, 0, 0]), T([0, 0.018, 0], [0.18, b, 0]), T([0.06, 0, 0])), SATIN)
-    r.add(sph(0.02, 12, 8), CHROME_C, mul(T(hub, [0.42, 0, 0]), T([0, 0.022, 0])), CHROME)
+    for (const b of [0, Math.PI]) r.add(capsule(0.02, 0.09, 3, 8).applyMatrix4(T([0, 0, 0], [0, 0, Math.PI / 2], [1, 1, 0.4])), '#f1ecff', mul(T(hub, [0.42, 0, 0]), T([0, 0.018, 0], [0.18, b, 0]), T([0.06, 0, 0])), SATIN, 0, 0.007)
+    r.add(sph(0.024, 10, 8), deep, mul(T(hub, [0.42, 0, 0]), T([0, 0.022, 0])))
     const rotor = joint(s < 0 ? 'rotorL' : 'rotorR', hub, r.mesh('rotor', m.body))
     rotor.rotation.x = 0.42
     // rotors spin about their own (tipped) y axis: the mesh is modelled tipped, so undo it inside the joint
@@ -1672,20 +1778,18 @@ function buildZip() {
   return root
 }
 
-/** Hex nut: chrome, chamfered, with a little screen face looking out of its hole */
+/** Hex nut: cartoon steel, chamfered, with a little screen face looking out of its hole */
 function buildNut() {
   const m = grid()
   const k = new Kit()
   const hex = Array.from({ length: 6 }, (_, i): P2 => [Math.cos((i / 6) * TAU) * 0.29, Math.sin((i / 6) * TAU) * 0.29])
   const tilt = T([0, 0, 0], [0.18, -0.42, 0])
-  k.add(extrude(frameShape(hex, circle(0.135, 36)), 0.15, 0.035, 12, 2), SYMBOL_COLOR.nut, tilt, fin(0.2, 0.6, 0.9))
-  k.add(tor(0.136, 0.014, 8, 40), STEEL_C, mul(tilt, T([0, 0, 0.11])), STEEL)
-  k.add(tor(0.124, 0.006, 6, 40), C('#5cf2ff', 2.2), mul(tilt, T([0, 0, 0.1])), lit(1, FX.pulse))
-  for (let z = -0.05; z < 0.06; z += 0.03) k.add(tor(0.138, 0.007, 6, 36), STEEL_C, mul(tilt, T([0, 0, z])), STEEL)
+  k.add(extrude(frameShape(hex, circle(0.135, 32)), 0.15, 0.04, 10, 2), SYMBOL_COLOR.nut, tilt, fin(0.2, 0.7, 1))
+  k.add(tor(0.134, 0.018, 8, 32), STEEL_C, mul(tilt, T([0, 0, 0.11])), STEEL, 0, 0.008)
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
   const sk = new ScreenKit()
-  sk.face(panel(circle(0.122, 40), 3, (x, y) => 0.018 * Math.max(0, 1 - (x * x + y * y) / 0.122 ** 2)), 'round', FACE_TINT.nut, mul(tilt, T([0, 0, 0.065])))
+  sk.face(panel(circle(0.122, 36), 3, (x, y) => 0.018 * Math.max(0, 1 - (x * x + y * y) / 0.122 ** 2)), 'round', FACE_TINT.nut, mul(tilt, T([0, 0, 0.065])))
   root.add(sk.mesh('nut', m.screen))
   return root
 }
@@ -1710,26 +1814,22 @@ function gearOutline(n: number, r0: number, r1: number): P2[] {
   return pts
 }
 
-/** Gear: orange anodised aluminium with lightening holes, turning around a chrome hub with a round screen face */
+/** Gear: chunky orange teeth with round holes, turning round a cream hub with a round screen face */
 function buildGear() {
   const m = grid()
   const tilt = T([0, 0, 0], [0.12, -0.32, 0])
   const g = new Kit()
-  const s = frameShape(gearOutline(10, 0.27, 0.34), circle(0.11, 36))
+  const s = frameShape(gearOutline(9, 0.265, 0.34), circle(0.11, 32))
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * TAU + Math.PI / 2
-    s.holes.push(pathOf(circle(0.046, 20, Math.cos(a) * 0.19, Math.sin(a) * 0.19)))
+    s.holes.push(pathOf(circle(0.044, 18, Math.cos(a) * 0.19, Math.sin(a) * 0.19)))
   }
-  g.add(extrude(s, 0.085, 0.016, 10, 2), SYMBOL_COLOR.gear, undefined, ANOD)
+  g.add(extrude(s, 0.09, 0.018, 8, 2), SYMBOL_COLOR.gear, undefined, ANOD)
   const gear = new THREE.Mesh(g.geometry(), m.body)
   gear.name = 'gearMesh'
   const k = new Kit()
-  k.add(extrude(frameShape(circle(0.135, 44), circle(0.1, 40)), 0.05, 0.014, 12, 3), CHROME_C, mul(tilt, T([0, 0, 0.06])), CHROME)
-  k.add(cyl(0.11, 0.11, 0.1, 36), GRAPH, mul(tilt, T([0, 0, 0.0], [Math.PI / 2, 0, 0])), SATIN)
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * TAU + Math.PI / 4
-    k.add(dome(0.011), STEEL_C, mul(tilt, T([Math.cos(a) * 0.118, Math.sin(a) * 0.118, 0.092])), STEEL)
-  }
+  k.add(extrude(frameShape(circle(0.138, 36), circle(0.1, 32)), 0.05, 0.016, 10, 3), WHITE, mul(tilt, T([0, 0, 0.06])), GLOSS)
+  k.add(cyl(0.11, 0.11, 0.1, 28), GRAPH, mul(tilt, T([0, 0, 0.0], [Math.PI / 2, 0, 0])), SATIN, 0, 0)
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
   // the gear turns about z inside a holder that carries the tilt
@@ -1742,150 +1842,138 @@ function buildGear() {
   spin.userData.rest = restOf(spin)
   root.add(holder)
   const sk = new ScreenKit()
-  sk.face(panel(circle(0.1, 40), 3, (x, y) => 0.012 * Math.max(0, 1 - (x * x + y * y) / 0.01)), 'round', FACE_TINT.gear, mul(tilt, T([0, 0, 0.07])))
+  sk.face(panel(circle(0.1, 36), 3, (x, y) => 0.012 * Math.max(0, 1 - (x * x + y * y) / 0.01)), 'round', FACE_TINT.gear, mul(tilt, T([0, 0, 0.07])))
   root.add(sk.mesh('gear', m.screen))
   return root
 }
 
-/** Battery: an upright cell in glossy black-green with chrome caps, a face and charge bars that fill */
+/** Battery: an upright green cell with cream caps, a face on a label band and charge bars that fill */
 function buildBattery() {
   const m = grid()
   const k = new Kit()
   const lean = T([0, -0.01, 0], [0, -0.25, -0.12])
   const R = 0.17
-  const green = SYMBOL_COLOR.battery
-  k.add(cyl(R, R, 0.5, 48), '#103a26', mul(lean, T([0, -0.03, 0])), GLOSS)
-  // chrome caps with a rolled edge, the + nub on top
-  k.add(lathe([[0, 0.25], [R * 0.98, 0.25], [R + 0.008, 0.235], [R + 0.01, 0.2], [R - 0.004, 0.19]], 48), CHROME_C, lean, CHROME)
-  k.add(lathe([[R - 0.004, -0.25], [R + 0.01, -0.26], [R + 0.008, -0.295], [R * 0.98, -0.31], [0, -0.31]], 48), CHROME_C, lean, CHROME)
-  k.add(cyl(0.06, 0.065, 0.045, 32), CHROME_C, mul(lean, T([0, 0.27, 0])), CHROME)
-  k.add(tor(0.06, 0.008, 8, 32), CHROME_C, mul(lean, T([0, 0.292, 0], [Math.PI / 2, 0, 0])), CHROME)
-  // a glowing green stripe down each side
-  for (const a of [-1.05, 1.05]) k.add(rbox(0.024, 0.4, 0.024, 0.01), C(green, 1.6), mul(lean, T([Math.sin(a) * R, -0.03, Math.cos(a) * R], [0, a, 0])), lit(1, FX.pulse), a > 0 ? 0.5 : 0)
-  // charge bars: three curved segments that fill bottom to top
-  for (let i = 0; i < 3; i++) {
-    const g = cyl(R + 0.004, R + 0.004, 0.05, 24, true)
-    const keepFront = new THREE.CylinderGeometry(R + 0.006, R + 0.006, 0.048, 20, 1, false, -0.62, 1.24)
-    g.dispose()
-    k.add(keepFront, C(green, 2.2), mul(lean, T([0, -0.2 + i * 0.068, 0])), lit(1, FX.fill), 0.15 + i * 0.25)
-  }
+  const green = '#33d96f'
+  k.add(cyl(R, R, 0.5, 36), green, mul(lean, T([0, -0.03, 0])))
+  // rounded cream caps, the + nub on top
+  k.add(lathe([[0, 0.25], [R * 0.9, 0.25], [R + 0.012, 0.225], [R + 0.014, 0.19], [R - 0.004, 0.185]], 36), WHITE, lean)
+  k.add(lathe([[R - 0.004, -0.245], [R + 0.014, -0.255], [R + 0.012, -0.29], [R * 0.9, -0.312], [0, -0.312]], 36), WHITE, lean)
+  k.add(cyl(0.06, 0.066, 0.05, 24), WHITE, mul(lean, T([0, 0.272, 0])))
+  // the charge window: a dark slot with three bars that fill bottom to top
+  const win = mul(lean, T([0, -0.135, 0]))
+  k.add(new THREE.CylinderGeometry(R + 0.006, R + 0.006, 0.2, 18, 1, false, -0.66, 1.32), INKY, win, SATIN, 0, 0)
+  for (let i = 0; i < 3; i++) k.add(new THREE.CylinderGeometry(R + 0.012, R + 0.012, 0.046, 14, 1, false, -0.56, 1.12), C('#7dff9c'), mul(lean, T([0, -0.2 + i * 0.064, 0])), lit(1, FX.fill), 0.15 + i * 0.25, 0)
   // a bolt emblem between face and bars
   const bolt = shapeOf([
-    [0.012, 0.05],
+    [0.014, 0.05],
     [-0.03, -0.006],
     [-0.002, -0.006],
-    [-0.014, -0.05],
-    [0.03, 0.008],
-    [0.002, 0.008],
+    [-0.016, -0.05],
+    [0.032, 0.008],
+    [0.004, 0.008],
   ])
-  k.add(extrude(bolt, 0.012, 0.004, 1, 1), C('#ffd23a', 1.4), mul(lean, T([0, -0.0, R + 0.002])), lit(0.6))
+  k.add(extrude(bolt, 0.012, 0.004, 1, 1), C('#ffd23a'), mul(lean, T([R * Math.sin(0.95), -0.015, R * Math.cos(0.95)], [0, 0.95, 0], 0.75)), GLOSS, 0, 0.006)
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
   const sk = new ScreenKit()
-  const scr = new THREE.CylinderGeometry(R + 0.003, R + 0.003, 0.13, 28, 4, true, -0.78, 1.56)
-  sk.face(scr, 'wide', FACE_TINT.battery, mul(lean, T([0, 0.115, 0])))
+  const scr = new THREE.CylinderGeometry(R + 0.004, R + 0.004, 0.14, 24, 4, true, -0.8, 1.6)
+  sk.face(scr, 'wide', FACE_TINT.battery, mul(lean, T([0, 0.1, 0])))
   root.add(sk.mesh('battery', m.screen))
   return root
 }
 
-/** Microchip: a glossy blue package with gold pins, glowing traces and a face on the die */
+/** Microchip: a blue package with fat gold pins, light traces and a face on the die */
 function buildChip() {
   const m = grid()
   const k = new Kit()
   const tilt = T([0, 0, 0], [0.3, -0.28, 0])
   const S = 0.44
-  const blue = '#2c7dff'
-  k.add(rbox(S, S, 0.075, 0.03, 2), blue, tilt)
-  // gold pins, five a side, bent down out of the package
+  const blue = '#2f86ff'
+  k.add(rbox(S, S, 0.085, 0.05, 2), blue, tilt)
+  // gold pins, four a side, bent down out of the package
   for (let side = 0; side < 4; side++) {
     const rot = T([0, 0, 0], [0, 0, (side * Math.PI) / 2])
-    for (let i = 0; i < 5; i++) {
-      const x = -0.16 + i * 0.08
-      k.add(box(0.04, 0.06, 0.016), GOLD_C, mul(tilt, rot, T([x, S / 2 + 0.024, -0.01])), GOLD)
-      k.add(box(0.04, 0.016, 0.05), GOLD_C, mul(tilt, rot, T([x, S / 2 + 0.048, -0.035])), GOLD)
+    for (let i = 0; i < 4; i++) {
+      const x = -0.15 + i * 0.1
+      k.add(rbox(0.052, 0.07, 0.024, 0.01, 1), GOLD_C, mul(tilt, rot, T([x, S / 2 + 0.028, -0.01])), GOLD, 0, 0.008)
     }
   }
-  // traces: from the die out to every pin, with pads
+  // light traces from the die out towards the pins
   const trace = (pts: P2[]) => {
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i]
       const b = pts[i + 1]
       const len = Math.hypot(b[0] - a[0], b[1] - a[1])
-      k.add(box(len + 0.01, 0.011, 0.006), C('#7fd8ff', 1.7), mul(tilt, T([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0.04], [0, 0, Math.atan2(b[1] - a[1], b[0] - a[0])])), lit(1, FX.pulse), (i * 0.13 + Math.abs(a[0] * 3)) % 0.9)
+      k.add(box(len + 0.016, 0.016, 0.006), C('#a8e6ff'), mul(tilt, T([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0.045], [0, 0, Math.atan2(b[1] - a[1], b[0] - a[0])])), lit(1, FX.pulse), (i * 0.13 + Math.abs(a[0] * 3)) % 0.9, 0)
     }
     const e = pts[pts.length - 1]
-    k.add(cyl(0.014, 0.014, 0.006, 12), C('#bff0ff', 2), mul(tilt, T([e[0], e[1], 0.04], [Math.PI / 2, 0, 0])), lit(1, FX.pulse), 0.5)
+    k.add(cyl(0.02, 0.02, 0.008, 12), C('#d6f5ff'), mul(tilt, T([e[0], e[1], 0.045], [Math.PI / 2, 0, 0])), lit(1, FX.pulse), 0.5, 0)
   }
   for (let side = 0; side < 4; side++) {
     const r = (p: P2): P2 => {
       const a = (side * Math.PI) / 2
       return [p[0] * Math.cos(a) - p[1] * Math.sin(a), p[0] * Math.sin(a) + p[1] * Math.cos(a)]
     }
-    trace([r([-0.16, 0.2]), r([-0.16, 0.16]), r([-0.1, 0.12])])
-    trace([r([0.0, 0.2]), r([0.0, 0.12])])
-    trace([r([0.16, 0.2]), r([0.16, 0.16]), r([0.1, 0.12])])
+    trace([r([-0.15, 0.19]), r([-0.15, 0.15]), r([-0.1, 0.12])])
+    trace([r([0.15, 0.19]), r([0.15, 0.15]), r([0.1, 0.12])])
   }
-  // the die in a dark frame, and a pin-one dot
-  k.add(rbox(0.21, 0.21, 0.03, 0.02), GRAPH, mul(tilt, T([0, 0, 0.035])), GLOSS)
-  k.add(cyl(0.016, 0.016, 0.006, 14), C('#ffd23a', 2), mul(tilt, T([-0.17, 0.17, 0.04], [Math.PI / 2, 0, 0])), lit(1, FX.blink))
+  // the die in a fat dark frame, and a pin-one dot
+  inkPlate(k, 0.21, 0.21, 0.035, mul(tilt, T([0, 0, 0.044])), 0.012, 0.008)
+  k.add(rbox(0.21, 0.21, 0.03, 0.035, 2), INKY, mul(tilt, T([0, 0, 0.04])), SATIN, 0, 0)
+  button(k, 0.02, C('#ffd23a'), mul(tilt, T([-0.168, 0.168, 0.044])), lit(1, FX.blink))
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
   const sk = new ScreenKit()
-  sk.face(panel(rrOutline(0.18, 0.18, 0.03), 3, bulge(0.18, 0.18, 0.006)), 'round', FACE_TINT.chip, mul(tilt, T([0, 0, 0.052])))
+  sk.face(panel(rrOutline(0.18, 0.18, 0.03), 3, bulge(0.18, 0.18, 0.006)), 'round', FACE_TINT.chip, mul(tilt, T([0, 0, 0.057])))
   root.add(sk.mesh('chip', m.screen))
   return root
 }
 
-/** Wild: a plasma core crackling in a spinning chrome cage, with a WILD band across its middle */
+/** Wild: an energy ball crackling in a spinning cage, with a WILD band across its middle */
 function buildWild() {
   const mag = SYMBOL_COLOR.wild
   const m = grid()
   const k = new Kit()
-  // the hot core inside the plasma
-  k.add(sph(0.085, 24, 16), C('#ffd0f4', 2.6), undefined, lit(1, FX.flicker))
-  // caps top and bottom with a magenta light ring
+  // caps top and bottom: cream domes with a pink lamp ring and a ball on top
   for (const s of [-1, 1]) {
     const cap = lathe(
       [
         [0.0, 0.3],
         [0.07, 0.3],
-        [0.1, 0.285],
-        [0.13, 0.255],
-        [0.16, 0.235],
-        [0.165, 0.215],
-        [0.12, 0.205],
+        [0.1, 0.287],
+        [0.13, 0.258],
+        [0.158, 0.236],
+        [0.166, 0.214],
+        [0.12, 0.204],
       ].map(([x, y]): P2 => [x, y]),
-      40,
+      32,
     )
-    k.add(cap, CHROME_C, T([0, 0, 0], [0, 0, 0], [1, s, 1]), CHROME)
-    k.add(tor(0.15, 0.01, 8, 40), C(mag, 2.2), T([0, s * 0.22, 0], [Math.PI / 2, 0, 0]), lit(1, FX.pulse), s > 0 ? 0 : 0.5)
-    k.add(sph(0.03, 16, 10), C(mag, 2.4), T([0, s * 0.31, 0]), lit(1, FX.pulse))
+    k.add(cap, WHITE, T([0, 0, 0], [0, 0, 0], [1, s, 1]))
+    k.add(tor(0.15, 0.014, 6, 32), C(mag), T([0, s * 0.222, 0], [Math.PI / 2, 0, 0]), lit(1, FX.pulse), s > 0 ? 0 : 0.5, 0)
+    k.add(sph(0.034, 12, 8), C('#ff9ae6'), T([0, s * 0.31, 0]), lit(1, FX.pulse))
   }
-  // the band: chrome rails round a dark screen
-  for (const y of [-0.085, 0.085]) {
-    k.add(new THREE.CylinderGeometry(0.25, 0.25, 0.018, 48, 1, true, -1.35, 2.7), CHROME_C, T([0, y + Math.sign(y) * 0.006, 0]), CHROME)
-    k.add(new THREE.CylinderGeometry(0.252, 0.252, 0.008, 48, 1, true, -1.32, 2.64), C(mag, 2), T([0, y - Math.sign(y) * 0.004, 0]), lit(1, FX.pulse))
-  }
-  for (const s of [-1, 1]) k.add(cyl(0.012, 0.012, 0.19, 10), CHROME_C, T([Math.sin(s * 1.35) * 0.248, 0, Math.cos(s * 1.35) * 0.248]), CHROME)
+  // the band: gold rails round a dark screen
+  for (const y of [-0.087, 0.087]) k.add(new THREE.CylinderGeometry(0.252, 0.252, 0.024, 40, 1, true, -1.38, 2.76), GOLD_C, T([0, y + Math.sign(y) * 0.006, 0]), GOLD, 0, 0)
+  for (const s of [-1, 1]) k.add(cyl(0.016, 0.016, 0.2, 8), GOLD_C, T([Math.sin(s * 1.38) * 0.25, 0, Math.cos(s * 1.38) * 0.25]), GOLD)
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
-  const plasma = new THREE.Mesh(sph(0.17, 36, 24), m.plasma)
+  const plasma = new THREE.Mesh(sph(0.17, 28, 18), m.plasma)
   plasma.name = 'plasma'
   root.add(plasma)
   const c = new Kit()
-  for (let i = 0; i < 4; i++) c.add(tor(0.205, 0.011, 8, 56), CHROME_C, T([0, 0, 0], [0, (i * Math.PI) / 4, 0]), CHROME)
-  c.add(tor(0.205, 0.011, 8, 56), CHROME_C, T([0, 0, 0], [Math.PI / 2, 0, 0]), CHROME)
+  for (let i = 0; i < 4; i++) c.add(tor(0.205, 0.015, 6, 44), WHITE, T([0, 0, 0], [0, (i * Math.PI) / 4, 0]), GLOSS, 0, 0.008)
+  c.add(tor(0.205, 0.015, 6, 44), WHITE, T([0, 0, 0], [Math.PI / 2, 0, 0]), GLOSS, 0, 0.008)
   root.add(joint('cage', [0, 0, 0], c.mesh('cage', m.body)))
   const sk = new ScreenKit()
-  sk.blank(new THREE.CylinderGeometry(0.244, 0.244, 0.155, 48, 1, true, -1.35, 2.7))
-  sk.label('WILD', C(mag, 1.4), T([0, -0.002, 0.258]), 0.15, 0.4, 0.258)
+  sk.blank(new THREE.CylinderGeometry(0.246, 0.246, 0.155, 40, 1, true, -1.38, 2.76))
+  sk.label('WILD', C('#ff8fe0'), T([0, -0.002, 0.26]), 0.15, 0.4, 0.26)
   root.add(sk.mesh('wild', m.screen))
   return root
 }
 
 /* ---------------- bonus symbols ---------------- */
 
-const BOT_COLOR: Record<BotKind, string> = { magnet: '#ff3b4f', zap: '#ffd21f', boost: '#3fe46a' }
+const BOT_COLOR: Record<BotKind, string> = { magnet: '#ff4b5f', zap: '#ffd42a', boost: '#45e872' }
 /** where a bot's value display sits: a wide dark plate across the lower part of the cell */
 const DISPLAY = { y: -0.25, w: 0.84, h: 0.3, z: 0.13 }
 /** the power cell: a fat glass capsule lying across the cell, its value written over the middle */
@@ -1901,18 +1989,17 @@ export function valueAnchor(sym: Sym): { y: number; z: number; size: number; max
   return sym === 'cell' ? { y: CELL_Y, z: CELL_R + 0.12, size: 0.27, maxW: 0.86 } : { y: DISPLAY.y + 0.004, z: DISPLAY.z + 0.16, size: 0.215, maxW: DISPLAY.w + 0.04 }
 }
 
-/** the value plate every bot carries: a chrome (or gold) bezel round dark glass; the number goes over it */
-function valuePlate(k: Kit, sk: ScreenKit, gold: boolean) {
+/** the value plate every bot carries: a fat bezel (gold for gold bots) round a deep blue screen; the number goes over it */
+function valuePlate(k: Kit, sk: ScreenKit, gold: boolean, rim: string) {
   const { y, w, h, z } = DISPLAY
-  const rim = gold ? GOLD_C : CHROME_C
-  k.add(extrude(frameShape(rrOutline(w, h, 0.08), rrOutline(w - 0.05, h - 0.05, 0.06)), 0.05, 0.012), rim, T([0, y, z]), gold ? GOLD : CHROME)
-  k.add(rbox(w - 0.03, h - 0.03, 0.06, 0.05), INKY, T([0, y, z - 0.03]), GLOSS)
-  sk.blank(panel(rrOutline(w - 0.05, h - 0.05, 0.06), 2), T([0, y, z + 0.02]))
+  k.add(extrude(frameShape(rrOutline(w, h, 0.1), rrOutline(w - 0.06, h - 0.06, 0.075)), 0.05, 0.014), gold ? GOLD_C : rim, T([0, y, z]), gold ? GOLD : GLOSS)
+  k.add(rbox(w - 0.03, h - 0.03, 0.06, 0.06), INKY, T([0, y, z - 0.03]), SATIN, 0, 0)
+  sk.blank(panel(rrOutline(w - 0.06, h - 0.06, 0.075), 2), T([0, y, z + 0.02]))
 }
 
 /**
- * Power cell: a fat glass capsule lying across the cell between chrome end caps (a + terminal on the right), a
- * glowing core and rings inside in the value's colour, held in a cradle. The value is written across its middle.
+ * Power cell: a fat glass capsule lying across the cell between cream end caps (a + terminal on the right), a core
+ * inside in the value's colour, held in a cradle. The value is written across its middle.
  */
 function buildCell() {
   const m = grid()
@@ -1925,32 +2012,28 @@ function buildCell() {
   const along = (x: number, y = Y, z = 0) => T([x, y, z], [0, 0, -Math.PI / 2])
   for (const s of [-1, 1]) {
     const x = s * (L / 2 + 0.035)
-    // the end cap: a chrome collar, a rolled edge and a domed end
-    k.add(cyl(R + 0.018, R + 0.018, 0.08, 36), CHROME_C, along(x), CHROME)
-    k.add(tor(R + 0.016, 0.015, 6, 36), CHROME_C, T([x - s * 0.04, Y, 0], [0, Math.PI / 2, 0]), CHROME)
-    k.add(tor(R + 0.012, 0.011, 6, 36), STEEL_C, T([x + s * 0.012, Y, 0], [0, Math.PI / 2, 0]), STEEL)
-    k.add(dome(R + 0.01, 0.3, 28, 6), CHROME_C, T([x + s * 0.04, Y, 0], [0, (s * Math.PI) / 2, 0]), CHROME)
+    // the end cap: a cream collar with a rolled lip and a rounded end
+    k.add(cyl(R + 0.02, R + 0.02, 0.08, 32), WHITE, along(x))
+    k.add(tor(R + 0.012, 0.018, 6, 32), GRAPH, T([x - s * 0.042, Y, 0], [0, Math.PI / 2, 0]), SATIN, 0, 0.008)
+    k.add(dome(R + 0.012, 0.32, 24, 6), WHITE, T([x + s * 0.04, Y, 0], [0, (s * Math.PI) / 2, 0]))
   }
   // the + terminal on the right, a flat - pad on the left
-  k.add(cyl(0.072, 0.082, 0.04, 24), STEEL_C, along(L / 2 + 0.12), STEEL)
-  k.add(cyl(0.048, 0.048, 0.018, 20), C('#ffd23a', 1.4), along(L / 2 + 0.146), lit(0.7))
-  k.add(cyl(0.09, 0.09, 0.018, 24), STEEL_C, along(-L / 2 - 0.12), STEEL)
-  // four chrome rods along the glass
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * TAU + Math.PI / 4
-    k.add(cyl(0.01, 0.01, L, 8), CHROME_C, along(0, Y + Math.cos(a) * (R - 0.02), Math.sin(a) * (R - 0.02)), CHROME)
-  }
-  // the cradle under it: two graphite saddles on a rubber foot
-  for (const s of [-1, 1]) k.add(rbox(0.1, 0.12, 0.22, 0.03), GRAPH, T([s * 0.2, Y - R - 0.01, -0.02]), SATIN)
-  k.add(rbox(0.6, 0.05, 0.24, 0.022), '#1d222c', T([0, Y - R - 0.075, -0.02]), RUBBER)
+  k.add(cyl(0.074, 0.084, 0.04, 20), GRAPH, along(L / 2 + 0.12), SATIN)
+  k.add(cyl(0.05, 0.05, 0.02, 16), C('#ffd23a'), along(L / 2 + 0.146), GLOSS)
+  k.add(cyl(0.09, 0.09, 0.02, 20), GRAPH, along(-L / 2 - 0.12), SATIN)
+  // the cradle under it: two saddles on a rubber foot
+  for (const s of [-1, 1]) k.add(rbox(0.11, 0.12, 0.22, 0.035), GRAPH, T([s * 0.2, Y - R - 0.01, -0.02]), SATIN)
+  k.add(rbox(0.6, 0.055, 0.24, 0.025), '#2b3150', T([0, Y - R - 0.075, -0.02]), RUBBER)
+  // an ink line round the glass's silhouette
+  k.outline(cyl(R, R, L, 28), along(0), INK_W)
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
-  // the core: a fat column of light filling the glass, ringed near each end, recoloured with the value (calm in the
-  // middle, where the number sits)
-  sk.solid(cyl(0.155, 0.155, L - 0.05, 24), C('#5cf2ff', 1), along(0))
-  for (const s of [-1, 1]) sk.solid(tor(0.19, 0.012, 6, 28), C('#5cf2ff', 1), T([s * 0.235, Y, 0], [0, Math.PI / 2, 0]))
+  // the core: a fat column in the value's colour filling the glass, ringed near each end
+  sk.solid(cyl(0.16, 0.16, L - 0.04, 24), C('#5cf2ff'), along(0))
+  for (const s of [-1, 1]) sk.solid(tor(0.19, 0.016, 6, 24), C('#5cf2ff'), T([s * 0.235, Y, 0], [0, Math.PI / 2, 0]))
   root.add(sk.mesh('cell', m.screen))
-  const glass = new THREE.Mesh(cyl(R, R, L, 36, true), m.glass)
+  // the glass, with two strips of shine along its top
+  const glass = new THREE.Mesh(glassGeo(R, L, 0, TAU, [[-Math.PI / 2 + 0.55, 0.16, 0.7], [-Math.PI / 2 + 0.85, 0.07, 0.55]], '#d8f6ff', 0.14), m.glass)
   glass.name = 'glass'
   glass.position.y = Y
   glass.rotation.z = -Math.PI / 2
@@ -1963,45 +2046,48 @@ function botHead(k: Kit, sk: ScreenKit, color: string, gold: boolean, tint: stri
   const W = 0.4
   const H = 0.29
   const D = 0.28
-  k.add(rbox(W, H, D, 0.075, 3), color, T([0, y, -0.02]), gold ? GOLD : GLOSS)
+  k.add(rbox(W, H, D, 0.1, 3), color, T([0, y, -0.02]), gold ? GOLD : GLOSS)
   const SW = 0.31
   const SH = 0.205
-  k.add(extrude(frameShape(rrOutline(SW + 0.04, SH + 0.04, 0.07), rrOutline(SW, SH, 0.055)), 0.02, 0.008), gold ? '#7a4a12' : GRAPH, T([0, y, D / 2 - 0.01]), GLOSS)
-  sk.face(panel(rrOutline(SW, SH, 0.055), 4, bulge(SW, SH, 0.008)), 'box', tint, T([0, y, D / 2 - 0.013]))
+  k.add(extrude(frameShape(rrOutline(SW + 0.05, SH + 0.05, 0.085), rrOutline(SW, SH, 0.06)), 0.024, 0.008), gold ? '#8a5414' : INKY, T([0, y, D / 2 - 0.01]), SATIN)
+  sk.face(panel(rrOutline(SW, SH, 0.06), 4, bulge(SW, SH, 0.008)), 'box', tint, T([0, y, D / 2 - 0.012]))
   // ear studs
-  for (const s of [-1, 1]) k.add(cyl(0.045, 0.045, 0.03, 20), gold ? '#fff0c0' : CHROME_C, T([s * (W / 2 + 0.01), y, -0.02], [0, 0, Math.PI / 2]), CHROME)
+  for (const s of [-1, 1]) k.add(cyl(0.05, 0.05, 0.035, 16), gold ? '#fff0c0' : GRAPH, T([s * (W / 2 + 0.012), y, -0.02], [0, 0, Math.PI / 2]), gold ? GOLD : SATIN)
   return y
 }
 
 /** the body behind the value plate, in the bot's colour (gold for gold bots), with little feet */
 function botBody(k: Kit, color: string, gold: boolean) {
-  k.add(rbox(0.86, 0.31, 0.24, 0.08, 2), color, T([0, DISPLAY.y, 0]), gold ? GOLD : GLOSS)
+  k.add(rbox(0.86, 0.31, 0.24, 0.1, 2), color, T([0, DISPLAY.y, 0]), gold ? GOLD : GLOSS)
   for (const s of [-1, 1]) {
-    k.add(rbox(0.13, 0.05, 0.16, 0.022), GRAPH, T([s * 0.25, DISPLAY.y - 0.175, 0.02]), RUBBER)
-    // side LEDs
-    k.add(sph(0.018, 10, 8), C(gold ? '#fff3c4' : '#ffffff', 2.2), T([s * 0.425, DISPLAY.y + 0.06, 0.04]), lit(1, FX.blink), s > 0 ? 0.5 : 0)
+    k.add(rbox(0.14, 0.055, 0.16, 0.025), GRAPH, T([s * 0.25, DISPLAY.y - 0.175, 0.02]), RUBBER)
+    // side lamps
+    k.add(sph(0.022, 10, 8), C(gold ? '#fff3c4' : '#ffffff'), T([s * 0.43, DISPLAY.y + 0.06, 0.04]), lit(1, FX.blink), s > 0 ? 0.5 : 0)
   }
   // the neck up to the head
-  k.add(cyl(0.07, 0.085, 0.07, 24), gold ? '#e7b04a' : STEEL_C, T([0, -0.1, -0.02]), gold ? GOLD : STEEL)
+  k.add(cyl(0.07, 0.085, 0.07, 18), gold ? '#e7b04a' : GRAPH, T([0, -0.1, -0.02]), gold ? GOLD : SATIN)
 }
 
-/** the gold bots' halo: a glowing ring behind the bot */
+/** the gold bots' halo: a fat gold ring behind the bot with four twinkling stars on it */
 function halo(k: Kit) {
-  k.add(tor(0.335, 0.014, 6, 64), C('#ffc94a', 1.5), T([0, 0.1, -0.17]), lit(1, FX.pulse))
-  k.add(tor(0.335, 0.005, 4, 64), C('#fff3cf', 1.9), T([0, 0.1, -0.158]), lit(1))
-  // sparkles on the ring
+  k.add(tor(0.335, 0.024, 6, 48), C('#ffd24a'), T([0, 0.1, -0.17]), lit(1, FX.pulse), 0, 0.012)
+  const star = shapeOf(Array.from({ length: 8 }, (_, i): P2 => {
+    const r = i % 2 ? 0.014 : 0.04
+    const a = (i / 8) * TAU + Math.PI / 2
+    return [Math.cos(a) * r, Math.sin(a) * r]
+  }))
   for (let i = 0; i < 4; i++) {
     const a = 0.5 + (i * TAU) / 4
-    k.add(sph(0.018, 8, 6), C('#fff6dc', 2.6), T([Math.cos(a) * 0.335, 0.1 + Math.sin(a) * 0.335, -0.15]), lit(1, FX.blink), i * 0.25)
+    k.add(extrude(star, 0.012, 0.004, 1, 1), C('#fff2c4'), T([Math.cos(a) * 0.335, 0.1 + Math.sin(a) * 0.335, -0.14]), lit(1, FX.blink), i * 0.25, 0.006)
   }
 }
 
 /** the gold bots' badge: GOLD on a dark plate with a gold rim, at the top of the head */
 function goldTag(k: Kit, sk: ScreenKit, hy: number) {
   const y = hy + 0.17
-  k.add(extrude(frameShape(rrOutline(0.2, 0.075, 0.03), rrOutline(0.176, 0.052, 0.022)), 0.02, 0.006, 6, 2), GOLD_C, T([0, y, 0.122]), GOLD)
-  sk.blank(panel(rrOutline(0.18, 0.056, 0.024), 1), T([0, y, 0.124]))
-  sk.label('GOLD', C('#ffd56a', 1.5), T([0, y, 0.13]), 0.07, 0.15)
+  k.add(extrude(frameShape(rrOutline(0.2, 0.08, 0.035), rrOutline(0.174, 0.054, 0.024)), 0.022, 0.006, 6, 2), GOLD_C, T([0, y, 0.122]), GOLD)
+  sk.blank(panel(rrOutline(0.18, 0.058, 0.026), 1), T([0, y, 0.124]))
+  sk.label('GOLD', C('#ffd56a'), T([0, y, 0.13]), 0.07, 0.15)
 }
 
 /** Magnet bot: a red horseshoe magnet arching over its head, sparking between its poles */
@@ -2013,23 +2099,22 @@ function buildMagnet(gold: boolean) {
   const shell = gold ? GOLD_C : col
   botBody(k, shell, gold)
   const hy = botHead(k, sk, gold ? GOLD_C : WHITE, gold, gold ? FACE_TINT.gold : FACE_TINT.magnet)
-  // the horseshoe: a half torus and two legs, silver poles at the ends
+  // the horseshoe: a half torus and two legs, cream poles at the ends
   const R = 0.2
   const AY = hy + 0.17
-  k.add(tor(R, 0.058, 14, 40, Math.PI), col, T([0, AY, -0.02]), gold ? GOLD : GLOSS)
+  k.add(tor(R, 0.062, 12, 32, Math.PI), col, T([0, AY, -0.02]), gold ? GOLD : GLOSS)
   for (const s of [-1, 1]) {
-    k.add(cyl(0.058, 0.058, 0.08, 24), col, T([s * R, AY - 0.04, -0.02]), gold ? GOLD : GLOSS)
-    k.add(cyl(0.06, 0.06, 0.07, 24), CHROME_C, T([s * R, AY - 0.11, -0.02]), CHROME)
-    k.add(tor(0.06, 0.006, 6, 24), GRAPH, T([s * R, AY - 0.077, -0.02], [Math.PI / 2, 0, 0]), GLOSS)
+    k.add(cyl(0.062, 0.062, 0.08, 20), col, T([s * R, AY - 0.04, -0.02]), gold ? GOLD : GLOSS)
+    k.add(cyl(0.064, 0.064, 0.07, 20), WHITE, T([s * R, AY - 0.11, -0.02]), GLOSS)
   }
-  // field sparks at the poles
+  // little zigzag sparks at the poles
   for (const s of [-1, 1])
-    for (let i = 0; i < 3; i++) {
-      const a = -0.5 + i * 0.5
-      k.add(capsule(0.006, 0.035, 2, 6), C('#8fe8ff', 2.6), T([s * (R + 0.075), AY - 0.12 + i * 0.03, 0.0], [0, 0, s * (0.9 + a)]), lit(1, FX.flicker), i * 0.3)
+    for (let i = 0; i < 2; i++) {
+      const a = -0.35 + i * 0.7
+      k.add(capsule(0.009, 0.04, 2, 6), C('#a8eeff'), T([s * (R + 0.08), AY - 0.12 + i * 0.04, 0.0], [0, 0, s * (0.9 + a)]), lit(1, FX.flicker), i * 0.3, 0.005)
     }
   if (gold) halo(k)
-  valuePlate(k, sk, gold)
+  valuePlate(k, sk, gold, col)
   if (gold) goldTag(k, sk, hy)
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
@@ -2046,32 +2131,27 @@ function buildZap(gold: boolean) {
   botBody(k, gold ? GOLD_C : col, gold)
   const hy = botHead(k, sk, gold ? GOLD_C : col, gold, gold ? FACE_TINT.gold : FACE_TINT.zap)
   const base = hy + 0.145
-  k.add(cyl(0.05, 0.07, 0.04, 24), GRAPH, T([0, base + 0.02, -0.02]), GLOSS)
-  // the coil: copper wound round a white former
-  k.add(cyl(0.03, 0.03, 0.14, 16), WHITE, T([0, base + 0.1, -0.02]), GLOSS)
-  const helix: P3[] = Array.from({ length: 80 }, (_, i) => {
-    const t = i / 79
-    const a = t * TAU * 7
-    return [Math.cos(a) * 0.036, base + 0.04 + t * 0.12, -0.02 + Math.sin(a) * 0.036]
-  })
-  k.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(helix.map((p) => V(...p))), 96, 0.008, 5), COPPER_C, undefined, COPPER)
-  // the top load: a chrome toroid and a glowing ball
-  k.add(tor(0.075, 0.03, 14, 40), CHROME_C, T([0, base + 0.18, -0.02], [Math.PI / 2, 0, 0]), CHROME)
-  k.add(sph(0.04, 18, 12), C('#fff6a8', 2.6), T([0, base + 0.2, -0.02]), lit(1, FX.flicker))
-  // little bolts arcing off the toroid
+  k.add(cyl(0.055, 0.075, 0.04, 20), GRAPH, T([0, base + 0.02, -0.02]), SATIN)
+  // the coil: copper wound round a cream former
+  k.add(cyl(0.034, 0.034, 0.14, 14), WHITE, T([0, base + 0.1, -0.02]), GLOSS)
+  for (let i = 0; i < 4; i++) k.add(tor(0.04, 0.011, 6, 18), COPPER_C, T([0, base + 0.06 + i * 0.03, -0.02], [Math.PI / 2, 0, 0]), COPPER, 0, 0.005)
+  // the top load: a fat cream ring and a crackling ball
+  k.add(tor(0.075, 0.032, 12, 32), WHITE, T([0, base + 0.18, -0.02], [Math.PI / 2, 0, 0]))
+  k.add(sph(0.044, 14, 10), C('#fff6a8'), T([0, base + 0.2, -0.02]), lit(1, FX.flicker))
+  // little bolts jumping off the ring
   const zig = (a: number, ph: number) => {
     const pts: P3[] = []
-    for (let i = 0; i < 5; i++) {
-      const r = 0.11 + i * 0.03
-      const j = i % 2 ? 0.18 : -0.18
-      pts.push([Math.cos(a + j * 0.4) * r, base + 0.18 + Math.sin(a + j) * 0.035 + i * 0.006, -0.02 + 0.03])
+    for (let i = 0; i < 4; i++) {
+      const r = 0.115 + i * 0.035
+      const j = i % 2 ? 0.2 : -0.2
+      pts.push([Math.cos(a + j * 0.4) * r, base + 0.18 + Math.sin(a + j) * 0.035 + i * 0.006, 0.01])
     }
-    for (let i = 0; i < pts.length - 1; i++) k.add(capsule(0.006, dist(pts[i], pts[i + 1]), 2, 6), C('#fff7b0', 2.8), aim(pts[i], pts[i + 1]), lit(1, FX.flicker), ph)
+    for (let i = 0; i < pts.length - 1; i++) k.add(capsule(0.009, dist(pts[i], pts[i + 1]), 2, 6), C('#fff7b0'), aim(pts[i], pts[i + 1]), lit(1, FX.flicker), ph, 0.005)
   }
   zig(0.35, 0.1)
   zig(Math.PI - 0.35, 0.6)
   if (gold) halo(k)
-  valuePlate(k, sk, gold)
+  valuePlate(k, sk, gold, gold ? GOLD_C : '#f0a800')
   if (gold) goldTag(k, sk, hy)
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
@@ -2088,34 +2168,34 @@ function buildBoost(gold: boolean) {
   botBody(k, gold ? GOLD_C : col, gold)
   // battery cells on the sides of the pack
   for (const s of [-1, 1]) {
-    k.add(cyl(0.05, 0.05, 0.24, 24), gold ? '#7a4a12' : '#103a26', T([s * 0.43, DISPLAY.y, -0.03], [0, 0, 0]), GLOSS)
-    for (const e of [-1, 1]) k.add(cyl(0.052, 0.052, 0.03, 24), CHROME_C, T([s * 0.43, DISPLAY.y + e * 0.12, -0.03]), CHROME)
-    k.add(rbox(0.02, 0.15, 0.02, 0.008), C('#7dffa0', 2.2), T([s * 0.43, DISPLAY.y, 0.02]), lit(1, FX.fill), 0.3)
+    k.add(cyl(0.054, 0.054, 0.24, 18), gold ? '#b8761c' : '#1f9e50', T([s * 0.43, DISPLAY.y, -0.03]))
+    for (const e of [-1, 1]) k.add(cyl(0.056, 0.056, 0.035, 18), WHITE, T([s * 0.43, DISPLAY.y + e * 0.12, -0.03]), GLOSS, 0, 0)
   }
   const hy = botHead(k, sk, gold ? GOLD_C : WHITE, gold, gold ? FACE_TINT.gold : FACE_TINT.boost)
   // the dish, tipped towards the camera, on a short mast
   const base = hy + 0.145
-  k.add(cyl(0.022, 0.03, 0.1, 14), CHROME_C, T([0, base + 0.04, -0.07]), CHROME)
+  k.add(cyl(0.024, 0.032, 0.1, 12), GRAPH, T([0, base + 0.04, -0.07]), SATIN)
   const dishM = T([0, base + (gold ? 0.135 : 0.115), -0.08], [0.95, 0, 0])
-  const prof: P2[] = Array.from({ length: 9 }, (_, i) => {
-    const r = (i / 8) * 0.17
+  const prof: P2[] = Array.from({ length: 7 }, (_, i) => {
+    const r = (i / 6) * 0.17
     return [r, (r * r) / 0.17 * 0.55]
   })
-  // the outside in the bot's colour (a lathe from the middle out faces outwards), the inside chrome (reversed)
-  k.add(lathe(prof, 44), gold ? GOLD_C : col, dishM, gold ? GOLD : GLOSS)
-  k.add(lathe(prof.map(([x, y]): P2 => [x * 0.97, y + 0.007]).reverse(), 44), CHROME_C, dishM, CHROME)
-  k.add(tor(0.17, 0.012, 6, 40), gold ? GOLD_C : col, mul(dishM, T([0, 0.096, 0], [Math.PI / 2, 0, 0])), gold ? GOLD : GLOSS)
-  for (const r of [0.07, 0.12]) k.add(tor(r, 0.006, 6, 40), C('#7dffa0', 2.4), mul(dishM, T([0, (r * r) / 0.17 * 0.55 + 0.008, 0], [Math.PI / 2, 0, 0])), lit(1, FX.pulse), r * 4)
-  k.add(cyl(0.008, 0.008, 0.11, 8), CHROME_C, mul(dishM, T([0, 0.055, 0])), CHROME)
-  k.add(sph(0.026, 14, 10), C('#b6ffc9', 2.8), mul(dishM, T([0, 0.115, 0])), lit(1, FX.pulse))
+  // the outside in the bot's colour (a lathe from the middle out faces outwards), the inside cream (reversed)
+  k.add(lathe(prof, 32), gold ? GOLD_C : col, dishM, gold ? GOLD : GLOSS)
+  k.add(lathe(prof.map(([x, y]): P2 => [x * 0.97, y + 0.007]).reverse(), 32), WHITE, dishM, SATIN, 0, 0)
+  k.add(tor(0.17, 0.016, 6, 32), gold ? GOLD_C : col, mul(dishM, T([0, 0.096, 0], [Math.PI / 2, 0, 0])), gold ? GOLD : GLOSS, 0, 0.008)
+  for (const r of [0.07, 0.12]) k.add(tor(r, 0.009, 6, 28), C('#8dffad'), mul(dishM, T([0, (r * r) / 0.17 * 0.55 + 0.01, 0], [Math.PI / 2, 0, 0])), lit(1, FX.pulse), r * 4, 0)
+  k.add(cyl(0.01, 0.01, 0.11, 6), GRAPH, mul(dishM, T([0, 0.055, 0])), SATIN)
+  k.add(sph(0.03, 12, 8), C('#c6ffd6'), mul(dishM, T([0, 0.115, 0])), lit(1, FX.pulse))
   if (gold) halo(k)
-  valuePlate(k, sk, gold)
+  valuePlate(k, sk, gold, gold ? GOLD_C : '#24b552')
   if (gold) goldTag(k, sk, hy)
   const root = new THREE.Group()
   root.add(k.mesh('body', m.body))
   root.add(sk.mesh(gold ? 'boost-gold' : 'boost', m.screen))
   return root
 }
+
 
 /* ------------------------------------------------------------------ */
 /*  Building and sharing                                                */
@@ -2639,8 +2719,9 @@ export class ValueLabels {
 /*  Volt, the host                                                      */
 /* ------------------------------------------------------------------ */
 
-const PEARL = '#eef1f6'
-const VOLT_CYAN = '#22cfe9'
+const PEARL = WHITE
+const VOLT_CYAN = '#2fc6d8'
+const VOLT_DEEP = '#1f97ad'
 const ORANGE = '#ff8a2a'
 
 export interface HostRig {
@@ -2669,7 +2750,7 @@ export interface HostRig {
   jawsR: [THREE.Group, THREE.Group]
   /** a big horseshoe magnet held in the right claw, hidden */
   magnet: THREE.Group
-  /** the glowing core in his chest (part of the body; its world position, for zaps to leave from) */
+  /** the power core in his chest (part of the body; its world position, for zaps to leave from) */
   core: THREE.Object3D
   /** the mouths of his two exhaust stacks (steam puffs, sparks), left and right */
   exhausts: THREE.Object3D[]
@@ -2699,7 +2780,7 @@ function drawHostFace(e: Expr) {
   h.tex.needsUpdate = true
 }
 
-/** a claw's jaw: a curved chrome finger with an orange rubber tip, hanging from its pivot, curling to +x */
+/** a claw's jaw: a fat curved finger with an orange rubber tip, hanging from its pivot, curling to +x */
 function jaw(k: Kit, s: number) {
   const pts: P3[] = [
     [0, 0, 0],
@@ -2708,12 +2789,12 @@ function jaw(k: Kit, s: number) {
     [s * -0.025, -0.26, 0],
   ]
   for (let i = 0; i < pts.length - 1; i++) {
-    k.add(capsule(0.035 - i * 0.006, dist(pts[i], pts[i + 1]), 4, 12), i === 2 ? ORANGE : CHROME_C, aim(pts[i], pts[i + 1]), i === 2 ? RUBBER : CHROME)
-    k.add(sph(0.036 - i * 0.006, 14, 10), GRAPH, T(pts[i]), SATIN)
+    k.add(capsule(0.042 - i * 0.006, dist(pts[i], pts[i + 1]), 3, 12), i === 2 ? ORANGE : PEARL, aim(pts[i], pts[i + 1]), i === 2 ? GLOSS : SATIN)
+    if (i) k.add(sph(0.04 - i * 0.006, 12, 8), GRAPH, T(pts[i]), SATIN, 0, 0)
   }
 }
 
-/** Volt: a big friendly pearl-and-cyan robot with a screen face, a power core in his chest and two claw arms */
+/** Volt: a big friendly cream-and-teal robot with a screen face, a power core in his chest and two claw arms */
 export function buildHost(): HostRig {
   lod = STAGE_LOD
   try {
@@ -2727,16 +2808,18 @@ function hostRig(): HostRig {
   const s = stage()
   const root = new THREE.Group()
   root.name = 'volt'
+  const VI = 0.028
 
   const torso = new THREE.Group()
   torso.name = 'torso'
-  const t = new Kit()
-  t.add(rbox(1.22, 0.86, 0.72, 0.22, 4), PEARL, T([0, 0.47, 0]))
-  // the chest: a cyan plate holding the power core, a bolt across it, vents under it
-  t.add(rbox(0.7, 0.5, 0.08, 0.1, 4), VOLT_CYAN, T([0, 0.5, 0.33]))
-  t.add(tor(0.155, 0.032, 14, 48), CHROME_C, T([0, 0.53, 0.38]), CHROME)
-  t.add(cyl(0.14, 0.14, 0.04, 40), C('#7ff6ff', 2.2), T([0, 0.53, 0.37], [Math.PI / 2, 0, 0]), lit(1, FX.pulse))
-  for (let i = 0; i < 8; i++) t.add(rbox(0.018, 0.12, 0.02, 0.008), STEEL_C, T([0, 0.53, 0.395], [0, 0, (i * TAU) / 8]).multiply(T([0, 0.105, 0])), STEEL)
+  const t = new Kit(VI)
+  t.add(rbox(1.22, 0.86, 0.72, 0.27, 4), PEARL, T([0, 0.47, 0]))
+  // the chest: a teal plate holding the power core, a bolt across it, vents under it
+  inkPlate(t, 0.7, 0.5, 0.13, T([0, 0.5, 0.358]), 0.02, 0.02)
+  t.add(rbox(0.7, 0.5, 0.08, 0.13, 4), VOLT_CYAN, T([0, 0.5, 0.33]), GLOSS, 0, 0)
+  inkDisc(t, 0.165, T([0, 0.53, 0.373]), 0.02)
+  t.add(cyl(0.165, 0.165, 0.035, 32), WHITE, T([0, 0.53, 0.36], [Math.PI / 2, 0, 0]), GLOSS, 0, 0)
+  t.add(cyl(0.125, 0.125, 0.04, 32), C('#8ff8ff'), T([0, 0.53, 0.37], [Math.PI / 2, 0, 0]), lit(1, FX.pulse), 0, 0)
   const bolt = shapeOf([
     [0.03, 0.12],
     [-0.07, -0.015],
@@ -2745,30 +2828,22 @@ function hostRig(): HostRig {
     [0.07, 0.02],
     [0.006, 0.02],
   ])
-  t.add(extrude(bolt, 0.025, 0.008, 1, 2), C('#ffd23a', 1.2), T([0, 0.53, 0.41]), lit(0.8))
-  for (const s2 of [-1, 1]) for (let i = 0; i < 3; i++) t.add(rbox(0.12, 0.024, 0.03, 0.012), GRAPH, T([s2 * 0.24, 0.38 - i * 0.05, 0.37]), SATIN)
-  // a row of status LEDs above the plate
-  for (let i = 0; i < 5; i++) t.add(dome(0.02, 0.6), C(['#5cf2ff', '#59ff7a', '#ffe14a', '#ff8a2a', '#ff3fd2'][i], 2.2), T([-0.16 + i * 0.08, 0.8, 0.355]), lit(1, FX.chase), i * 0.18)
-  // the belt and a chrome buckle at the waist
-  t.add(cyl(0.44, 0.44, 0.14, 40), GRAPH, T([0, 0.02, 0]), SATIN)
-  t.add(rbox(0.22, 0.12, 0.05, 0.03), CHROME_C, T([0, 0.02, 0.43]), CHROME)
-  t.add(rbox(0.14, 0.05, 0.02, 0.015), C('#5cf2ff', 2), T([0, 0.02, 0.457]), lit(1, FX.pulse))
+  t.add(extrude(bolt, 0.025, 0.008, 1, 2), C('#ffd23a'), T([0, 0.53, 0.4], [0, 0, 0], 0.85), GLOSS, 0, 0.012)
+  for (const s2 of [-1, 1]) for (let i = 0; i < 2; i++) t.add(rbox(0.12, 0.03, 0.03, 0.015), VOLT_DEEP, T([s2 * 0.24, 0.36 - i * 0.06, 0.37]), SATIN, 0, 0)
+  // a row of status lamps above the plate
+  for (let i = 0; i < 5; i++) button(t, 0.026, C(['#5cf2ff', '#59ff7a', '#ffe14a', '#ff8a2a', '#ff5fd8'][i]), T([-0.18 + i * 0.09, 0.8, 0.36]), lit(1, FX.chase), i * 0.18)
+  // the belt and a teal buckle at the waist
+  t.add(cyl(0.44, 0.44, 0.14, 36), GRAPH, T([0, 0.02, 0]), SATIN)
+  t.add(rbox(0.24, 0.13, 0.06, 0.04), VOLT_CYAN, T([0, 0.02, 0.43]))
   // neck
-  t.add(cyl(0.16, 0.2, 0.08, 32), STEEL_C, T([0, 0.92, 0]), STEEL)
-  t.add(cyl(0.13, 0.13, 0.08, 32), CHROME_C, T([0, 0.99, 0]), CHROME)
-  t.add(tor(0.14, 0.012, 8, 32), VOLT_CYAN, T([0, 0.955, 0], [Math.PI / 2, 0, 0]))
-  // screws
-  for (const sx of [-1, 1]) for (const sy of [0.2, 0.78]) t.add(dome(0.02), CHROME_C, T([sx * 0.5, sy, 0.36]), CHROME)
-  // panel seams down the sides of the chest
-  for (const sx of [-1, 1]) t.add(box(0.012, 0.62, 0.012), '#b9c2d0', T([sx * 0.43, 0.47, 0.362]), SATIN)
-  // exhaust stacks behind the shoulders
-  // stacks leaning out from behind the shoulders, their mouths in the gap between ear and shoulder
+  t.add(cyl(0.17, 0.2, 0.08, 28), GRAPH, T([0, 0.92, 0]), SATIN)
+  t.add(cyl(0.14, 0.14, 0.08, 28), VOLT_DEEP, T([0, 0.99, 0]))
+  // exhaust stacks leaning out from behind the shoulders, their mouths in the gap between ear and shoulder
   const stack = (sx: number) => T([sx * 0.5, 0.86, -0.24], [0, 0, -sx * 0.38])
   for (const sx of [-1, 1]) {
-    t.add(cyl(0.06, 0.07, 0.42, 24), CHROME_C, stack(sx), CHROME)
-    t.add(tor(0.064, 0.016, 8, 24), GRAPH, mul(stack(sx), T([0, 0.2, 0], [Math.PI / 2, 0, 0])), SATIN)
-    t.add(cyl(0.048, 0.048, 0.02, 20), INKY, mul(stack(sx), T([0, 0.205, 0])), SATIN)
-    t.add(tor(0.07, 0.012, 8, 24), VOLT_CYAN, mul(stack(sx), T([0, 0.02, 0], [Math.PI / 2, 0, 0])))
+    t.add(cyl(0.07, 0.08, 0.42, 20), VOLT_CYAN, stack(sx))
+    t.add(tor(0.07, 0.022, 8, 20), WHITE, mul(stack(sx), T([0, 0.2, 0], [Math.PI / 2, 0, 0])), GLOSS, 0, 0.012)
+    t.add(cyl(0.055, 0.055, 0.02, 16), INKY, mul(stack(sx), T([0, 0.205, 0])), SATIN, 0, 0)
   }
   torso.add(t.mesh('body', s.body))
   const exhausts = [-1, 1].map((sx) => {
@@ -2787,36 +2862,31 @@ function hostRig(): HostRig {
   const head = new THREE.Group()
   head.name = 'head'
   head.position.set(0, 1.02, 0)
-  const h = new Kit()
+  const h = new Kit(VI)
   const HY = 0.4
-  h.add(rbox(1.06, 0.76, 0.68, 0.2, 4), PEARL, T([0, HY, 0]))
+  h.add(rbox(1.06, 0.76, 0.68, 0.24, 4), PEARL, T([0, HY, 0]))
   const SW = 0.82
   const SH = 0.54
-  h.add(extrude(frameShape(rrOutline(SW + 0.08, SH + 0.08, 0.14), rrOutline(SW, SH, 0.11)), 0.04, 0.014), GRAPH, T([0, HY - 0.01, 0.352]), GLOSS)
-  h.add(extrude(shapeOf(rrOutline(SW + 0.02, SH + 0.02, 0.12)), 0.012), INKY, T([0, HY - 0.01, 0.343]), GLOSS)
-  // a cyan brow strip, ear modules with light rings, and antennae
-  h.add(rbox(0.36, 0.035, 0.04, 0.017), VOLT_CYAN, T([0, HY + 0.33, 0.33]))
+  h.add(extrude(frameShape(rrOutline(SW + 0.1, SH + 0.1, 0.16), rrOutline(SW, SH, 0.12)), 0.05, 0.016), INKY, T([0, HY - 0.01, 0.348]), SATIN)
+  // a teal brow, ear modules with lamp rings, and antennae with round lamps
+  h.add(rbox(0.4, 0.05, 0.05, 0.025), VOLT_CYAN, T([0, HY + 0.335, 0.325]))
   for (const sx of [-1, 1]) {
-    h.add(cyl(0.16, 0.16, 0.12, 40), VOLT_CYAN, T([sx * 0.56, HY, 0], [0, 0, Math.PI / 2]))
-    h.add(cyl(0.11, 0.11, 0.05, 36), CHROME_C, T([sx * 0.63, HY, 0], [0, 0, Math.PI / 2]), CHROME)
-    h.add(tor(0.13, 0.014, 8, 40), C('#7ff6ff', 2.2), T([sx * 0.622, HY, 0], [0, Math.PI / 2, 0]), lit(1, FX.pulse), sx > 0 ? 0.5 : 0)
+    h.add(cyl(0.17, 0.17, 0.13, 32), VOLT_CYAN, T([sx * 0.56, HY, 0], [0, 0, Math.PI / 2]))
+    h.add(cyl(0.11, 0.11, 0.05, 28), WHITE, T([sx * 0.635, HY, 0], [0, 0, Math.PI / 2]))
+    h.add(tor(0.135, 0.018, 6, 28), C('#8ff8ff'), T([sx * 0.627, HY, 0], [0, Math.PI / 2, 0]), lit(1, FX.pulse), sx > 0 ? 0.5 : 0, 0)
     const a: P3 = [sx * 0.6, HY + 0.12, 0]
     const b: P3 = [sx * 0.72, HY + 0.52, -0.02]
-    h.add(cyl(0.016, 0.02, dist(a, b), 10), CHROME_C, aim(a, b), CHROME)
-    h.add(sph(0.05, 16, 12), C('#7ff6ff', 2.4), T(b), lit(1, FX.pulse), sx > 0 ? 0.3 : 0.8)
-    h.add(tor(0.035, 0.009, 6, 18), CHROME_C, mul(aim(a, b), T([0, dist(a, b) / 2 - 0.04, 0], [Math.PI / 2, 0, 0])), CHROME)
+    h.add(cyl(0.02, 0.026, dist(a, b), 8), GRAPH, aim(a, b), SATIN)
+    h.add(sph(0.06, 14, 10), C('#ffe14a'), T(b), lit(1, FX.pulse), sx > 0 ? 0.3 : 0.8)
   }
-  // screws round the bezel
-  for (const sx of [-1, 1]) for (const sy of [-1, 1]) h.add(dome(0.018), CHROME_C, T([sx * 0.47, HY + sy * 0.3, 0.335]), CHROME)
   // the beacon's base
-  h.add(cyl(0.11, 0.13, 0.05, 32), GRAPH, T([0, HY + 0.4, 0]), GLOSS)
+  h.add(cyl(0.12, 0.14, 0.05, 24), GRAPH, T([0, HY + 0.4, 0]), SATIN)
   head.add(h.mesh('head', s.body))
 
   const hf = hostFaceTexture()
   const faceMat = keep(makeScreen(hf.tex))
-  faceMat.userData.gain.value = 1.45
   const sk = new ScreenKit()
-  sk.face(panel(rrOutline(SW, SH, 0.11), 5, bulge(SW, SH, 0.018)), 'box', FACE_TINT.rex, T([0, HY - 0.01, 0.352]))
+  sk.face(panel(rrOutline(SW, SH, 0.12), 5, bulge(SW, SH, 0.018)), 'box', FACE_TINT.rex, T([0, HY - 0.01, 0.352]))
   const screen = sk.mesh('volt', faceMat)
   // Volt's face has its own texture: its uv is the whole canvas
   const uv = screen.geometry.getAttribute('uv') as THREE.BufferAttribute
@@ -2828,12 +2898,13 @@ function hostRig(): HostRig {
   beacon.name = 'beacon'
   beacon.position.set(0, HY + 0.43, 0)
   const lampMat = keep(new THREE.MeshBasicMaterial({ color: C('#ff2a1f', 0.6) }))
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.1, 24, 12, 0, TAU, 0, Math.PI / 2).applyMatrix4(T([0, 0, 0], [0, 0, 0], [1, 1.2, 1])), lampMat)
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 10, 0, TAU, 0, Math.PI / 2).applyMatrix4(T([0, 0, 0], [0, 0, 0], [1, 1.2, 1])), lampMat)
   lamp.name = 'lamp'
-  const bc = new Kit()
-  bc.add(tor(0.103, 0.01, 6, 28), CHROME_C, T([0, 0.005, 0], [Math.PI / 2, 0, 0]), CHROME)
-  for (let i = 0; i < 4; i++) bc.add(tor(0.106, 0.007, 6, 20, Math.PI / 2), CHROME_C, T([0, 0, 0], [0, (i * Math.PI) / 2, 0]).multiply(T([0, 0, 0], [0, 0, 0], [1, 1.2, 1])), CHROME)
-  bc.add(sph(0.016, 10, 8), CHROME_C, T([0, 0.125, 0]), CHROME)
+  const bc = new Kit(0.02)
+  bc.outline(new THREE.SphereGeometry(0.105, 20, 10, 0, TAU, 0, Math.PI / 2).applyMatrix4(T([0, 0, 0], [0, 0, 0], [1, 1.2, 1])), undefined, 0.02)
+  bc.add(tor(0.108, 0.016, 6, 24), GRAPH, T([0, 0.008, 0], [Math.PI / 2, 0, 0]), SATIN)
+  for (let i = 0; i < 2; i++) bc.add(tor(0.111, 0.011, 6, 18, Math.PI), GRAPH, T([0, 0, 0], [0, (i * Math.PI) / 2, 0]).multiply(T([0, 0, 0], [0, 0, 0], [1, 1.2, 1])), SATIN, 0, 0)
+  bc.add(sph(0.022, 10, 8), GRAPH, T([0, 0.13, 0]), SATIN)
   beacon.add(lamp, bc.mesh('cage', s.body))
   beacon.userData.rest = restOf(beacon)
   head.add(beacon)
@@ -2842,35 +2913,32 @@ function hostRig(): HostRig {
 
   // the arms: shoulder, elbow and wrist joints, each segment hanging along -y in its joint's frame
   const arms = [-1, 1].map((sx) => {
-    const a = new Kit()
-    a.add(sph(0.17, 28, 20), GRAPH, T([0, 0, 0]), SATIN)
-    a.add(new THREE.SphereGeometry(0.21, 28, 12, 0, TAU, 0, Math.PI * 0.42), VOLT_CYAN, T([0, 0.02, 0], [0, 0, -sx * 0.25]))
-    a.add(tor(0.175, 0.016, 8, 36), CHROME_C, T([0, -0.05, 0], [Math.PI / 2, 0, 0]), CHROME)
-    a.add(capsule(0.115, 0.3, 6, 20), PEARL, T([0, -0.27, 0]))
-    a.add(tor(0.118, 0.018, 8, 32), VOLT_CYAN, T([0, -0.3, 0], [Math.PI / 2, 0, 0]))
+    const a = new Kit(VI)
+    a.add(sph(0.17, 22, 16), GRAPH, T([0, 0, 0]), SATIN)
+    a.add(new THREE.SphereGeometry(0.215, 22, 10, 0, TAU, 0, Math.PI * 0.42), VOLT_CYAN, T([0, 0.02, 0], [0, 0, -sx * 0.25]))
+    a.add(capsule(0.12, 0.3, 4, 16), PEARL, T([0, -0.27, 0]))
+    a.add(tor(0.122, 0.024, 6, 24), VOLT_CYAN, T([0, -0.3, 0], [Math.PI / 2, 0, 0]), GLOSS, 0, 0.012)
     const arm = new THREE.Group()
     arm.name = sx < 0 ? 'armL' : 'armR'
     arm.position.set(sx * 0.7, 0.66, 0)
     arm.add(a.mesh('upper', s.body))
-    const f = new Kit()
-    f.add(sph(0.115, 24, 16), GRAPH, T([0, 0, 0]), SATIN)
-    f.add(capsule(0.13, 0.3, 6, 20), PEARL, T([0, -0.25, 0]))
-    f.add(tor(0.132, 0.022, 8, 32), VOLT_CYAN, T([0, -0.36, 0], [Math.PI / 2, 0, 0]))
-    f.add(cyl(0.11, 0.1, 0.07, 28), CHROME_C, T([0, -0.47, 0]), CHROME)
-    f.add(rbox(0.1, 0.05, 0.03, 0.015), C('#7ff6ff', 2), T([0, -0.2, 0.125]), lit(1, FX.pulse), sx > 0 ? 0.5 : 0)
+    const f = new Kit(VI)
+    f.add(sph(0.12, 18, 12), GRAPH, T([0, 0, 0]), SATIN)
+    f.add(capsule(0.135, 0.3, 4, 16), PEARL, T([0, -0.25, 0]))
+    f.add(tor(0.137, 0.026, 6, 24), VOLT_CYAN, T([0, -0.36, 0], [Math.PI / 2, 0, 0]), GLOSS, 0, 0.012)
+    f.add(cyl(0.115, 0.105, 0.07, 20), GRAPH, T([0, -0.47, 0]), SATIN)
     const fore = new THREE.Group()
     fore.name = sx < 0 ? 'foreL' : 'foreR'
     fore.position.set(0, -0.48, 0)
     fore.add(f.mesh('fore', s.body))
-    const c = new Kit()
-    c.add(rbox(0.24, 0.14, 0.2, 0.06, 4), GRAPH, T([0, -0.07, 0]), SATIN)
-    c.add(cyl(0.035, 0.035, 0.22, 16), CHROME_C, T([0, -0.13, 0], [Math.PI / 2, 0, 0]), CHROME)
+    const c = new Kit(VI)
+    c.add(rbox(0.25, 0.15, 0.21, 0.07, 3), GRAPH, T([0, -0.07, 0]), SATIN)
     const claw = new THREE.Group()
     claw.name = sx < 0 ? 'clawL' : 'clawR'
     claw.position.set(0, -0.52, 0)
     claw.add(c.mesh('palm', s.body))
     const jaws = [-1, 1].map((js) => {
-      const j = new Kit()
+      const j = new Kit(VI)
       jaw(j, js)
       const g = new THREE.Group()
       g.name = js < 0 ? 'jawIn' : 'jawOut'
@@ -2894,12 +2962,12 @@ function hostRig(): HostRig {
   // the magnet prop: grip at the origin, the horseshoe below it
   const magnet = new THREE.Group()
   magnet.name = 'magnet'
-  const mk = new Kit()
-  mk.add(cyl(0.04, 0.04, 0.2, 16), GRAPH, T([0, -0.05, 0]), RUBBER)
-  mk.add(tor(0.22, 0.085, 16, 40, Math.PI), '#ff3b4f', T([0, -0.38, 0], [0, 0, 0]))
+  const mk = new Kit(VI)
+  mk.add(cyl(0.045, 0.045, 0.2, 12), GRAPH, T([0, -0.05, 0]), RUBBER)
+  mk.add(tor(0.22, 0.09, 12, 32, Math.PI), '#ff4b5f', T([0, -0.38, 0], [0, 0, 0]))
   for (const sx of [-1, 1]) {
-    mk.add(cyl(0.085, 0.085, 0.12, 28), '#ff3b4f', T([sx * 0.22, -0.44, 0]))
-    mk.add(cyl(0.088, 0.088, 0.13, 28), CHROME_C, T([sx * 0.22, -0.56, 0]), CHROME)
+    mk.add(cyl(0.09, 0.09, 0.12, 20), '#ff4b5f', T([sx * 0.22, -0.44, 0]))
+    mk.add(cyl(0.093, 0.093, 0.13, 20), WHITE, T([sx * 0.22, -0.56, 0]))
   }
   magnet.add(mk.mesh('magnet', s.body))
   magnet.position.set(0, -0.2, 0)
@@ -2935,7 +3003,7 @@ function hostRig(): HostRig {
 export function setHostFace(e: Expr) {
   if (hostFace?.expr !== e) drawHostFace(e)
 }
-/** the colour Volt's face glows in (cyan by default; red in an alarm) */
+/** the colour Volt's face is drawn in (cyan by default; red in an alarm) */
 export function setHostTint(rig: HostRig, color: THREE.ColorRepresentation) {
   const c = C(color)
   const col = rig.screen.geometry.getAttribute('color') as THREE.BufferAttribute
@@ -2952,104 +3020,53 @@ export function openClaw(jaws: [THREE.Group, THREE.Group], t: number) {
 /*  The machine: glass tubes, frame, marquee                            */
 /* ------------------------------------------------------------------ */
 
-/** neon letters, cap height 1: strokes as polylines (corners get rounded) */
-function letterStrokes(ch: string): { w: number; strokes: P2[][] } {
-  const arcPts = (cx: number, cy: number, r: number, a0: number, a1: number, n = 10): P2[] => Array.from({ length: n + 1 }, (_, i) => [cx + Math.cos(a0 + ((a1 - a0) * i) / n) * r, cy + Math.sin(a0 + ((a1 - a0) * i) / n) * r])
+/**
+ * Bold sign letters, cap height 1, as flat shapes to extrude (parts that overlap merge into one letter: each part is
+ * its own solid, and the outline only shows round the outside of them all). `w` is the advance.
+ */
+function letterShapes(ch: string): { w: number; shapes: THREE.Shape[] } {
+  const S = 0.19
+  const rect = (x0: number, y0: number, x1: number, y1: number) => shapeOf([[x0, y0], [x1, y0], [x1, y1], [x0, y1]])
+  const ring = (cx: number, cy: number, w: number, h: number) => {
+    const r = Math.min(w, h) / 2
+    const o = rrOutline(w, h, r, 8).map(([x, y]): P2 => [x + cx, y + cy])
+    const i = rrOutline(w - 2 * S, h - 2 * S, Math.max(0.02, r - S), 8).map(([x, y]): P2 => [x + cx, y + cy])
+    return frameShape(o, i)
+  }
   switch (ch) {
     case 'R':
-      return {
-        w: 0.64,
-        strokes: [
-          [[0, 0], [0, 1], [0.34, 1], ...arcPts(0.34, 0.75, 0.25, Math.PI / 2, -Math.PI / 2).slice(1), [0.02, 0.5]],
-          [
-            [0.3, 0.5],
-            [0.62, 0],
-          ],
-        ],
-      }
-    case 'O': {
-      // a closed loop: the outline once round, overlapping its start a little
-      const o = rrOutline(0.66, 1, 0.33, 8).map(([x, y]): P2 => [x + 0.33, y + 0.5])
-      return { w: 0.66, strokes: [[...o, o[0], o[1]]] }
-    }
+      return { w: 0.66, shapes: [rect(0, 0, S, 1), ring(0.31, 0.69, 0.62, 0.62), shapeOf([[S * 0.8, 0.46], [S * 0.8 + 0.2, 0.46], [0.66, 0], [0.45, 0]])] }
+    case 'O':
+      return { w: 0.72, shapes: [ring(0.36, 0.5, 0.72, 1)] }
     case 'B':
-      return {
-        w: 0.62,
-        strokes: [
-          [[0, 0.02], [0, 1], [0.3, 1], ...arcPts(0.3, 0.76, 0.24, Math.PI / 2, -Math.PI / 2).slice(1), [0.04, 0.52]],
-          [[0.04, 0.52], [0.34, 0.52], ...arcPts(0.34, 0.26, 0.26, Math.PI / 2, -Math.PI / 2).slice(1), [0, 0]],
-        ],
-      }
+      return { w: 0.64, shapes: [rect(0, 0, S, 1), ring(0.28, 0.73, 0.56, 0.54), ring(0.32, 0.28, 0.64, 0.56)] }
     case 'I':
-      return {
-        w: 0.3,
-        strokes: [
-          [
-            [0.15, 0],
-            [0.15, 1],
-          ],
-          [
-            [0, 1],
-            [0.3, 1],
-          ],
-          [
-            [0, 0],
-            [0.3, 0],
-          ],
-        ],
-      }
+      return { w: S, shapes: [rect(0, 0, S, 1)] }
     case 'T':
-      return {
-        w: 0.64,
-        strokes: [
-          [
-            [0, 1],
-            [0.64, 1],
-          ],
-          [
-            [0.32, 1],
-            [0.32, 0],
-          ],
-        ],
-      }
+      return { w: 0.66, shapes: [rect(0, 1 - S, 0.66, 1), rect(0.33 - S / 2, 0, 0.33 + S / 2, 1 - S * 0.5)] }
     default:
-      return { w: 0.4, strokes: [] }
+      return { w: 0.4, shapes: [] }
   }
 }
 
-/** neon tubing spelling `text` (centred on the origin), cap height `size`, in vertex colours by word */
-function neonText(text: string, size: number, r: number, colors: string[]) {
-  const words = text.split(' ')
-  const gap = 0.2
-  const space = 0.55
-  const widthOf = (w: string) => [...w].reduce((a, ch) => a + letterStrokes(ch).w, 0) + gap * (w.length - 1)
-  const total = words.reduce((a, w) => a + widthOf(w), 0) + space * (words.length - 1)
-  const k = new Kit()
-  const posts = new Kit()
+/** chunky extruded letters spelling `word` (centred on the origin), cap height `size` */
+function signWord(k: Kit, word: string, size: number, color: string, m: THREE.Matrix4) {
+  const gap = 0.11
+  const total = [...word].reduce((a, ch) => a + letterShapes(ch).w, 0) + gap * (word.length - 1)
   let x = -total / 2
-  words.forEach((w, wi) => {
-    for (const ch of w) {
-      const L = letterStrokes(ch)
-      for (const st of L.strokes) {
-        const pts = st.map(([px, py]): P3 => [(x + px) * size, (py - 0.5) * size, 0])
-        k.add(pipe(pts, r, r * 2.2, 8), C(colors[wi % colors.length], 2.3), undefined, lit(1))
-        // electrodes at both ends, and standoffs holding the tube off the backing
-        for (const e of [pts[0], pts[pts.length - 1]]) posts.add(cyl(r * 1.15, r * 1.15, r * 2.4, 10), GRAPH, T([e[0], e[1], -r * 0.6], [Math.PI / 2, 0, 0]), SATIN)
-        const mid = pts[Math.floor(pts.length / 2)]
-        posts.add(cyl(r * 0.45, r * 0.45, r * 5, 8), CHROME_C, T([mid[0], mid[1], -r * 2.5], [Math.PI / 2, 0, 0]), CHROME)
-      }
-      x += L.w + gap
-    }
-    x += space - gap
-  })
-  return { tubes: k, posts }
+  for (const ch of word) {
+    const L = letterShapes(ch)
+    for (const sh of L.shapes) k.add(extrude(sh, 0.2, 0.025, 6, 2), color, mul(m, T([x * size, -0.5 * size, 0], [0, 0, 0], [size, size, size])), GLOSS, 0, 0.015)
+    x += L.w + gap
+  }
+  return total * size
 }
 
 export interface TubeRig {
   root: THREE.Group
   /** the glass (open at the front) */
   glass: THREE.Mesh
-  /** the neon rings at the top and bottom; the material is this tube's own: set its color (HDR) to light it */
+  /** the lamp rings at the top and bottom; the material is this tube's own: set its color to light it */
   neon: THREE.Mesh
 }
 
@@ -3057,9 +3074,9 @@ export interface MachineRig {
   root: THREE.Group
   /** left to right; tube c is centred on x = (c - (cols - 1) / 2) * cell, y = 0 */
   tubes: TubeRig[]
-  /** the sign above the frame */
+  /** the sign above the frame: two boards, ROBO and RIOT, with a gap in the middle for Volt */
   marquee: THREE.Group
-  /** ROBO RIOT in neon: its material is the machine's own; scale material.color to flicker it (vertex colours carry the hues) */
+  /** the letters: their material is the machine's own; scale material.color to flicker them */
   letters: THREE.Mesh
   /** gauge needles (rotation.z: 0 points straight up, about ±2.2 at the ends of the dial) */
   needles: THREE.Group[]
@@ -3067,15 +3084,18 @@ export interface MachineRig {
   vents: THREE.Object3D[]
   /** the arcade buttons under the tubes: one instanced mesh, instanceColor per tube */
   buttons: THREE.InstancedMesh
-  /** overall extent: half width, top (marquee) and bottom (base) */
-  size: { halfW: number; top: number; bottom: number; boardTop: number; boardBottom: number }
+  /**
+   * overall extent: half width, top (the boards) and bottom (base), the board's edges, the header's top (where Volt
+   * leans) and the gap between the boards (its half width)
+   */
+  size: { halfW: number; top: number; bottom: number; boardTop: number; boardBottom: number; ledge: number; gap: number }
 }
 
 /**
- * The arcade machine around a cols × rows board of `cell` units centred on the origin: five glass tubes with chrome
- * caps, painted steel pillars with rivets, pipes and steam vents, a header with hazard trim and two gauges, a base
- * with arcade buttons, and the marquee with ROBO RIOT in neon and chasing bulbs. Built in the stage materials
- * (unclipped). About 12 draw calls.
+ * The cartoon arcade cabinet round a cols × rows board of `cell` units centred on the origin: five glass tubes with
+ * cream caps and lamp rings in front of a deep blue back, slim coral pillars with chasing bulbs and steam vents, a
+ * slim header with yellow trim and two gauges, a base with fat arcade buttons, and the marquee: ROBO and RIOT on two
+ * boards with bulbs, leaving the middle to Volt. Built in the stage materials (unclipped).
  */
 export function buildMachine(o: { cols?: number; rows?: number; cell?: number } = {}): MachineRig {
   lod = STAGE_LOD
@@ -3084,6 +3104,20 @@ export function buildMachine(o: { cols?: number; rows?: number; cell?: number } 
   } finally {
     lod = 1
   }
+}
+
+/** a geometry turned inside out: seen from inside (the backs of the tubes) */
+function inward(g: Geo) {
+  const x = g.index ? g : mergeVertices(g)
+  const ix = x.index!
+  for (let i = 0; i < ix.count; i += 3) {
+    const j = ix.getX(i + 1)
+    ix.setX(i + 1, ix.getX(i + 2))
+    ix.setX(i + 2, j)
+  }
+  const n = x.getAttribute('normal')
+  for (let i = 0; i < n.count; i++) n.setXYZ(i, -n.getX(i), -n.getY(i), -n.getZ(i))
+  return x
 }
 
 function machineRig(o: { cols?: number; rows?: number; cell?: number }): MachineRig {
@@ -3095,32 +3129,42 @@ function machineRig(o: { cols?: number; rows?: number; cell?: number }): Machine
   const H = rows * cell
   const root = new THREE.Group()
   root.name = 'machine'
-  const f = new Kit()
-  const NAVY = '#1c2640'
-  const NAVY2 = '#243152'
+  const f = new Kit(STAGE_INK)
+  const BODY = '#ec5462'
+  const BODY2 = '#c93f52'
+  const TRIM = '#ffcd3c'
+  const BACK = '#2c3670'
+  const NAVY = '#222860'
   const TR = cell * 0.47
-  const TH = H + 0.24 * cell
+  const TH = H + 0.12 * cell
   const OPEN = 0.95
 
-  // tubes: back panels, chrome caps and edge rails go in the frame; glass and neon are their own meshes
+  // the deep blue back the tubes stand against
+  f.add(rbox(W + 0.16, TH + 0.06, 0.06, 0.06, 2), '#1a1f48', T([0, 0, -0.56]), SATIN, 0, 0)
+  // tubes: backs, cream caps and edge rails go in the frame; glass and lamp rings are their own meshes
   const tubes: TubeRig[] = []
-  const glassGeo = new THREE.CylinderGeometry(TR, TR, TH, 48, 1, true, OPEN, TAU - 2 * OPEN)
+  const glassGeom = glassGeo(TR, TH, OPEN, TAU - OPEN, [
+    [TAU - 1.2, 0.16, 0.5],
+    [1.3, 0.06, 0.32],
+  ])
   for (let c = 0; c < cols; c++) {
     const x = (c - (cols - 1) / 2) * cell
-    f.add(new THREE.CylinderGeometry(TR * 0.985, TR * 0.985, TH, 40, 1, true, Math.PI / 2, Math.PI), '#121828', T([x, 0, 0]), SATIN)
+    f.add(inward(new THREE.CylinderGeometry(TR * 0.985, TR * 0.985, TH, 28, 1, true, Math.PI / 2, Math.PI)), BACK, T([x, 0, 0]), SATIN, 0, 0)
     for (const sy of [-1, 1]) {
       const y = sy * (TH / 2)
-      f.add(lathe([[TR * 0.9, -0.06], [TR + 0.05, -0.06], [TR + 0.07, -0.03], [TR + 0.07, 0.04], [TR + 0.04, 0.08], [TR * 0.9, 0.08]], 48), CHROME_C, T([x, y + sy * 0.03, 0], [0, 0, 0], [1, sy, 1]), CHROME)
+      f.add(lathe([[TR * 0.88, -0.05], [TR + 0.05, -0.05], [TR + 0.075, -0.025], [TR + 0.075, 0.035], [TR + 0.045, 0.07], [TR * 0.88, 0.07]], 36), WHITE, T([x, y + sy * 0.02, 0], [0, 0, 0], [1, sy, 1]), GLOSS)
     }
-    for (const a of [OPEN, -OPEN]) f.add(cyl(0.022, 0.022, TH, 10), CHROME_C, T([x + Math.sin(a) * TR, 0, Math.cos(a) * TR]), CHROME)
+    // the glass's sides drawn in ink
+    for (const sx of [-1, 1]) f.add(box(0.014, TH - 0.08, 0.014), INK, T([x + sx * (TR + 0.004), 0, 0]), INKF, 0, 0)
     const tube = new THREE.Group()
     tube.name = `tube${c}`
     tube.position.x = x
-    const glass = new THREE.Mesh(glassGeo, s.glass)
+    const glass = new THREE.Mesh(glassGeom, s.glass)
     glass.name = 'glass'
     const nk = new Kit()
-    for (const sy of [-1, 1]) nk.add(tor(TR + 0.035, 0.016, 8, 48), '#ffffff', T([0, sy * (TH / 2 - 0.05), 0], [Math.PI / 2, 0, 0]), lit(1))
-    const neon = new THREE.Mesh(nk.geometry(), keep(new THREE.MeshBasicMaterial({ color: C('#5cf2ff', 1.6), vertexColors: true })))
+    for (const sy of [-1, 1]) nk.add(tor(TR + 0.04, 0.026, 8, 36), '#ffffff', T([0, sy * (TH / 2 - 0.045), 0], [Math.PI / 2, 0, 0]), lit(1), 0, 0)
+    for (const sy of [-1, 1]) f.outline(tor(TR + 0.04, 0.026, 8, 36), T([x, sy * (TH / 2 - 0.045), 0], [Math.PI / 2, 0, 0]), 0.013)
+    const neon = new THREE.Mesh(nk.geometry(), keep(new THREE.MeshBasicMaterial({ color: C('#5cf2ff'), vertexColors: true })))
     neon.name = 'neon'
     tube.add(glass, neon)
     root.add(tube)
@@ -3128,104 +3172,111 @@ function machineRig(o: { cols?: number; rows?: number; cell?: number }): Machine
   }
 
   // pillars: slim, so the tubes get the width
-  const PW = 0.44 * cell
-  const PX = W / 2 + 0.05 * cell + PW / 2
-  const PH = H + 0.8 * cell
+  const PW = 0.25 * cell
+  const PX = W / 2 + 0.04 * cell + PW / 2
+  const top = H / 2 + 0.08 * cell + 0.09
+  const HH = 0.18
+  const BH = 0.3
+  const bottom = -H / 2 - 0.08 * cell - BH / 2
+  const PH = top - bottom
   for (const sx of [-1, 1]) {
     const x = sx * PX
-    f.add(rbox(PW, PH, 0.9, 0.07, 3), NAVY, T([x, 0, -0.1]), PAINT)
-    f.add(rbox(PW - 0.1, PH - 0.5, 0.04, 0.035, 2), NAVY2, T([x, 0.05, 0.36]), PAINT)
-    // rivets down both edges of the inset
-    for (let y = -PH / 2 + 0.4; y < PH / 2 - 0.2; y += 0.32) for (const dx of [-1, 1]) f.add(dome(0.019), CHROME_C, T([x + dx * (PW / 2 - 0.036), y, 0.352]), CHROME)
-    // a neon strip on the inner edge
-    f.add(rbox(0.026, PH - 0.6, 0.03, 0.011), C('#5cf2ff', 1.8), T([x - sx * (PW / 2 - 0.016), 0.05, 0.37]), lit(1))
-    // hazard panel low on the pillar
-    const hz = T([x, -PH / 2 + 0.72, 0.39])
-    f.add(rbox(PW - 0.14, 0.46, 0.025, 0.03, 2), HAZARD, hz, GLOSS)
-    hazard(f, PW - 0.16, 0.44, mul(hz, T([0, 0, 0.014])), 0.12, 0.008)
-    // a steam vent: a grille with slats
-    const vy = 0.75 * cell
-    f.add(rbox(PW - 0.14, 0.4, 0.06, 0.035, 2), GRAPH, T([x, vy, 0.38]), SATIN)
-    for (let i = 0; i < 5; i++) f.add(rbox(PW - 0.21, 0.032, 0.04, 0.014), INKY, T([x, vy - 0.136 + i * 0.068, 0.4]), SATIN)
-    for (const dy of [-1, 1]) for (const dx of [-1, 1]) f.add(dome(0.014), CHROME_C, T([x + dx * (PW / 2 - 0.1), vy + dy * 0.17, 0.415]), CHROME)
+    f.add(rbox(PW, PH, 0.9, 0.09, 3), BODY, T([x, (top + bottom) / 2, -0.1]), PAINT)
+    // chasing bulbs down the front
+    for (let i = 0; i < 9; i++) {
+      const y = top - 0.5 - i * ((PH - 1.1) / 8)
+      button(f, 0.042, C('#ffe27a'), T([x, y, 0.355]), lit(1, FX.chase), i * 0.11)
+    }
+    // a steam vent: a grille with fat slats, low on the pillar
+    const vy = -1.75 * cell
+    inkPlate(f, PW - 0.06, 0.34, 0.05, T([x, vy, 0.36]), 0.014, 0.02)
+    f.add(rbox(PW - 0.06, 0.34, 0.05, 0.05, 2), NAVY, T([x, vy, 0.36]), SATIN, 0, 0)
+    for (let i = 0; i < 3; i++) f.add(rbox(PW - 0.12, 0.045, 0.03, 0.02), BODY2, T([x, vy - 0.09 + i * 0.09, 0.385]), SATIN, 0, 0)
   }
   const vents = [-1, 1].map((sx, i) => {
     const v = new THREE.Object3D()
     v.name = `vent${i}`
-    v.position.set(sx * PX, 0.75 * cell, 0.45)
+    v.position.set(sx * PX, -1.75 * cell, 0.45)
     root.add(v)
     return v
   })
 
-  // pipes: copper up the left pillar, chrome up the right, both into the header
-  const top = H / 2 + 0.3 * cell
-  // hugging the pillars' sides, so they add little to the width
-  const PO = PX + PW / 2 + 0.022
-  f.add(pipe([[-PO, -H / 2 - 0.3, 0.1], [-PO, top - 0.05, 0.1], [-PO + 0.24, top + 0.12, 0.1]], 0.046, 0.16, 12), COPPER_C, undefined, COPPER)
-  f.add(pipe([[PO, -H / 2 - 0.3, 0.05], [PO, top - 0.05, 0.05], [PO - 0.24, top + 0.12, 0.05]], 0.042, 0.16, 12), CHROME_C, undefined, CHROME)
-  for (const [x, y, c2] of [
-    [-PO, -0.8, COPPER_C],
-    [-PO, 1.6, COPPER_C],
-    [PO, -0.3, CHROME_C],
-    [PO, 2.0, CHROME_C],
-  ] as [number, number, string][])
-    f.add(cyl(0.064, 0.064, 0.06, 16), c2, T([x, y, x < 0 ? 0.1 : 0.05]), c2 === COPPER_C ? COPPER : CHROME)
-  // a red valve wheel on the copper pipe
-  const vw = T([-PO, 0.4, 0.2], [0, 0, 0])
-  f.add(cyl(0.025, 0.025, 0.12, 10), STEEL_C, mul(vw, T([0, 0, -0.05], [Math.PI / 2, 0, 0])), STEEL)
-  f.add(tor(0.09, 0.017, 8, 28), '#e8323c', vw)
-  for (let i = 0; i < 3; i++) f.add(cyl(0.01, 0.01, 0.18, 6), '#e8323c', mul(vw, T([0, 0, 0], [0, 0, (i * Math.PI) / 3])))
-
   // header and base: slim bars, so the board gets the height
-  const HW = W + 2 * PW + 0.22
-  const HH = 0.32 * cell
-  f.add(rbox(HW, HH, 0.95, 0.07, 3), NAVY, T([0, top, -0.08]), PAINT)
-  const trim = T([0, top - 0.055 * cell, 0.405])
-  f.add(rbox(HW - 0.1, 0.1, 0.03, 0.02, 2), HAZARD, trim, GLOSS)
-  hazard(f, HW - 0.12, 0.09, mul(trim, T([0, 0, 0.016])), 0.12, 0.008)
-  for (let x = -HW / 2 + 0.3; x < HW / 2 - 0.2; x += 0.4) f.add(dome(0.018), CHROME_C, T([x, top + 0.1, 0.39]), CHROME)
-  const BH = 0.44 * cell
-  const bottom = -H / 2 - 0.08 * cell - BH / 2
-  f.add(rbox(HW, BH, 1.0, 0.07, 3), NAVY, T([0, bottom, -0.05]), PAINT)
-  f.add(rbox(HW - 0.3, 0.24, 0.05, 0.05, 2), NAVY2, T([0, bottom + 0.03, 0.46]), PAINT)
-  const btrim = T([0, bottom - 0.165 * cell, 0.455])
-  f.add(rbox(HW - 0.1, 0.075, 0.03, 0.02, 2), HAZARD, btrim, GLOSS)
-  hazard(f, HW - 0.12, 0.065, mul(btrim, T([0, 0, 0.016])), 0.11, 0.008)
-  for (let c = 0; c < cols; c++) f.add(cyl(0.125, 0.135, 0.06, 32), CHROME_C, T([(c - (cols - 1) / 2) * cell, bottom + 0.04, 0.49], [Math.PI / 2, 0, 0]), CHROME)
-  const bk = new Kit()
-  bk.add(sph(0.1, 24, 12, ).applyMatrix4(T([0, 0, 0], [Math.PI / 2, 0, 0], [1, 0.55, 1])), '#ffffff', undefined, lit(1.6, FX.pulse))
+  const HW = W + 2 * PW + 0.06
+  f.add(rbox(HW, HH, 0.95, 0.08, 3), BODY, T([0, top, -0.08]), PAINT)
+  inkPlate(f, HW - 0.1, 0.07, 0.03, T([0, top - 0.005, 0.402]), 0.012, 0.012)
+  f.add(rbox(HW - 0.1, 0.07, 0.03, 0.03, 2), TRIM, T([0, top - 0.005, 0.395]), GLOSS, 0, 0)
+  f.add(rbox(HW, BH, 1.0, 0.09, 3), BODY, T([0, bottom, -0.05]), PAINT)
+  inkPlate(f, HW - 0.1, 0.06, 0.025, T([0, bottom + BH / 2 - 0.06, 0.462]), 0.012, 0.012)
+  f.add(rbox(HW - 0.1, 0.06, 0.03, 0.025, 2), TRIM, T([0, bottom + BH / 2 - 0.06, 0.455]), GLOSS, 0, 0)
+  for (let c = 0; c < cols; c++) {
+    const bx = (c - (cols - 1) / 2) * cell
+    inkDisc(f, 0.135, T([bx, bottom - 0.025, 0.47]), 0.014)
+    f.add(cyl(0.135, 0.14, 0.06, 28), NAVY, T([bx, bottom - 0.025, 0.45], [Math.PI / 2, 0, 0]), SATIN, 0, 0)
+  }
+  const bk = new Kit(0.016)
+  bk.add(sph(0.1, 20, 10).applyMatrix4(T([0, 0, 0], [Math.PI / 2, 0, 0], [1, 0.62, 1])), '#ffffff', undefined, lit(0.55, FX.pulse))
   const buttons = new THREE.InstancedMesh(bk.geometry(), s.frame, cols)
   buttons.name = 'buttons'
   for (let c = 0; c < cols; c++) {
-    buttons.setMatrixAt(c, T([(c - (cols - 1) / 2) * cell, bottom + 0.04, 0.52], [Math.PI / 2, 0, 0]))
+    buttons.setMatrixAt(c, T([(c - (cols - 1) / 2) * cell, bottom - 0.025, 0.5], [Math.PI / 2, 0, 0]))
     buttons.setColorAt(c, C(['#ff3b4f', '#ffd21f', '#3fe46a', '#3ea2ff', '#ff3fd2'][c % 5]))
   }
   root.add(buttons)
 
-  // gauges on the header ends, over the pillars
+  // the marquee: two boards standing on the header behind Volt, ROBO on the left and RIOT on the right
+  const marquee = new THREE.Group()
+  marquee.name = 'marquee'
+  const GAP = 0.92
+  const BW = HW / 2 - 0.27 - GAP
+  const MH = 0.6
+  const ledge = top + HH / 2
+  // raised a little, so the header's front edge does not hide their feet
+  const my = ledge + MH / 2 + 0.14
+  marquee.position.set(0, my, -0.74)
+  const mk = new Kit(STAGE_INK)
+  const lk = new Kit(STAGE_INK)
+  const words = ['ROBO', 'RIOT']
+  const colors = ['#62e6f4', '#ff7ad6']
+  for (const sx of [-1, 1]) {
+    const cx = sx * (GAP + BW / 2)
+    mk.add(rbox(BW, MH, 0.2, 0.14, 3), NAVY, T([cx, 0, 0]), SATIN)
+    mk.add(extrude(frameShape(rrOutline(BW - 0.02, MH - 0.02, 0.13), rrOutline(BW - 0.12, MH - 0.12, 0.08)), 0.04, 0.012), TRIM, T([cx, 0, 0.11]), GLOSS)
+    // bulbs round the rim, evenly spaced along it
+    const rim = rrOutline(BW - 0.07, MH - 0.07, 0.1, 3)
+    const segLen = rim.map((p, i) => Math.hypot(rim[(i + 1) % rim.length][0] - p[0], rim[(i + 1) % rim.length][1] - p[1]))
+    const perim = segLen.reduce((a, b) => a + b, 0)
+    const nb = Math.round(perim / 0.17)
+    for (let j = 0, i = 0, run = 0; j < nb; j++) {
+      const d = (j / nb) * perim
+      while (run + segLen[i] < d) run += segLen[i++]
+      const q = rim[i]
+      const r = rim[(i + 1) % rim.length]
+      const t = (d - run) / segLen[i]
+      mk.add(sph(0.032, 10, 6), C('#fff1b0'), T([cx + q[0] + (r[0] - q[0]) * t, q[1] + (r[1] - q[1]) * t, 0.14]), lit(1, FX.chase), (j * 0.11) % 0.9, 0.01)
+    }
+    signWord(lk, words[sx < 0 ? 0 : 1], 0.4 * cell, colors[sx < 0 ? 0 : 1], T([cx, -0.01, 0.15]))
+  }
+  marquee.add(mk.mesh('sign', s.frame))
+  const letters = lk.mesh('letters', keep(makeBody()))
+  marquee.add(letters)
+  root.add(marquee)
+
+  // gauges on the header's ends, over the pillars, standing above it
   const needles: THREE.Group[] = []
   for (const sx of [-1, 1]) {
-    const gx = sx * PX
-    const gy = top + 0.02
-    const gz = 0.43
-    const G = 0.86
-    const gm = (m: THREE.Matrix4) => mul(T([gx, gy, gz], [0, 0, 0], G), T([-gx, -gy, -gz]), m)
-    f.add(cyl(0.26, 0.27, 0.08, 40), CHROME_C, gm(T([gx, gy, gz - 0.02], [Math.PI / 2, 0, 0])), CHROME)
-    f.add(tor(0.245, 0.022, 10, 40), CHROME_C, gm(T([gx, gy, gz + 0.02])), CHROME)
-    f.add(cyl(0.23, 0.23, 0.02, 40), '#f3efe4', gm(T([gx, gy, gz + 0.012], [Math.PI / 2, 0, 0])), SATIN)
-    for (let i = 0; i <= 10; i++) {
-      const a = -2.2 + (i / 10) * 4.4
-      const zone = i < 6 ? '#2fbf5a' : i < 8 ? '#ffb21f' : '#ff3b3b'
-      f.add(rbox(0.016, i % 5 ? 0.04 : 0.06, 0.01, 0.004), i % 5 ? GRAPH : zone, gm(mul(T([gx, gy, gz + 0.025], [0, 0, -a]), T([0, 0.17, 0]))), SATIN)
-      if (i < 10) f.add(new THREE.RingGeometry(0.19, 0.21, 4, 1, Math.PI / 2 - a - 0.44, 0.44), zone, gm(T([gx, gy, gz + 0.023])), SATIN)
-    }
-    f.add(cyl(0.03, 0.03, 0.03, 16), CHROME_C, gm(T([gx, gy, gz + 0.04], [Math.PI / 2, 0, 0])), CHROME)
+    const gx = sx * (HW / 2 - 0.22)
+    const gy = ledge + 0.16
+    const gz = 0.1
+    f.add(cyl(0.2, 0.21, 0.09, 32), BODY2, T([gx, gy, gz - 0.02], [Math.PI / 2, 0, 0]), PAINT)
+    f.add(cyl(0.165, 0.165, 0.02, 32), WHITE, T([gx, gy, gz + 0.03], [Math.PI / 2, 0, 0]), SATIN, 0, 0)
+    for (let i = 0; i < 3; i++) f.add(new THREE.RingGeometry(0.11, 0.145, 6, 1, Math.PI / 2 - (-2.2 + (i + 1) * 1.4667), 1.4667), ['#3fd67a', '#ffc21a', '#ff4b4b'][i], T([gx, gy, gz + 0.042]), SATIN, 0, 0)
+    f.add(cyl(0.024, 0.024, 0.03, 12), GRAPH, T([gx, gy, gz + 0.05], [Math.PI / 2, 0, 0]), SATIN, 0, 0)
     const nk = new Kit()
-    nk.add(rbox(0.016, 0.2 * G, 0.01, 0.006), '#e8282f', T([0, 0.07 * G, 0]), GLOSS)
-    nk.add(cyl(0.022, 0.022, 0.012, 14), '#e8282f', T([0, 0, 0], [Math.PI / 2, 0, 0]), GLOSS)
+    nk.add(rbox(0.024, 0.15, 0.012, 0.01), '#e8282f', T([0, 0.055, 0]), GLOSS, 0, 0.006)
     const n = new THREE.Group()
     n.name = `needle${needles.length}`
-    n.position.set(gx, gy, gz + 0.032)
+    n.position.set(gx, gy, gz + 0.055)
     n.add(nk.mesh('needle', s.frame))
     n.rotation.z = sx * 0.9
     n.userData.rest = restOf(n)
@@ -3235,65 +3286,6 @@ function machineRig(o: { cols?: number; rows?: number; cell?: number }): Machine
 
   root.add(f.mesh('frame', s.frame))
 
-  // the marquee: an arched sign with chasing bulbs and the name in neon
-  const marquee = new THREE.Group()
-  marquee.name = 'marquee'
-  const MW = W + 0.9
-  const MH = 0.88 * cell
-  // sitting right on the header, so the board gets the height
-  const my = top + HH / 2 - 0.02 + MH / 2
-  marquee.position.set(0, my, 0.05)
-  const arch: P2[] = []
-  const N = 28
-  for (let i = 0; i <= N; i++) {
-    const t2 = i / N
-    const x = MW / 2 - t2 * MW
-    arch.push([x, MH / 2 - 0.2 + 0.2 * Math.sqrt(Math.max(0, 1 - (2 * x / MW) ** 2))])
-  }
-  const outline: P2[] = [...arch, [-MW / 2, -MH / 2 + 0.12], [-MW / 2 + 0.12, -MH / 2], [MW / 2 - 0.12, -MH / 2], [MW / 2, -MH / 2 + 0.12]]
-  const mk = new Kit()
-  mk.add(extrude(shapeOf(outline), 0.3, 0.04, 8, 3), '#121a2e', undefined, PAINT)
-  const inset = outline.map(([x, y]): P2 => [x * 0.955, y * 0.9 - 0.01])
-  mk.add(extrude(frameShape(outline.map(([x, y]): P2 => [x * 0.985, y * 0.97]), inset), 0.05, 0.012, 8, 2), CHROME_C, T([0, 0, 0.17]), CHROME)
-  // bulbs round the edge
-  const edge = outline.map(([x, y]): P2 => [x * 0.968, y * 0.935])
-  const perim: P2[] = []
-  for (let i = 0; i < edge.length; i++) {
-    const a = edge[i]
-    const b = edge[(i + 1) % edge.length]
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1])
-    const n = Math.max(1, Math.round(len / 0.2))
-    for (let j = 0; j < n; j++) perim.push([a[0] + ((b[0] - a[0]) * j) / n, a[1] + ((b[1] - a[1]) * j) / n])
-  }
-  const spaced: P2[] = []
-  let acc = 1
-  for (let i = 0; i < perim.length; i++) {
-    const p = perim[i]
-    const prev = spaced[spaced.length - 1]
-    if (!prev || Math.hypot(p[0] - prev[0], p[1] - prev[1]) >= 0.19) spaced.push(p)
-    acc++
-  }
-  void acc
-  spaced.forEach(([x, y]) => {
-    mk.add(cyl(0.03, 0.035, 0.03, 10), STEEL_C, T([x, y, 0.19], [Math.PI / 2, 0, 0]), STEEL)
-    mk.add(sph(0.04, 12, 8), C('#ffd88a', 2.2), T([x, y, 0.215]), lit(1, FX.chase))
-  })
-  // the name
-  const nt = neonText('ROBO RIOT', 0.47 * cell, 0.03 * cell, ['#5cf2ff', '#ff3fd2'])
-  for (const g of [nt.posts]) {
-    const geo = g.geometry()
-    geo.translate(0, -0.02, 0.2)
-    const pm = new THREE.Mesh(geo, s.frame)
-    marquee.add(pm)
-  }
-  const lg = nt.tubes.geometry()
-  lg.translate(0, -0.02, 0.24)
-  const letters = new THREE.Mesh(lg, keep(new THREE.MeshBasicMaterial({ vertexColors: true, color: '#ffffff' })))
-  letters.name = 'letters'
-  marquee.add(mk.mesh('sign', s.frame), letters)
-  // little rivets along the bottom
-  root.add(marquee)
-
   return {
     root,
     tubes,
@@ -3302,7 +3294,7 @@ function machineRig(o: { cols?: number; rows?: number; cell?: number }): Machine
     needles,
     vents,
     buttons,
-    size: { halfW: PO + 0.06, top: my + MH / 2, bottom: bottom - BH / 2, boardTop: H / 2, boardBottom: -H / 2 },
+    size: { halfW: HW / 2 + 0.03, top: my + MH / 2, bottom: bottom - BH / 2, boardTop: H / 2, boardBottom: -H / 2, ledge, gap: GAP },
   }
 }
 
@@ -3317,7 +3309,7 @@ export interface LeverRig {
   arm: THREE.Group
 }
 
-/** a big arcade lever: a chrome housing on a plate, a chrome arm and a red ball knob */
+/** a big cartoon arcade lever: a housing on a plate, a cream arm and a red ball knob */
 export function buildLever(): LeverRig {
   lod = STAGE_LOD
   try {
@@ -3331,18 +3323,14 @@ function leverRig(): LeverRig {
   const s = stage()
   const root = new THREE.Group()
   root.name = 'lever'
-  const b = new Kit()
-  b.add(rbox(0.3, 0.5, 0.1, 0.04, 3), '#1c2640', T([0, -0.05, -0.12]), PAINT)
-  b.add(cyl(0.13, 0.15, 0.18, 32), CHROME_C, T([0, 0, -0.02], [Math.PI / 2, 0, 0]), CHROME)
-  b.add(tor(0.13, 0.016, 8, 32), GRAPH, T([0, 0, 0.07]), GLOSS)
-  for (const dy of [-0.24, 0.14]) b.add(dome(0.02), CHROME_C, T([0, dy, -0.065]), CHROME)
+  const b = new Kit(STAGE_INK)
+  b.add(rbox(0.3, 0.5, 0.1, 0.06, 3), '#c93f52', T([0, -0.05, -0.12]), PAINT)
+  b.add(cyl(0.14, 0.16, 0.18, 24), GRAPH, T([0, 0, -0.02], [Math.PI / 2, 0, 0]), SATIN)
   root.add(b.mesh('housing', s.body))
-  const a = new Kit()
-  a.add(cyl(0.07, 0.07, 0.08, 24), GRAPH, T([0, 0, 0.1], [Math.PI / 2, 0, 0]), SATIN)
-  a.add(cyl(0.032, 0.036, 0.9, 16), CHROME_C, T([0, 0.45, 0.12]), CHROME)
-  a.add(tor(0.04, 0.012, 6, 16), GRAPH, T([0, 0.18, 0.12], [Math.PI / 2, 0, 0]), RUBBER)
-  a.add(sph(0.13, 32, 24), '#ff3141', T([0, 0.95, 0.12]))
-  a.add(tor(0.05, 0.014, 8, 20), CHROME_C, T([0, 0.835, 0.12], [Math.PI / 2, 0, 0]), CHROME)
+  const a = new Kit(STAGE_INK)
+  a.add(cyl(0.075, 0.075, 0.08, 18), '#ffcd3c', T([0, 0, 0.1], [Math.PI / 2, 0, 0]), GLOSS)
+  a.add(cyl(0.04, 0.045, 0.9, 12), WHITE, T([0, 0.45, 0.12]), GLOSS)
+  a.add(sph(0.14, 24, 16), '#ff3b4f', T([0, 0.95, 0.12]))
   const arm = new THREE.Group()
   arm.name = 'arm'
   arm.add(a.mesh('arm', s.body))
@@ -3358,30 +3346,29 @@ function leverRig(): LeverRig {
 let socketMat: THREE.Material | null = null
 let socketGlowTex: THREE.CanvasTexture | null = null
 
-/** a soft rounded square of light, brightest a little in from its edge: the backlight of a lit socket */
+/** a flat rounded square of light with a soft inner edge: the lit well of a full socket */
 function glowSquare() {
   if (socketGlowTex) return socketGlowTex
   const c = document.createElement('canvas')
   c.width = c.height = 128
   const g = c.getContext('2d')!
-  const grad = g.createRadialGradient(64, 64, 4, 64, 64, 64)
-  grad.addColorStop(0, 'rgba(255,255,255,0.55)')
-  grad.addColorStop(0.55, 'rgba(255,255,255,0.42)')
-  grad.addColorStop(0.82, 'rgba(255,255,255,0.16)')
-  grad.addColorStop(1, 'rgba(255,255,255,0)')
+  const grad = g.createRadialGradient(64, 64, 8, 64, 64, 70)
+  grad.addColorStop(0, 'rgba(255,255,255,0.5)')
+  grad.addColorStop(0.75, 'rgba(255,255,255,0.32)')
+  grad.addColorStop(1, 'rgba(255,255,255,0.22)')
   g.fillStyle = grad
-  roundRectPath(g, 2, 2, 124, 124, 30)
+  roundRectPath(g, 4, 4, 120, 120, 22)
   g.fill()
   socketGlowTex = new THREE.CanvasTexture(c)
   return socketGlowTex
 }
 
 /**
- * The 25 charging sockets of the Power Grid, in four instanced draws. Housings: a dark gunmetal frame with a slim
- * steel lip round a deep black well (setTint dims an empty one right down). Rims: a light pipe round the well
- * (setColor). Glows: a backlight in the well behind the cell (setGlow, off when empty). Latches: four clamps that
- * hide in the frame while open and bite in when clamped (setLatch 0..1). Positions are socket centres; each socket
- * is `size` across.
+ * The 25 charging sockets of the Power Grid, in four instanced draws. Housings: a fat indigo frame round a deep
+ * well, ink outlined (setTint dims an empty one right down). Rims: a lamp ring round the well (setColor). Glows: the
+ * well lit flat in the cell's colour (setGlow, off when empty). Latches: four fat yellow clamps that hide in the
+ * frame while open and bite in when clamped (setLatch 0..1). Positions are socket centres; each socket is `size`
+ * across.
  */
 export class SocketField {
   readonly root = new THREE.Group()
@@ -3398,42 +3385,37 @@ export class SocketField {
   constructor(positions: THREE.Vector3[], size = 1) {
     lod = 1.4
     // their own material, so the alarm (setAlert) leaves the rim colours to setColor
-    const mat = (socketMat ??= keep(withEnv({ m: makeBody(false) }).m))
+    const mat = (socketMat ??= keep(makeBody()))
     this.at = positions.map((p) => p.clone())
     this.scale = size
     this.shown = positions.map(() => true)
     this.latch = positions.map(() => 0)
     const n = positions.length
-    const h = new Kit()
+    const h = new Kit(0.018)
     const O = 0.96
     const I = 0.8
-    h.add(extrude(frameShape(rrOutline(O, O, 0.17, 6), rrOutline(I, I, 0.11, 6)), 0.1, 0.016, 8, 2), '#262d3c', T([0, 0, 0]), fin(0.4, 0.55, 0.35))
-    h.add(extrude(frameShape(rrOutline(I + 0.016, I + 0.016, 0.118, 6), rrOutline(I - 0.02, I - 0.02, 0.1, 6)), 0.024, 0.005, 6, 2), '#7c879c', T([0, 0, 0.042]), STEEL)
-    h.add(rbox(I, I, 0.04, 0.1, 2), '#05070b', T([0, 0, -0.06]), SATIN)
-    // a faint charging pad at the back of the well
-    h.add(tor(0.25, 0.006, 6, 40), '#1d2331', T([0, 0, -0.038]), STEEL)
-    for (const sx of [-1, 1]) for (const sy of [-1, 1]) h.add(dome(0.016), '#8a93a6', T([sx * 0.4, sy * 0.4, 0.066]), STEEL)
+    h.add(extrude(frameShape(rrOutline(O, O, 0.2, 5), rrOutline(I, I, 0.13, 5)), 0.1, 0.02, 8, 2), '#3d4684', T([0, 0, 0]), GLOSS)
+    h.add(rbox(I, I, 0.04, 0.12, 2), '#11163a', T([0, 0, -0.06]), SATIN, 0, 0)
     this.housings = new THREE.InstancedMesh(h.geometry(), mat, n)
     this.housings.name = 'housings'
     const r = new Kit()
-    r.add(pipe([...rrOutline(I - 0.05, I - 0.05, 0.09, 5).map(([x, y]): P3 => [x, y, 0])], 0.011, 0, 6, true), '#ffffff', T([0, 0, 0.03]), lit(1))
+    r.add(pipe([...rrOutline(I - 0.05, I - 0.05, 0.1, 4).map(([x, y]): P3 => [x, y, 0])], 0.016, 0, 6, true), '#ffffff', T([0, 0, 0.03]), lit(1), 0, 0)
     this.rims = new THREE.InstancedMesh(r.geometry(), mat, n)
     this.rims.name = 'rims'
     const glowMat = keep(new THREE.MeshBasicMaterial({ map: glowSquare(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }))
-    this.glows = new THREE.InstancedMesh(new THREE.PlaneGeometry(I - 0.02, I - 0.02), glowMat, n)
+    this.glows = new THREE.InstancedMesh(new THREE.PlaneGeometry(I - 0.03, I - 0.03), glowMat, n)
     this.glows.name = 'glows'
-    const l = new Kit()
+    const l = new Kit(0.012)
     for (let i = 0; i < 4; i++) {
       const m = T([0, 0, 0], [0, 0, (i * Math.PI) / 2])
-      l.add(rbox(0.2, 0.075, 0.05, 0.02, 2), CHROME_C, mul(m, T([0, I / 2 + 0.005, 0.075])), CHROME)
-      l.add(rbox(0.14, 0.035, 0.052, 0.012, 2), HAZARD, mul(m, T([0, I / 2 - 0.04, 0.076])), GLOSS)
+      l.add(rbox(0.22, 0.085, 0.06, 0.035, 2), HAZARD, mul(m, T([0, I / 2 + 0.0, 0.075])), GLOSS)
     }
     this.latches = new THREE.InstancedMesh(l.geometry(), mat, n)
     this.latches.name = 'latches'
     for (let i = 0; i < n; i++) {
       this.housings.setMatrixAt(i, this.matrix(i, 1))
       this.housings.setColorAt(i, this.tmp.setScalar(1))
-      this.rims.setColorAt(i, C('#5cf2ff', 1.4))
+      this.rims.setColorAt(i, C('#5cf2ff'))
       this.glows.setColorAt(i, this.tmp.setScalar(0))
       this.place(i)
     }
@@ -3457,12 +3439,12 @@ export class SocketField {
     this.latches.instanceMatrix.needsUpdate = true
   }
 
-  /** the rim light's colour (HDR: intensity multiplies it) */
-  setColor(i: number, color: THREE.ColorRepresentation, intensity = 1.4) {
+  /** the rim lamp's colour (intensity multiplies it; over 1 it squeezes towards white-hot) */
+  setColor(i: number, color: THREE.ColorRepresentation, intensity = 1) {
     this.rims.setColorAt(i, this.tmp.set(color).multiplyScalar(intensity))
     this.rims.instanceColor!.needsUpdate = true
   }
-  /** the backlight in the well behind the cell (0: off) */
+  /** the well's light behind the cell (0: off) */
   setGlow(i: number, color: THREE.ColorRepresentation, intensity: number) {
     this.glows.setColorAt(i, this.tmp.set(color).multiplyScalar(intensity))
     this.glows.instanceColor!.needsUpdate = true
@@ -3495,41 +3477,38 @@ export class SocketField {
 /*  Confetti of bolts and gears, and coins                              */
 /* ------------------------------------------------------------------ */
 
-let bitMat: THREE.MeshStandardMaterial | null = null
-/** shiny metal for the bits below, tinted per instance (instanceColor) or per mesh (color) */
+let bitMat: THREE.MeshToonMaterial | null = null
+/** toon shading for the bits below, ink outlined, tinted per instance (instanceColor) or per mesh (color) */
 export function bitMaterial() {
   if (bitMat) return bitMat
-  bitMat = new THREE.MeshStandardMaterial({ color: '#ffffff', metalness: 0.85, roughness: 0.28 })
-  bitMat.envMapIntensity = 1.2
-  if (envTex) bitMat.envMap = envTex
+  bitMat = new THREE.MeshToonMaterial({ color: '#ffffff', vertexColors: true, gradientMap: toonRamp(RAMP) })
   extraMats.add(bitMat)
   return bitMat
 }
 
 /**
- * Small solids for confetti and showers, each about 0.1 across, white (tint them with instanceColor, e.g. through
- * the Bits class in lib/three/fx with bitMaterial()): a gear, a hex bolt, a nut and a coin stamped with a bolt.
+ * Small solids for confetti and showers, each about 0.1 across, white with an ink outline (tint them with
+ * instanceColor, e.g. through the Bits class in lib/three/fx with bitMaterial()): a gear, a hex bolt, a nut and a
+ * coin stamped with a bolt.
  */
 export function bitGeometries() {
   lod = 1
   const one = (f: (k: Kit) => void) => {
-    const k = new Kit()
+    const k = new Kit(0.008)
     f(k)
     const g = k.geometry()
-    for (const a of ['color', 'aSurf', 'aFx']) g.deleteAttribute(a)
+    for (const a of ['aSurf', 'aFx']) g.deleteAttribute(a)
     return g
   }
-  const gear = one((k) => k.add(extrude(frameShape(gearOutline(8, 0.04, 0.052), circle(0.016, 12)), 0.016, 0.004, 4, 1), '#fff', undefined, GLOSS))
+  const gear = one((k) => k.add(extrude(frameShape(gearOutline(8, 0.04, 0.054), circle(0.016, 10)), 0.018, 0.004, 3, 1), '#fff', undefined, GLOSS))
   const bolt = one((k) => {
-    k.add(cyl(0.028, 0.028, 0.018, 6), '#fff', T([0, 0.035, 0]))
-    k.add(cyl(0.012, 0.012, 0.07, 10), '#fff')
-    for (let i = 0; i < 4; i++) k.add(tor(0.013, 0.003, 4, 10), '#fff', T([0, -0.02 + i * 0.012, 0], [Math.PI / 2, 0, 0]))
+    k.add(cyl(0.03, 0.03, 0.02, 6), '#fff', T([0, 0.035, 0]))
+    k.add(cyl(0.014, 0.014, 0.07, 8), '#fff')
   })
-  const nut = one((k) => k.add(extrude(frameShape(circle(0.034, 6), circle(0.015, 12)), 0.02, 0.004, 4, 1), '#fff', undefined, GLOSS))
+  const nut = one((k) => k.add(extrude(frameShape(circle(0.036, 6), circle(0.015, 10)), 0.022, 0.004, 3, 1), '#fff', undefined, GLOSS))
   const coin = one((k) => {
-    k.add(cyl(0.05, 0.05, 0.012, 28), '#fff', T([0, 0, 0], [Math.PI / 2, 0, 0]))
+    k.add(cyl(0.052, 0.052, 0.014, 22), '#fff', T([0, 0, 0], [Math.PI / 2, 0, 0]))
     for (const sz of [-1, 1]) {
-      k.add(tor(0.044, 0.004, 4, 28), '#fff', T([0, 0, sz * 0.006]))
       const b = shapeOf([
         [0.006, 0.026],
         [-0.016, -0.004],
@@ -3538,11 +3517,12 @@ export function bitGeometries() {
         [0.016, 0.004],
         [0.002, 0.004],
       ])
-      k.add(extrude(b, 0.004, 0, 1), '#fff', T([0, 0, sz * 0.007], [0, sz < 0 ? Math.PI : 0, 0]))
+      k.add(extrude(b, 0.004, 0, 1), '#fff7d8', T([0, 0, sz * 0.008], [0, sz < 0 ? Math.PI : 0, 0]), GLOSS, 0, 0)
     }
   })
   return { gear, bolt, nut, coin }
 }
+
 
 /* ------------------------------------------------------------------ */
 /*  Contact shadows and electric arcs                                   */
@@ -3598,16 +3578,19 @@ varying vec3 vTint;
 varying float vAlpha;
 varying float vAcross;
 void main() {
-  // clamped: pow() of a negative number is NaN, and one NaN pixel blooms the whole frame black
+  // a cartoon bolt: a white core, a band of its colour and an ink edge, all hard-edged
   float d = clamp(abs(vAcross * 2.0 - 1.0), 0.0, 1.0);
-  float core = 1.0 - smoothstep(0.0, 0.32, d);
-  float glow = pow(1.0 - d, 2.2);
-  gl_FragColor = vec4((vTint * glow * 1.3 + vec3(core) * 1.6) * vAlpha, 1.0);
+  vec3 tint = min(vTint, vec3(1.15));
+  vec3 col = mix(vec3(0.106, 0.086, 0.204), tint, step(d, 0.7));
+  col = mix(col, vec3(1.0), step(d, 0.3));
+  float a = vAlpha * step(d, 0.97);
+  if (a < 0.01) discard;
+  gl_FragColor = vec4(col, a);
 }`
 
 /**
- * Electric arcs and lightning: jagged ribbons from a to b that re-strike every few frames, a white-hot core in a
- * coloured glow, all in one additive draw. `bow` sags the arc sideways (magnet field lines), `jag` is how wild it
+ * Electric arcs and lightning: jagged ribbons from a to b that re-strike every few frames, drawn as cartoon bolts
+ * (a white core in a band of colour with an ink edge), all in one draw. `bow` sags the arc sideways (magnet field lines), `jag` is how wild it
  * is. Ribbons face +z (the scene looks along -z). Call update(dt) every frame.
  */
 export class Arcs {
@@ -3641,7 +3624,7 @@ export class Arcs {
     this.geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
     this.geo.setIndex(idx)
     this.geo.setDrawRange(0, 0)
-    this.mat = new THREE.ShaderMaterial({ vertexShader: ARC_VERT, fragmentShader: ARC_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
+    this.mat = new THREE.ShaderMaterial({ vertexShader: ARC_VERT, fragmentShader: ARC_FRAG, transparent: true, depthWrite: false })
     this.mesh = new THREE.Mesh(this.geo, this.mat)
     this.mesh.frustumCulled = false
     this.mesh.renderOrder = 11
@@ -3721,10 +3704,10 @@ export class Arcs {
 /* ------------------------------------------------------------------ */
 
 /**
- * Frees everything this module made: prototypes, live pieces' screens, materials, the atlas, Volt's face, the
- * environment map. Meshes from buildHost / buildMachine / buildLever share materials that this frees but own their
- * geometry: the scene disposes those geometries (or traverses and disposes them) itself; SocketField and Arcs
- * have their own dispose().
+ * Frees everything this module made: prototypes, live pieces' screens, materials, the atlas, Volt's face and this
+ * renderer's copy of the toon ramp. Meshes from buildHost / buildMachine / buildLever share materials that this frees
+ * but own their geometry: the scene disposes those geometries (or traverses and disposes them) itself; SocketField
+ * and Arcs have their own dispose().
  */
 export function disposeModels() {
   for (const p of protos.values())
@@ -3754,9 +3737,9 @@ export function disposeModels() {
   shadowMat?.dispose()
   shadowTex = null
   shadowMat = null
-  envTex?.dispose()
-  envTex = null
-  envRenderer = null
+  // the toon ramp is a shared cache (lib/three/toon, Pop Party uses the same one): disposing it drops this renderer's
+  // listener on it, which would otherwise keep the whole renderer alive (the next scene uploads it again)
+  toonRamp(RAMP).dispose()
 }
 
 /** disposes the geometry of every mesh under `o` (for the host, machine and lever rigs) */

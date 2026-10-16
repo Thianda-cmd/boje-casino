@@ -807,7 +807,7 @@ export default function RoboRiot() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0 }}
-                className={`${pill} relative transition-shadow ${grid.last ? '!ring-2 !ring-[#ff5468]/80 !shadow-[0_0_20px_-4px_#ff5468]' : ''}`}
+                className={`${pill} relative transition-colors ${grid.last ? '!border-[#ff5468] !bg-[#3a1030]/95' : ''}`}
                 aria-label={grid.last ? 'Last respin' : `${grid.left} respins left`}
               >
                 <span className={`${pillLabel} ${grid.last ? 'text-[#ff7a8a]' : 'text-[#9ff4ff]/80'}`}>{grid.last ? 'Last' : 'Respins'}</span>
@@ -826,7 +826,7 @@ export default function RoboRiot() {
                 {grid.reset > 0 && (
                   <motion.span
                     key={grid.reset}
-                    className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-[#5cf2ff] px-2 py-0.5 text-[10px] font-black uppercase leading-none tracking-wider text-[#04202a] shadow-[0_0_14px_#5cf2ff]"
+                    className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full border-2 border-[#1b1634] bg-[#5cf2ff] px-2 py-0.5 text-[10px] font-black uppercase leading-none tracking-wider text-[#1b1634] shadow-[0_2px_0_#1b1634]"
                     initial={{ opacity: 0, scale: 0.5, y: 8 }}
                     animate={{ opacity: [0, 1, 1, 0], scale: [0.5, 1.15, 1, 1], y: [8, 0, 0, -6] }}
                     transition={{ duration: 1.3, times: [0, 0.15, 0.75, 1] }}
@@ -843,7 +843,6 @@ export default function RoboRiot() {
                     initial={i < hud.cells ? { scale: 1.9, y: -4 } : false}
                     animate={hud.cells >= TRIGGER - 2 && hud.cells < TRIGGER && i >= hud.cells ? { opacity: [0.45, 1, 0.45] } : { scale: 1, y: 0 }}
                     transition={hud.cells >= TRIGGER - 2 && i >= hud.cells ? { duration: 0.6, repeat: Infinity } : { type: 'spring', stiffness: 500, damping: 15 }}
-                    className={hud.cells >= TRIGGER ? 'drop-shadow-[0_0_6px_#5cf2ff]' : ''}
                   >
                     <CellIcon on={i < hud.cells} className="h-[21px] w-[14px] sm:h-6 sm:w-4" />
                   </motion.span>
@@ -879,7 +878,7 @@ export default function RoboRiot() {
             {caption && (
               <motion.div
                 key={caption.id}
-                className="absolute inset-0 truncate text-center text-[13px] font-bold text-white/85 [text-shadow:0_1px_3px_rgba(0,0,0,.8)]"
+                className="absolute inset-0 truncate text-center text-[13px] font-bold text-white/90 [text-shadow:0_1.5px_0_#1b1634,0_0_3px_#1b1634]"
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
@@ -906,7 +905,8 @@ export default function RoboRiot() {
           >
             <span
               className={`inline-block ${p.big ? 'text-[28px] sm:text-[36px]' : 'text-[22px] sm:text-[28px]'}`}
-              style={{ color: p.big ? '#fff3b0' : '#fff', textShadow: `0 0 18px ${p.big ? '#ffc93d' : p.color}, 0 3px 0 #070b24, 0 0 3px #070b24, 0 0 3px #070b24` }}
+              // cartoon lettering: an ink outline and a hard drop, no glow
+              style={{ color: p.big ? '#ffe14a' : '#fff', WebkitTextStroke: '5px #1b1634', paintOrder: 'stroke fill', textShadow: '0 4px 0 #1b1634' }}
             >
               {p.text}
             </span>
@@ -925,9 +925,10 @@ export default function RoboRiot() {
             exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.18 } }}
             transition={{ type: 'spring', stiffness: 520, damping: 20 }}
           >
-            <div className="relative whitespace-nowrap rounded-lg border-2 border-[#5cf2ff] bg-[#071530]/95 px-2.5 py-1 font-mono text-[12px] font-black tracking-wider text-[#bffaff] shadow-[0_0_16px_-2px_#5cf2ff,inset_0_0_10px_rgba(92,242,255,.25)] sm:px-3 sm:text-[14px]">
+            {/* a cartoon speech bubble, inked like the machine */}
+            <div className="relative whitespace-nowrap rounded-xl border-[2.5px] border-[#1b1634] bg-white px-2.5 py-1 text-[12px] font-black uppercase tracking-wide text-[#1b1634] shadow-[0_3px_0_rgba(27,22,52,.55)] sm:px-3 sm:text-[14px]">
               {bubble.text}
-              <span className="absolute -right-[7px] top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 border-r-2 border-t-2 border-[#5cf2ff] bg-[#071530]" />
+              <span className="absolute -right-[8px] top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 border-r-[2.5px] border-t-[2.5px] border-[#1b1634] bg-white" />
             </div>
           </motion.div>
         )}
@@ -957,7 +958,7 @@ export default function RoboRiot() {
 
   return (
     <>
-      <GameShell panel={panel} stage={stage} stageClass="max-sm:h-[calc(100vw+205px)] max-sm:min-h-[520px]" />
+      <GameShell panel={panel} stage={stage} stageClass="max-sm:h-[calc(100vw+156px)] max-sm:min-h-[460px]" />
       <AnimatePresence>{paytable && <PaytableModal bet={bet} thumbs={thumbs} onClose={() => setPaytable(false)} />}</AnimatePresence>
       <AnimatePresence>
         {buying && (
@@ -997,7 +998,8 @@ export default function RoboRiot() {
   )
 }
 
-const pillBase = 'flex h-8 items-center rounded-full bg-[#081029]/90 ring-1 ring-[#5cf2ff]/20 shadow-[0_0_18px_-6px_rgba(92,242,255,.5)] sm:h-10'
+/** an inked counter pill, flat like the cabinet (no glow) */
+const pillBase = 'flex h-8 items-center rounded-full border-2 border-[#1b1634] bg-[#151c52]/95 shadow-[0_3px_0_rgba(27,22,52,.6),inset_0_1.5px_0_rgba(255,255,255,.13)] sm:h-10'
 /** a counter pill: label over value on phones, so three of them fit across; side by side from sm up */
 const pill = `${pillBase} flex-col justify-center gap-0.5 px-3.5 leading-none sm:flex-row sm:gap-2 sm:px-4`
 const pillLabel = 'text-[9px] font-bold uppercase tracking-wider sm:text-[11px]'
@@ -1030,37 +1032,41 @@ function BuyButton({ label, cost, tone, disabled, onClick }: { label: string; co
 
 /** a power cell: the HUD pips (dim until one lands) and the banners */
 function CellIcon({ on = true, gold = false, className = '' }: { on?: boolean; gold?: boolean; className?: string }) {
+  // drawn like the 3D cell: flat colours, an ink outline and a hard white shine (dim and outline-free until one lands)
+  const ink = '#1b1634'
   const core = gold ? '#ffcf3a' : '#5cf2ff'
-  const cap = on ? (gold ? '#ffe9a8' : '#dbe6f2') : 'rgba(255,255,255,.16)'
+  const cap = on ? (gold ? '#ffb020' : '#c3cde6') : 'rgba(255,255,255,.16)'
   return (
     <svg viewBox="0 0 20 32" className={className} aria-hidden>
-      <rect x="3.5" y="5" width="13" height="22" rx="3.5" fill={on ? (gold ? 'rgba(255,207,58,.2)' : 'rgba(92,242,255,.18)') : 'rgba(255,255,255,.05)'} stroke={on ? (gold ? '#ffe9a8' : '#c8fbff') : 'rgba(255,255,255,.22)'} strokeWidth="1.5" />
+      <rect x="3.5" y="5" width="13" height="22" rx="3.5" fill={on ? (gold ? '#fff2c4' : '#e2fdff') : 'rgba(255,255,255,.05)'} stroke={on ? ink : 'rgba(255,255,255,.22)'} strokeWidth={on ? 1.8 : 1.5} />
       {on && (
         <>
-          <rect x="7" y="8" width="6" height="16" rx="3" fill={core} />
-          <rect x="8.6" y="9.5" width="2.8" height="13" rx="1.4" fill="#fff" opacity=".85" />
-          <path d="M11.2 10.5 8.6 16.4h2.4l-1.3 5.2 3.4-6.6h-2.4l1.2-4.5Z" fill={gold ? '#a85d00' : '#06566a'} opacity=".75" />
+          <rect x="6.5" y="8.5" width="7" height="15" rx="2.5" fill={core} stroke={ink} strokeWidth="1.2" />
+          <path d="M11.2 10.3 8.3 16.6h2.6l-1.3 5.3 3.6-7h-2.6l1.3-4.6Z" fill="#fff" stroke={ink} strokeWidth=".9" strokeLinejoin="round" />
+          <rect x="4.9" y="7.2" width="1.6" height="7" rx=".8" fill="#fff" opacity=".9" />
         </>
       )}
-      <rect x="2" y="1.5" width="16" height="5" rx="2" fill={cap} />
-      <rect x="2" y="25.5" width="16" height="5" rx="2" fill={cap} />
+      <rect x="2" y="1.5" width="16" height="5" rx="2" fill={cap} stroke={on ? ink : 'none'} strokeWidth="1.5" />
+      <rect x="2" y="25.5" width="16" height="5" rx="2" fill={cap} stroke={on ? ink : 'none'} strokeWidth="1.5" />
     </svg>
   )
 }
 
 /** a lightning bolt: the respin pips and the Overclock label */
-function BoltIcon({ on = true, danger = false, color, className = '' }: { on?: boolean; danger?: boolean; color?: string; className?: string }) {
+function BoltIcon({ on = true, danger = false, color, ink = false, className = '' }: { on?: boolean; danger?: boolean; color?: string; ink?: boolean; className?: string }) {
   const fill = color ?? (on ? (danger ? '#ff5468' : '#5cf2ff') : 'rgba(255,255,255,.12)')
+  // the pips and the big bolts are inked like the machine; the small label bolt in the panel stays plain
+  const inked = on && (ink || !color)
   return (
-    <svg viewBox="0 0 14 20" className={className} aria-hidden>
+    <svg viewBox="-1 -1 16 22" className={className} aria-hidden>
       <path
         d="M9 1 2 11.2h4.4L4.6 19 12 8.6H7.6L9 1Z"
         fill={fill}
-        stroke={on && !color ? (danger ? '#ffd0d6' : '#e0fdff') : danger ? 'rgba(255,84,104,.6)' : 'none'}
-        strokeWidth="1"
+        stroke={inked ? '#1b1634' : danger ? 'rgba(255,84,104,.6)' : 'none'}
+        strokeWidth={inked ? 1.6 : 1}
         strokeLinejoin="round"
-        style={on && !color ? { filter: `drop-shadow(0 0 3px ${danger ? '#ff5468' : '#5cf2ff'})` } : undefined}
       />
+      {inked && <path d="M8.2 3.6 5 8.6" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" opacity=".85" />}
     </svg>
   )
 }
@@ -1069,7 +1075,6 @@ function BoltIcon({ on = true, danger = false, color, className = '' }: { on?: b
 function StampFx({ kind, onDone }: { kind: 'surge' | 'full'; onDone: () => void }) {
   const full = kind === 'full'
   const grad = full ? 'bg-[linear-gradient(180deg,#fff6cf_0%,#ffd45c_45%,#f39b12_100%)]' : 'bg-[linear-gradient(180deg,#ffffff_0%,#a8f7ff_40%,#22c7f0_100%)]'
-  const glow = full ? '#ffcf3a' : '#5cf2ff'
   const word = full ? 'Full grid' : 'Power surge!'
   return (
     <motion.div
@@ -1079,21 +1084,14 @@ function StampFx({ kind, onDone }: { kind: 'surge' | 'full'; onDone: () => void 
       transition={{ duration: full ? 2 : 1.5, times: [0, 0.12, 0.2, 0.82, 1], ease: 'easeOut' }}
       onAnimationComplete={onDone}
     >
-      <div className="relative whitespace-nowrap text-[40px] font-black uppercase italic leading-none tracking-tight sm:text-[64px]">
-        <span className="absolute inset-0 translate-x-[3px] text-[#ff3fd2] opacity-70 mix-blend-screen">{word}</span>
-        <span className="absolute inset-0 -translate-x-[3px] text-[#5cf2ff] opacity-70 mix-blend-screen">{word}</span>
-        <span className={`relative bg-clip-text text-transparent ${grad}`} style={{ filter: `drop-shadow(0 4px 0 #070b24) drop-shadow(0 0 18px ${glow})` }}>
-          {word}
-        </span>
-      </div>
+      <Toon look={grad} stroke={10} className="whitespace-nowrap text-[40px] font-black uppercase italic leading-none tracking-tight sm:text-[64px]">
+        {word}
+      </Toon>
       {full && (
-        <motion.div
-          className="mt-1 bg-[linear-gradient(100deg,#5cf2ff_0%,#ff3fd2_35%,#ffe14a_65%,#59ff7a_100%)] bg-clip-text text-[56px] font-black italic leading-none text-transparent [filter:drop-shadow(0_4px_0_#070b24)] sm:text-[84px]"
-          initial={{ scale: 0 }}
-          animate={{ scale: [0, 1.4, 1] }}
-          transition={{ delay: 0.25, duration: 0.45 }}
-        >
-          ×{FULL_MULT}
+        <motion.div initial={{ scale: 0 }} animate={{ scale: [0, 1.4, 1] }} transition={{ delay: 0.25, duration: 0.45 }}>
+          <Toon look="bg-[linear-gradient(100deg,#5cf2ff_0%,#ff3fd2_35%,#ffe14a_65%,#59ff7a_100%)]" stroke={12} className="mt-1 text-[56px] font-black italic leading-none sm:text-[84px]">
+            ×{FULL_MULT}
+          </Toon>
         </motion.div>
       )}
     </motion.div>
@@ -1117,19 +1115,17 @@ const TIER_LOOK = [
 ]
 const CYAN_TEXT = TIER_LOOK[0].text
 const GOLD_TEXT = TIER_LOOK[2].text
-const SHADOW = '[filter:drop-shadow(0_4px_0_#070b24)]'
-
-/** a title with the neon glitch: magenta and cyan ghosts either side of the gradient */
-function Glitch({ children, className, look }: { children: ReactNode; className: string; look: string }) {
+/**
+ * A cartoon title, lettered like the ROBO / RIOT boards: the gradient over a thick ink outline with a hard drop under it.
+ * The outline is a copy of the text behind, stroked, so the stroke never eats into the letters.
+ */
+function Toon({ children, className, look, stroke = 8 }: { children: ReactNode; className: string; look: string; stroke?: number }) {
   return (
     <div className={`relative ${className}`}>
-      <span className="absolute inset-0 translate-x-[2px] text-[#ff3fd2] opacity-60" aria-hidden>
+      <span className="absolute inset-0 text-[#1b1634] [filter:drop-shadow(0_4px_0_#1b1634)]" style={{ WebkitTextStroke: `${stroke}px #1b1634` }} aria-hidden>
         {children}
       </span>
-      <span className="absolute inset-0 -translate-x-[2px] text-[#5cf2ff] opacity-60" aria-hidden>
-        {children}
-      </span>
-      <span className={`relative bg-clip-text text-transparent ${SHADOW} ${look}`}>{children}</span>
+      <span className={`relative bg-clip-text text-transparent ${look}`}>{children}</span>
     </div>
   )
 }
@@ -1199,9 +1195,9 @@ function BannerCard({ banner, onTap, onTier }: { banner: Banner; onTap: () => vo
             exit={{ scale: 0.85, opacity: 0, transition: { duration: 0.12 } }}
             transition={{ type: 'spring', stiffness: 420, damping: 12 }}
           >
-            <Glitch look={TIER_LOOK[tier].text} className="whitespace-nowrap text-[34px] font-black uppercase italic leading-none tracking-tight sm:text-[50px]">
+            <Toon look={TIER_LOOK[tier].text} className="whitespace-nowrap text-[34px] font-black uppercase italic leading-none tracking-tight sm:text-[50px]">
               {TIERS[tier].name}
-            </Glitch>
+            </Toon>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1215,20 +1211,20 @@ function BannerCard({ banner, onTap, onTier }: { banner: Banner; onTap: () => vo
       <>
         <div className="relative mb-2 flex items-end gap-2">
           <motion.div animate={{ y: [0, -5, 0], rotate: [-12, -4, -12] }} transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}>
-            <CellIcon className="h-11 w-7 drop-shadow-[0_0_10px_#5cf2ff]" />
+            <CellIcon className="h-11 w-7" />
           </motion.div>
           <motion.div animate={{ y: [0, -8, 0], scale: [1, 1.08, 1] }} transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}>
-            <BoltIcon className="h-16 w-12" color={sup ? '#ffcf3a' : '#ffe14a'} />
+            <BoltIcon className="h-16 w-12" color={sup ? '#ffcf3a' : '#ffe14a'} ink />
           </motion.div>
           <motion.div animate={{ y: [0, -5, 0], rotate: [12, 4, 12] }} transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}>
-            <CellIcon gold={sup} className={`h-11 w-7 ${sup ? 'drop-shadow-[0_0_10px_#ffcf3a]' : 'drop-shadow-[0_0_10px_#5cf2ff]'}`} />
+            <CellIcon gold={sup} className="h-11 w-7" />
           </motion.div>
         </div>
-        <Glitch look={sup ? GOLD_TEXT : CYAN_TEXT} className="text-[44px] font-black uppercase italic leading-none tracking-tight sm:text-[64px]">
+        <Toon look={sup ? GOLD_TEXT : CYAN_TEXT} className="text-[44px] font-black uppercase italic leading-none tracking-tight sm:text-[64px]">
           {sup ? 'Super Grid' : 'Power Grid'}
-        </Glitch>
+        </Toon>
         <div className="relative mt-3 flex items-baseline gap-2">
-          <span className={`bg-clip-text text-[52px] font-black leading-none text-transparent ${SHADOW} ${CYAN_TEXT}`}>{RESPINS}</span>
+          <Toon look={CYAN_TEXT} className="text-[52px] font-black leading-none">{RESPINS}</Toon>
           <span className="text-[13px] font-extrabold uppercase tracking-[0.3em] text-white/80">respins</span>
         </div>
         <div className="relative mt-2 max-w-[300px] text-[14px] font-bold text-white/85">
@@ -1252,13 +1248,13 @@ function BannerCard({ banner, onTap, onTier }: { banner: Banner; onTap: () => vo
   } else if (banner.kind === 'end') {
     body = (
       <>
-        <div className={`relative bg-clip-text text-[28px] font-black uppercase italic leading-none tracking-tight text-transparent sm:text-[38px] ${SHADOW} ${CYAN_TEXT}`}>Power down!</div>
+        <Toon look={CYAN_TEXT} stroke={7} className="text-[28px] font-black uppercase italic leading-none tracking-tight sm:text-[38px]">Power down!</Toon>
         {banner.full && (
           <motion.div
             initial={{ scale: 0, rotate: -12 }}
             animate={{ scale: 1, rotate: -4 }}
             transition={{ type: 'spring', stiffness: 400, damping: 12, delay: 0.2 }}
-            className="relative mt-3 rounded-md bg-[linear-gradient(180deg,#ffe58a,#f5b41f)] px-2.5 py-1 text-[13px] font-black uppercase tracking-wider text-[#3a2400] shadow-[0_0_20px_-2px_#ffcf3a]"
+            className="relative mt-3 rounded-md border-2 border-[#1b1634] bg-[linear-gradient(180deg,#ffe58a,#f5b41f)] px-2.5 py-1 text-[13px] font-black uppercase tracking-wider text-[#3a2400] shadow-[0_3px_0_#1b1634]"
           >
             Full grid ×{FULL_MULT}
           </motion.div>
@@ -1273,9 +1269,9 @@ function BannerCard({ banner, onTap, onTier }: { banner: Banner; onTap: () => vo
   } else {
     body = (
       <>
-        <Glitch look={GOLD_TEXT} className="text-[40px] font-black uppercase italic leading-none tracking-tight sm:text-[56px]">
+        <Toon look={GOLD_TEXT} className="text-[40px] font-black uppercase italic leading-none tracking-tight sm:text-[56px]">
           Max win
-        </Glitch>
+        </Toon>
         {money}
         <div className="relative mt-1 text-[14px] font-bold text-white/85">{fmt(MAX_WIN, 0)}× your bet</div>
       </>
@@ -1407,7 +1403,7 @@ function PaytableModal({ bet, thumbs, onClose }: { bet: number; thumbs: Partial<
       <Card tone="#5cf2ff" icon={pic('host', 48)}>
         <span className="font-bold text-ink">Power Surge!</span> When 4 or 5 power cells land on a paid spin, Volt sometimes zaps in the missing ones and starts the Power Grid.
       </Card>
-      <Card tone="#ff8a2a" icon={<BoltIcon className="mx-2 h-10 w-8 shrink-0" color="#ff8a2a" />}>
+      <Card tone="#ff8a2a" icon={<BoltIcon className="mx-2 h-10 w-8 shrink-0" color="#ff8a2a" ink />}>
         <span className="font-bold text-ink">Buy the Power Grid</span> for {BUY_PRICE}× the bet ({money(BUY_PRICE)}): it starts with {TRIGGER} power cells or bots on random sockets.{' '}
         <span className="font-bold text-ink">Super Grid</span> costs {fmt(SUPER_PRICE, 0)}× ({money(SUPER_PRICE)}): the same plus a gold bot on a seventh socket.{' '}
         <span className="font-bold text-ink">Overclock</span> makes each spin cost {ANTE_COST}× the bet with the same pays and starts the Power Grid about 1.6× as often; the buys are off

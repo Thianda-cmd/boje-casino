@@ -14,6 +14,7 @@ import { RouletteWheel } from '../art/RouletteWheel'
 import { PrizeWheel } from '../art/PrizeWheel'
 import { wheelSegments } from '../games/wheel/rules'
 import { CrateArt, ItemArt } from '../games/cases/art'
+import { duckMarkup, type Expr } from '../games/derby/art'
 
 /* Lobby art. Chicken Road keeps its pixel look; everything else is clean vector art on a bold gradient. */
 
@@ -50,6 +51,10 @@ export function GameCover({ id }: { id: GameId }) {
       return <RouletteCover />
     case 'chompers':
       return <ChompersCover />
+    case 'battles':
+      return <BattlesCover />
+    case 'derby':
+      return <DerbyCover />
     case 'cases':
       return <CasesCover />
     case 'baccarat':
@@ -892,12 +897,12 @@ const ROBO_FONT = 'Manrope, system-ui, sans-serif'
 const ROBO_CITY: [number, number, number][] = [
   [-4, 128, 20], [14, 106, 18], [30, 138, 16], [44, 96, 18], [60, 120, 14], [140, 112, 16], [154, 90, 20], [172, 124, 14], [184, 100, 20],
 ]
-/** lit windows: a few per building, picked deterministically, in neon colours */
+/** lit windows: a few per building, picked deterministically, in warm lamplight */
 const ROBO_WINDOWS = ROBO_CITY.flatMap(([x, y, w], b) =>
   Array.from({ length: 5 }, (_, i) => {
     const col = (b * 7 + i * 3) % 3
     const row = (b * 5 + i * 7) % 6
-    return { x: x + 3 + col * ((w - 6) / 3), y: y + 6 + row * 9, c: ['#ffe14a', '#5cf2ff', '#ff6fd8'][(b + i) % 3] }
+    return { x: x + 3 + col * ((w - 6) / 3), y: y + 6 + row * 9, c: ['#ffd76a', '#ffe9a8', '#ffc24d'][(b + i) % 3] }
   }).filter((p) => p.y < 172),
 )
 /** the Power Grid sockets on the machine's sign: [label, colour] */
@@ -909,20 +914,19 @@ const ROBO_SOCKETS: [string, string][] = [
 ]
 
 /** A glass power cell like the game's: chrome caps, a glowing core, and a value tag under it when given. (x, y) is its top centre. */
-function CoverCell({ x, y, core, glow, tag, gold = false, rot = 0 }: { x: number; y: number; core: string; glow: string; tag?: string; gold?: boolean; rot?: number }) {
+function CoverCell({ x, y, core, tag, gold = false, rot = 0 }: { x: number; y: number; core: string; tag?: string; gold?: boolean; rot?: number }) {
   const cap = gold ? '#ffd45a' : '#e3eaf3'
   return (
     <g transform={`rotate(${rot} ${x} ${y + 18})`}>
-      <circle cx={x} cy={y + 18} r={gold ? 19 : 24} fill={glow} />
-      <rect x={x - 10} y={y + 4} width="20" height="28" rx="5" fill={gold ? '#7a4a00' : '#5cf2ff'} fillOpacity={gold ? 0.55 : 0.25} stroke={RINK} strokeWidth="2.5" />
+      <rect x={x - 10} y={y + 4} width="20" height="28" rx="5" fill={gold ? '#ffe6a0' : '#c9f3ff'} stroke={RINK} strokeWidth="2.5" />
       <rect x={x - 5} y={y + 8} width="10" height="20" rx="5" fill={core} />
       <rect x={x - 2.4} y={y + 10} width="3.6" height="15" rx="1.8" fill="#fff" opacity=".9" />
       <rect x={x - 12.5} y={y} width="25" height="7" rx="2.5" fill={cap} stroke={RINK} strokeWidth="2.5" />
       <rect x={x - 12.5} y={y + 29} width="25" height="7" rx="2.5" fill={cap} stroke={RINK} strokeWidth="2.5" />
       {tag && (
         <g>
-          <rect x={x - 16} y={y + 39} width="32" height="16" rx="4" fill="#060a1c" stroke={gold ? '#ffcf3a' : '#aab4c8'} strokeWidth="2" />
-          <text x={x} y={y + 51.5} textAnchor="middle" fontSize="12" fontWeight="900" fill={core} fontFamily={ROBO_FONT}>
+          <rect x={x - 16} y={y + 39} width="32" height="16" rx="5" fill="#fff" stroke={RINK} strokeWidth="2.5" />
+          <text x={x} y={y + 51.5} textAnchor="middle" fontSize="12" fontWeight="900" fill={RINK} fontFamily={ROBO_FONT}>
             {tag}
           </text>
         </g>
@@ -931,8 +935,8 @@ function CoverCell({ x, y, core, glow, tag, gold = false, rot = 0 }: { x: number
   )
 }
 
-/** Robo Riot: Volt, the big toy robot, behind his machine's marquee in a neon workshop at night, a power cell held high
- *  and lightning crackling from his other claw. */
+/** Robo Riot: Volt, the big cartoon toy robot, behind his machine's red marquee in the workshop at night, a power cell
+ *  held high and a lightning bolt from his other claw. */
 function RoboRiotCover() {
   const u = useUid()
   const arm = (d: string) => (
@@ -949,16 +953,17 @@ function RoboRiotCover() {
   )
   const bolt = '166,60 175,44 169,42 181,25 175,23 188,4'
   return (
-    <Scene from="#2fd3ff" to="#2a1366">
+    <Scene from="#8f78ff" to="#2a1660">
       <defs>
         <linearGradient id={`${u}m`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#ffffff" />
-          <stop offset=".55" stopColor="#e2e8f1" />
-          <stop offset="1" stopColor="#a9b5c8" />
+          <stop offset=".62" stopColor="#f1f4fa" />
+          <stop offset=".62" stopColor="#d6deeb" />
+          <stop offset="1" stopColor="#d6deeb" />
         </linearGradient>
         <linearGradient id={`${u}a`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#f2f5fa" />
-          <stop offset="1" stopColor="#a9b5c8" />
+          <stop offset="0" stopColor="#f4f6fb" />
+          <stop offset="1" stopColor="#d6deeb" />
         </linearGradient>
         <linearGradient id={`${u}t`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#6ff5ea" />
@@ -966,47 +971,33 @@ function RoboRiotCover() {
           <stop offset="1" stopColor="#0d958c" />
         </linearGradient>
         <radialGradient id={`${u}s`} cx=".4" cy=".35" r=".8">
-          <stop offset="0" stopColor="#17386a" />
-          <stop offset="1" stopColor="#060d24" />
+          <stop offset="0" stopColor="#25407a" />
+          <stop offset="1" stopColor="#13234d" />
         </radialGradient>
         <linearGradient id={`${u}r`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#ff8a8a" />
           <stop offset="1" stopColor="#d81e2c" />
         </linearGradient>
         <linearGradient id={`${u}k`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#2b2170" />
-          <stop offset="1" stopColor="#120b36" />
+          <stop offset="0" stopColor="#ff5a5f" />
+          <stop offset=".5" stopColor="#ff5a5f" />
+          <stop offset=".5" stopColor="#e2343f" />
+          <stop offset="1" stopColor="#e2343f" />
         </linearGradient>
-        <radialGradient id={`${u}gc`}>
-          <stop offset="0" stopColor="#5cf2ff" stopOpacity=".75" />
-          <stop offset="1" stopColor="#5cf2ff" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`${u}gy`}>
-          <stop offset="0" stopColor="#ffd34a" stopOpacity=".8" />
-          <stop offset="1" stopColor="#ffd34a" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id={`${u}b`} x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor="#ff4a4a" stopOpacity=".5" />
-          <stop offset="1" stopColor="#ff4a4a" stopOpacity="0" />
-        </linearGradient>
-        <filter id={`${u}f`} x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="2.4" />
-        </filter>
       </defs>
 
       {/* the window onto the city: searchlights, the moon, the skyline with its lit windows */}
-      <path d="M20 250 L64 -4 L84 -4 Z M188 250 L128 -4 L146 -4 Z" fill="#fff" opacity=".07" />
-      <g fill="#1a0e4c" opacity=".8">
+      <circle cx="34" cy="34" r="17" fill="#fff4d0" stroke={RINK} strokeWidth="2.5" />
+      <circle cx="29" cy="30" r="3.4" fill="#f0dfa8" />
+      <circle cx="39" cy="40" r="2.4" fill="#f0dfa8" />
+      <g fill="#3d2580">
         {ROBO_CITY.map(([x, y, w]) => (
           <rect key={x} x={x} y={y} width={w} height={190 - y} />
         ))}
       </g>
       {ROBO_WINDOWS.map((w, i) => (
-        <rect key={i} x={w.x} y={w.y} width="2.6" height="3" fill={w.c} opacity=".85" />
+        <rect key={i} x={w.x} y={w.y} width="2.6" height="3" fill={w.c} />
       ))}
-
-      {/* Volt's beacon swings its red light up through the room */}
-      <path d="M100 30 L34 -6 L76 -6 Z M100 30 L150 -6 L188 -6 Z" fill={`url(#${u}b)`} />
 
       {/* the body, with the chest panel, its power core and LEDs */}
       <g stroke={RINK} strokeWidth="3" strokeLinejoin="round">
@@ -1014,7 +1005,6 @@ function RoboRiotCover() {
         <rect x="80" y="116" width="40" height="44" rx="8" fill={`url(#${u}t)`} strokeWidth="2.5" />
         <circle cx="100" cy="136" r="12" fill={`url(#${u}s)`} strokeWidth="2.5" />
       </g>
-      <circle cx="100" cy="136" r="16" fill={`url(#${u}gy)`} />
       <path d="M102.5 127 95 138h5l-2.5 8.5 8-11.5h-5l2-8Z" fill="#ffe14a" stroke="#fff6c0" strokeWidth=".8" strokeLinejoin="round" />
       {['#ff4fd8', '#ffe14a', '#59ff7a', '#5cf2ff'].map((c, i) => (
         <circle key={c} cx={88 + i * 8} cy="154" r="2" fill={c} />
@@ -1030,14 +1020,12 @@ function RoboRiotCover() {
         <circle cx="46" cy="104" r="5.5" />
         <circle cx="154" cy="104" r="5.5" />
       </g>
-      <CoverCell x={37} y={40} core="#ffb21f" glow={`url(#${u}gy)`} gold rot={-8} />
+      <CoverCell x={37} y={40} core="#ffb21f" gold rot={-8} />
       {pincer('M31 88 Q25 82 30 74')}
       {pincer('M44 88 Q50 81 44 73')}
 
-      <polyline points={bolt} fill="none" stroke="#5cf2ff" strokeWidth="9" strokeLinejoin="round" strokeLinecap="round" opacity=".45" filter={`url(#${u}f)`} />
-      <polyline points={bolt} fill="none" stroke="#bff9ff" strokeWidth="3.2" strokeLinejoin="round" strokeLinecap="round" />
-      <polyline points="166,60 158,46 162,42 152,32" fill="none" stroke="#bff9ff" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" opacity=".85" />
-      <circle cx="166" cy="62" r="13" fill={`url(#${u}gc)`} />
+      <polyline points={bolt} fill="none" stroke={RINK} strokeWidth="9" strokeLinejoin="round" strokeLinecap="round" />
+      <polyline points={bolt} fill="none" stroke="#ffe14a" strokeWidth="4.5" strokeLinejoin="round" strokeLinecap="round" />
       {pincer('M160 84 Q154 74 160 66')}
       {pincer('M171 84 Q178 74 171 66')}
 
@@ -1045,11 +1033,9 @@ function RoboRiotCover() {
       <g stroke={RINK} strokeWidth="3" strokeLinecap="round">
         <path d="M76 44 L68 20 M124 44 L132 20" />
       </g>
-      <circle cx="68" cy="18" r="11" fill={`url(#${u}gc)`} />
-      <circle cx="132" cy="18" r="11" fill={`url(#${u}gc)`} />
       <g stroke={RINK} strokeWidth="2.5">
-        <circle cx="68" cy="18" r="4.6" fill="#8ff8ff" />
-        <circle cx="132" cy="18" r="4.6" fill="#8ff8ff" />
+        <circle cx="68" cy="18" r="5.2" fill="#ffd34a" />
+        <circle cx="132" cy="18" r="5.2" fill="#ffd34a" />
         <rect x="87" y="35" width="26" height="7" rx="2" fill="#6f7c94" />
         <path d="M90 36 A10 10 0 0 1 110 36 Z" fill={`url(#${u}r)`} />
       </g>
@@ -1062,9 +1048,6 @@ function RoboRiotCover() {
       </g>
       <path d="M73 54 Q73 51 77 51 H100 L88 64 H73 Z" fill="#fff" opacity=".08" />
       <g fill="none" stroke="#5cf2ff" strokeLinecap="round">
-        <g strokeWidth="9" opacity=".5" filter={`url(#${u}f)`}>
-          <path d="M80 75 Q87 64 94 75 M106 75 Q113 64 120 75 M88 82 Q100 93 112 82" />
-        </g>
         <path d="M80 75 Q87 64 94 75 M106 75 Q113 64 120 75" strokeWidth="4.5" />
         <path d="M88 82 Q100 93 112 82" strokeWidth="4" />
       </g>
@@ -1072,24 +1055,18 @@ function RoboRiotCover() {
       <ellipse cx="121.5" cy="84" rx="4.2" ry="2.6" fill="#ff5fb0" opacity=".9" />
 
       {/* a power cell with its value hovers by his side */}
-      <CoverCell x={176} y={118} core="#ff4fd8" glow={`url(#${u}gc)`} tag="25" rot={10} />
+      <CoverCell x={176} y={118} core="#ff4fd8" tag="25" rot={10} />
 
       {/* the machine's marquee: chasing bulbs, and the Power Grid sockets lit with values */}
       <path d="M4 254 V186 Q4 172 18 172 H182 Q196 172 196 186 V254 Z" fill={`url(#${u}k)`} stroke={RINK} strokeWidth="3" />
-      <g filter={`url(#${u}f)`} opacity=".9">
-        {Array.from({ length: 15 }, (_, i) => (
-          <circle key={i} cx={16 + i * 12} cy="180" r="3.2" fill={i % 3 === 1 ? '#ff8fd8' : '#ffe9a8'} />
-        ))}
-      </g>
       {Array.from({ length: 15 }, (_, i) => (
-        <circle key={i} cx={16 + i * 12} cy="180" r="2.2" fill="#fffaf0" />
+        <circle key={i} cx={16 + i * 12} cy="180" r="2.8" fill={i % 2 ? '#fff4c2' : '#ffd34a'} stroke={RINK} strokeWidth="1.2" />
       ))}
-      <rect x="14" y="190" width="172" height="70" rx="9" fill="#070a20" stroke="#5cf2ff" strokeWidth="2" />
+      <rect x="14" y="190" width="172" height="70" rx="9" fill="#25226b" stroke={RINK} strokeWidth="2.5" />
       {ROBO_SOCKETS.map(([t, c], i) => (
         <g key={t}>
-          <rect x={22 + i * 41} y="198" width="33" height="28" rx="6" fill={c} opacity=".35" filter={`url(#${u}f)`} />
-          <rect x={22 + i * 41} y="198" width="33" height="28" rx="6" fill="#0b1235" stroke={c} strokeWidth="2.2" />
-          <text x={38.5 + i * 41} y="217" textAnchor="middle" fontSize="14" fontWeight="900" fill="#fff" stroke={c} strokeWidth="2.6" paintOrder="stroke" fontFamily={ROBO_FONT}>
+          <rect x={22 + i * 41} y="198" width="33" height="28" rx="6" fill={c} stroke={RINK} strokeWidth="2.5" />
+          <text x={38.5 + i * 41} y="217" textAnchor="middle" fontSize="14" fontWeight="900" fill="#fff" stroke={RINK} strokeWidth="3" paintOrder="stroke" fontFamily={ROBO_FONT}>
             {t}
           </text>
         </g>
@@ -1257,6 +1234,211 @@ function BaccaratCover() {
       </g>
       <Sparkle x={182} y={30} r={4} />
       <Sparkle x={22} y={118} r={3} />
+    </Scene>
+  )
+}
+
+/** Case Battles: two players' reels face off over their open crates. The right reel has stopped on a grand diamond (the
+ *  winner, crowned), the left on a copper coin; a vs badge sits between them. */
+function BattlesCover() {
+  const u = useUid()
+  const cols: { x: number; avatar: number; tiles: ['ring' | 'bag', 'diamond' | 'copper', 'coins' | 'watch']; hit: string; tier: 'high' | 'extreme'; win: boolean }[] = [
+    { x: 16, avatar: 2, tiles: ['bag', 'copper', 'watch'], hit: '#8d9fb4', tier: 'extreme', win: false },
+    { x: 110, avatar: 9, tiles: ['ring', 'diamond', 'coins'], hit: '#ffc23d', tier: 'high', win: true },
+  ]
+  const W = 74
+  const top = 52
+  const H = 132
+  const mid = top + H / 2
+  return (
+    <Scene from="#ff7a3d" to="#2a0d0a">
+      <defs>
+        <radialGradient id={`${u}g`} cx=".5" cy=".5" r=".5">
+          <stop offset="0" stopColor="#fff1d6" stopOpacity=".9" />
+          <stop offset=".4" stopColor="#ffb547" stopOpacity=".45" />
+          <stop offset="1" stopColor="#ff7a3d" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${u}f`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#0b1621" />
+          <stop offset=".24" stopColor="#0b1621" stopOpacity="0" />
+          <stop offset=".76" stopColor="#0b1621" stopOpacity="0" />
+          <stop offset="1" stopColor="#0b1621" />
+        </linearGradient>
+        {cols.map((c, i) => (
+          <clipPath key={i} id={`${u}c${i}`}>
+            <rect x={c.x} y={top} width={W} height={H} rx="12" />
+          </clipPath>
+        ))}
+      </defs>
+      {Array.from({ length: 9 }, (_, i) => (
+        <path key={i} d="M100 250 L94 -40 L106 -40 Z" fill="#fff" opacity=".06" transform={`rotate(${(i - 4) * 16} 100 250)`} />
+      ))}
+      <ellipse cx="147" cy={mid} rx="70" ry="80" fill={`url(#${u}g)`} />
+      {cols.map((c, i) => (
+        <g key={i}>
+          <rect x={c.x} y={top} width={W} height={H} rx="12" fill="#0b1621" opacity=".94" />
+          <g clipPath={`url(#${u}c${i})`}>
+            {c.tiles.map((k, j) => {
+              const y = mid - 25 + (j - 1) * 56
+              const hit = j === 1
+              return (
+                <g key={k} opacity={hit ? 1 : 0.55}>
+                  <rect x={c.x + 8} y={y} width={W - 16} height={50} rx="7" fill="#15283a" stroke={hit ? c.hit : '#ffffff'} strokeOpacity={hit ? 1 : 0.08} strokeWidth={hit ? 2.2 : 1} />
+                  {hit && <rect x={c.x + 8} y={y} width={W - 16} height={50} rx="7" fill={c.hit} opacity=".16" />}
+                  <ItemArt kind={k} size={hit ? 40 : 34} x={c.x + W / 2 - (hit ? 20 : 17)} y={y + (hit ? 4 : 8)} />
+                </g>
+              )
+            })}
+            <rect x={c.x} y={top} width={W} height={H} fill={`url(#${u}f)`} />
+          </g>
+          {/* the marker notches */}
+          <path d={`M${c.x} ${mid - 5}v10l7-5Z`} fill={c.hit} />
+          <path d={`M${c.x + W} ${mid - 5}v10l-7-5Z`} fill={c.hit} />
+          {/* the crate it came from, lid up */}
+          <g style={{ filter: 'drop-shadow(0 6px 6px rgba(30,8,0,.45))' }}>
+            <CrateArt tier={c.tier} part="body" size={62} x={c.x + W / 2 - 31} y={top + H + 2} />
+          </g>
+          <g transform={`translate(0 -7) rotate(${i ? 9 : -9} ${c.x + W / 2} ${top + H + 22})`}>
+            <CrateArt tier={c.tier} part="lid" size={62} x={c.x + W / 2 - 31} y={top + H + 2} />
+          </g>
+          {/* the player */}
+          <circle cx={c.x + W / 2} cy={top} r="15" fill={c.win ? '#ffc23d' : '#2b475c'} />
+          <g transform={`translate(${c.x + W / 2 - 13} ${top - 13})`}>
+            <Avatar index={c.avatar} size={26} />
+          </g>
+        </g>
+      ))}
+      {/* the winner's crown */}
+      <g transform={`translate(${110 + W / 2 - 13} ${top - 40}) rotate(8 13 10)`} style={{ filter: 'drop-shadow(0 3px 3px rgba(40,10,0,.45))' }}>
+        <path d="M2 20 1 6.5 7.5 12 13 2.5 18.5 12 25 6.5 24 20Z" fill="#f4b72f" stroke="#8a5705" strokeWidth="1.2" strokeLinejoin="round" />
+        <rect x="1.6" y="18.4" width="22.8" height="4.4" rx="1.4" fill="#c98b12" stroke="#8a5705" strokeWidth="1" />
+        <circle cx="13" cy="2.5" r="1.8" fill="#fff6cf" />
+      </g>
+      {/* vs */}
+      <circle cx="100" cy={mid} r="16" fill="#0b1621" stroke="#ff7a3d" strokeWidth="2.5" />
+      <text x="100" y={mid + 4.6} textAnchor="middle" fontSize="13" fontWeight="900" fill="#fff" fontFamily="Manrope, system-ui, sans-serif" letterSpacing=".5">
+        VS
+      </text>
+      <Sparkle x={188} y={78} r={4.5} />
+      <Sparkle x={104} y={44} r={3.5} />
+      <Sparkle x={194} y={160} r={3} />
+    </Scene>
+  )
+}
+
+const DERBY_COLORS = ['#ffd23f', '#5cc6ff', '#a984ff', '#ff86c8', '#46dd8c', '#ffa63d']
+
+/** a rubber duck from the Duck Derby model, its waterline at (x, y) */
+function CoverDuck({ lane, x, y, s, expr = 'happy', beak = 0, tilt = 0 }: { lane: number; x: number; y: number; s: number; expr?: Expr; beak?: number; tilt?: number }) {
+  const u = useUid()
+  return <g transform={`translate(${x} ${y}) rotate(${tilt}) scale(${s})`} dangerouslySetInnerHTML={{ __html: duckMarkup(lane, u, expr, beak) }} />
+}
+
+/** Duck Derby: the field charging down the river to the finish flag, Quackers riding a wave out in front. */
+function DerbyCover() {
+  const u = useUid()
+  const DINK = '#26182f'
+  return (
+    <Scene from="#8fe1ff" to="#1477c4">
+      <defs>
+        <linearGradient id={`${u}w`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#9aeaf8" />
+          <stop offset=".45" stopColor="#4cc2e6" />
+          <stop offset="1" stopColor="#1782c4" />
+        </linearGradient>
+        <radialGradient id={`${u}sun`}>
+          <stop offset="0" stopColor="#fff6c2" stopOpacity=".9" />
+          <stop offset="1" stopColor="#fff6c2" stopOpacity="0" />
+        </radialGradient>
+        <pattern id={`${u}chk`} width="8" height="8" patternUnits="userSpaceOnUse">
+          <rect width="8" height="8" fill="#fff" />
+          <rect width="4" height="4" fill={DINK} />
+          <rect x="4" y="4" width="4" height="4" fill={DINK} />
+        </pattern>
+      </defs>
+
+      {/* a sleepy sun and a cloud */}
+      <circle cx="160" cy="36" r="34" fill={`url(#${u}sun)`} />
+      <circle cx="160" cy="36" r="15" fill="#ffe066" stroke="#f2a91d" strokeWidth="2" />
+      <path d="M154 34 q2.5 2.5 5 0 M161 34 q2.5 2.5 5 0" stroke="#c9781a" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      <path d="M155.5 39.5 q4.5 4 9 0" stroke="#c9781a" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      <g fill="#fff">
+        <circle cx="82" cy="44" r="9" />
+        <circle cx="95" cy="38" r="12" />
+        <circle cx="108" cy="45" r="8" />
+        <rect x="75" y="44" width="40" height="8" rx="4" />
+      </g>
+
+      {/* race-day bunting in the six ducks' colours */}
+      <path d="M-5 14 Q100 40 205 12" fill="none" stroke={DINK} strokeWidth="1.4" />
+      {[0.1, 0.22, 0.34, 0.46, 0.58, 0.7, 0.82, 0.94].map((t, i) => {
+        const x = (1 - t) * (1 - t) * -5 + 2 * (1 - t) * t * 100 + t * t * 205
+        const y = (1 - t) * (1 - t) * 14 + 2 * (1 - t) * t * 40 + t * t * 12
+        return <path key={t} d={`M${x - 6} ${y} L${x + 6} ${y} L${x} ${y + 13} Z`} fill={DERBY_COLORS[i % 6]} stroke={DINK} strokeWidth="1.3" strokeLinejoin="round" />
+      })}
+
+      {/* hills, trees and the far bank */}
+      <path d="M-5 92 Q30 70 62 86 T130 80 T205 84 V112 H-5 Z" fill="#86cfae" />
+      {[8, 30, 52, 76, 98, 122, 146, 170, 194].map((x, i) => (
+        <circle key={x} cx={x} cy={96 + (i % 2) * 3} r={13 + (i % 3) * 2} fill={i % 2 ? '#4fb65a' : '#5cc463'} />
+      ))}
+      <rect x="-5" y="100" width="210" height="16" fill="#6fcd6a" />
+      <rect x="-5" y="112" width="210" height="5" fill="#e3c78e" />
+
+      {/* the finish post */}
+      <rect x="164" y="56" width="4" height="58" rx="1.5" fill="#f2ead8" stroke={DINK} strokeWidth="1.8" />
+      <path d="M168 58 Q177 55 188 59 V76 Q177 72 168 75 Z" fill={`url(#${u}chk)`} stroke={DINK} strokeWidth="1.8" strokeLinejoin="round" />
+
+      {/* the river, its ripples and a lane rope */}
+      <rect x="-5" y="116" width="210" height="140" fill={`url(#${u}w)`} />
+      <g stroke="#fff" strokeLinecap="round" fill="none" opacity=".55" strokeWidth="2">
+        <path d="M12 128 q6 -3 12 0 M150 126 q5 -3 10 0 M104 134 q6 -3 12 0 M30 170 q7 -3 14 0 M164 176 q7 -3 14 0 M10 214 q8 -4 16 0 M176 222 q8 -4 16 0" />
+      </g>
+      <path d="M-5 158 L205 150" stroke="#fff" strokeOpacity=".5" strokeWidth="1.5" />
+      {[4, 30, 56, 82, 108, 134, 160, 186].map((x, i) => (
+        <circle key={x} cx={x} cy={158 - (x + 5) * 0.038} r="3.2" fill={i % 2 ? '#fff' : '#ff4d61'} stroke={DINK} strokeWidth="1.2" />
+      ))}
+
+      {/* the chasers */}
+      <path d="M8 142 l14 0 M2 148 l16 0" stroke="#fff" strokeWidth="2" strokeLinecap="round" opacity=".7" />
+      <CoverDuck lane={4} x={42} y={146} s={0.46} expr="grit" />
+      <ellipse cx="42" cy="146.5" rx="25" ry="3" fill="none" stroke="#fff" strokeWidth="1.8" opacity=".85" />
+      <path d="M118 140 l12 0 M114 146 l14 0" stroke="#fff" strokeWidth="2" strokeLinecap="round" opacity=".7" />
+      <CoverDuck lane={5} x={150} y={145} s={0.42} expr="wow" beak={18} />
+      <ellipse cx="150" cy="145.5" rx="23" ry="2.8" fill="none" stroke="#fff" strokeWidth="1.8" opacity=".85" />
+
+      {/* Quackers charging through a splash */}
+      <ellipse cx="94" cy="196" rx="62" ry="12" fill="#1f86c2" opacity=".35" />
+      <g fill="#fff">
+        {[
+          [36, 186, -48, 5, 13],
+          [46, 176, -30, 4.5, 12],
+          [58, 172, -14, 3.6, 9],
+          [146, 182, 36, 5, 14],
+          [156, 190, 56, 4.5, 11],
+          [136, 172, 18, 3.6, 9],
+        ].map(([x, y, r, rx, ry], i) => (
+          <ellipse key={i} cx={x} cy={y} rx={rx} ry={ry} transform={`rotate(${r} ${x} ${y})`} />
+        ))}
+      </g>
+      <path d="M26 176 l-18 -3 M24 188 l-20 1 M30 198 l-16 5" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" opacity=".75" />
+      <CoverDuck lane={0} x={94} y={192} s={1} expr="joy" beak={22} tilt={-8} />
+      {/* the foam hugging the front of the duck */}
+      <path d="M34 192 C46 184 64 196 80 190 C96 184 112 196 128 189 C140 184 150 190 156 194 C146 204 120 206 94 205 C66 205 44 202 34 192 Z" fill="#fff" />
+      <path d="M44 198 C70 204 120 204 146 197" stroke="#bfefff" strokeWidth="2" fill="none" strokeLinecap="round" />
+      {[
+        [162, 168, 3.2],
+        [170, 182, 2.4],
+        [152, 160, 2.2],
+        [176, 170, 1.8],
+        [22, 166, 2.6],
+        [14, 178, 1.8],
+        [30, 156, 1.6],
+      ].map(([x, y, r], i) => (
+        <circle key={i} cx={x} cy={y} r={r} fill="#fff" />
+      ))}
+      <Sparkle x={186} y={98} r={4} />
+      <Sparkle x={14} y={70} r={3.5} />
     </Scene>
   )
 }

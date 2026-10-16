@@ -91,6 +91,28 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
           <path d="M7.5 15h9M9 15l1 1.6 1-1.6 1 1.6 1-1.6 1 1.6 1-1.6" />
         </svg>
       )
+    case 'battles':
+      // two blades crossed over a crate's lid
+      return (
+        <svg {...p}>
+          <path d="M4.5 3.5 15 14M19.5 3.5 9 14" />
+          <path d="M12.6 16.4l4.8-4.8M6.6 11.6l4.8 4.8" />
+          <path d="M15 14l3 3M9 14l-3 3" />
+          <rect x="7" y="19" width="10" height="2.6" rx=".8" fill="currentColor" stroke="none" />
+        </svg>
+      )
+    case 'derby':
+      return (
+        <svg {...p}>
+          {/* a rubber duck bobbing on a ripple: round head, beak, upturned tail */}
+          <circle cx="14.2" cy="6.6" r="3.4" />
+          <path d="M17.4 6.2l3.3.8-3 1.6" strokeWidth="1.7" />
+          <path d="M11.4 9.6C7.6 9.8 5 9.4 3 7.6c-.3 3.4.4 6.2 2.4 8 1.5 1.3 3.5 1.9 6.1 1.9h3c3.4 0 5.8-1.9 5.8-4.6 0-1.6-.9-2.8-2.4-3.4" />
+          <path d="M8.6 13.3c1.6 1 3.6 1 5.2 0" strokeWidth="1.6" />
+          <circle cx="15.2" cy="6" r=".75" fill="currentColor" stroke="none" />
+          <path d="M2 21.2c2 0 2-1 4-1s2 1 4 1 2-1 4-1 2 1 4 1 2-1 4-1" opacity=".55" />
+        </svg>
+      )
     case 'cases':
       return (
         <svg {...p}>

@@ -31,7 +31,6 @@ import {
   setValue as writeValue,
   shadowMaterial,
   tickModels,
-  useEnvironment,
   valueAnchor,
   valueText,
   warmUp,
@@ -43,7 +42,7 @@ import {
 } from './models'
 
 /*
-  The Robo Riot stage: an arcade machine in a neon workshop at night. Five glass tubes hold the robots; on a spin
+  The Robo Riot stage: a cartoon arcade machine in a workshop at night. Five glass tubes hold the robots; on a spin
   Volt yanks his lever, each tube sucks its robots up and out of the top and a new column drops in and bounces.
   When the Power Grid starts the lights cut to red alert, Volt's beacon turns, the glass slides away and the tubes
   become 25 charging sockets: empty ones spin like little slot windows, arrivals slam in and the latches clamp,
@@ -62,20 +61,20 @@ export interface ScreenPoint {
 
 const FOV = 30
 /**
- * The view fits FIT_W across and FIT_H up with its top at VIEW_TOP: the machine (6.2 across with its pipes, from
- * its base at -3.02 to the marquee at 3.82), Volt's head and antennae over the marquee (up to about 5.5) and 0.92
- * under the base for the counters (the screen needs about 65 px there). The cabinet is compact so the board gets
- * the screen: a cell is about 84 px on a 1440 × 900 desktop and 57 px on a 375 px phone. On narrow screens the
- * width rules and any height to spare goes under the machine, so the top stays put (see resize).
+ * The view fits FIT_W across and FIT_H up with its top at VIEW_TOP: the cabinet (5.62 across, from its base at -2.88
+ * to the boards of the marquee at 3.46), Volt between the boards with his head and beacon over them (up to 4.33)
+ * and HUD_PX under the base for the counters. The cabinet is slim and Volt stands in the marquee's gap rather than
+ * on top of it, so the board gets the screen: a cell is about 100 px on a 1440 × 900 desktop and 62 px on a 375 px
+ * phone. On narrow screens the width rules and any height to spare goes under the machine (see resize).
  */
-const FIT_W = 6.24
-const FIT_H = 9.58
-const VIEW_TOP = 5.64
+const FIT_W = 5.7
+const VIEW_TOP = 4.42
+const FIT_H = VIEW_TOP + 2.9
 const CAM_Y = VIEW_TOP - FIT_H / 2
 /** the room the screen's counters need under the machine, in CSS px (with a little for the perspective) */
-const HUD_PX = 76
+const HUD_PX = 74
 /** the tubes' window: pieces are clipped above and below it, so they leave through the tops and drop in from them */
-const WIN_H = 2.62
+const WIN_H = 2.56
 const CLIP = [new THREE.Plane(new THREE.Vector3(0, -1, 0), WIN_H), new THREE.Plane(new THREE.Vector3(0, 1, 0), WIN_H)]
 
 const cellX = (c: number) => c - (COLS - 1) / 2
@@ -95,15 +94,17 @@ const SOCK_BACK = -0.9
 /** the cast is modelled to fit 0.9 of a cell; this fills a tube */
 const CAST = 1.02
 /**
- * Volt stands behind the marquee, leaning on it: his chest hidden by the sign, his head and shoulders over it, drawn
- * this much bigger than modelled. His moves are laid out for him at DESIGN scale and scaled with him (vp).
+ * Volt stands in the gap between the marquee's boards, behind the header, leaning on it: his belly hidden by it, his
+ * chest, head and shoulders over it, drawn this much bigger than modelled. His moves are laid out for him at DESIGN
+ * scale and scaled with him (vp), relative to the ledge he leans on (the header's top, LEDGE: see buildMachine).
  */
-const VOLT_SCALE = 1.1
+const VOLT_SCALE = 0.85
 const DESIGN = 1.3
 const VK = VOLT_SCALE / DESIGN
-const VOLT_AT = new THREE.Vector3(0, 3.32, -0.6)
-/** his lever sticks up from behind the marquee on his right; it is mirrored, so a pull swings it down towards him */
-const LEVER_AT = new THREE.Vector3(2.5 * VK, VOLT_AT.y + 0.25, VOLT_AT.z + 0.15 * VK)
+const LEDGE = 2.76
+const VOLT_AT = new THREE.Vector3(0, LEDGE - 0.59 * VK, -0.6)
+/** his lever stands behind the right board, its knob over it; it is mirrored, so a pull swings it down towards him */
+const LEVER_AT = new THREE.Vector3(2.1 * VK, VOLT_AT.y + 0.6, VOLT_AT.z - 0.36)
 const LEVER_SCALE = DESIGN * VK
 const LEVER_REST = 0.1
 const LEVER_PULL = -0.9
@@ -146,16 +147,18 @@ const HOT = col3('#ff7a2e')
 const WHITE = new THREE.Color(1, 1, 1)
 const HEART = col3('#ff3a2a')
 /** the lights by night and in the alarm */
-const KEY_NIGHT = col3('#ffe7cc')
-const KEY_ALARM = col3('#ffb4a4')
-const RIM_NIGHT = col3('#5ce8ff')
+const KEY_NIGHT = col3('#fff4e0')
+const KEY_ALARM = col3('#ffe2d8')
+const RIM_NIGHT = col3('#a8f0ff')
 const RIM_ALARM = col3('#ff3a2a')
-const RIM2_NIGHT = col3('#ff4fd8')
+const RIM2_NIGHT = col3('#ffb8ea')
 const RIM2_ALARM = col3('#ff2a50')
+const AMB_NIGHT = col3('#dbe3ff')
+const AMB_ALARM = col3('#ffe0da')
 /** an empty socket's rim: dim steel, so the full ones stand out */
 const SOCK_IDLE = col3('#7f90b4')
 const COIN_GOLD = col3('#ffc94a')
-const TUBE_BASE = 1.6
+const TUBE_BASE = 1
 /** colours by their hex string, parsed once */
 const colors = new Map<string, THREE.Color>()
 const colorOf = (hex: string) => {
@@ -172,10 +175,12 @@ const BUTTONS = ['#ff3b4f', '#ffd21f', '#3fe46a', '#3ea2ff', '#ff3fd2'].map((c) 
 const SCREEN_VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }'
 
 /**
- * The workshop at night. A wall of ribbed steel with a big factory window onto a neon city (moon, drifting blimp,
- * searchlights, three layers of skyline with lit windows and signs), a counter of spare parts under it (boxes,
- * gears and sleeping robot heads whose eyes blink), two hanging work lamps with dust in their beams, and the floor.
- * uAlert turns it to red alert: the room goes dark red, Volt's beacon sweeps it, lightning flickers over the city.
+ * The workshop at night, drawn flat like a cartoon background: a wall of indigo panels with a big round-cornered
+ * window onto a sleepy city (a cream moon, twinkling stars, drifting clouds, a little blimp, two rows of rounded
+ * buildings with warm windows), a shelf of spare parts under it (crates, gears and robot heads whose eyes blink), two
+ * hanging lamps throwing soft cones, and a checked floor. Shapes are signed distances with ink rims a couple of
+ * pixels wide (fwidth), colours in a few flat tones. uAlert turns it to red alert: the room goes red, Volt's beacon
+ * sweeps it in flat beams and cartoon lightning strikes over the city.
  */
 const BACK_FRAG = /* glsl */ `
 uniform float uTime;
@@ -189,242 +194,225 @@ uniform float uPulse;
 uniform float uHot;
 uniform float uFloor;
 varying vec2 vUv;
+float PX;
 float hash(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
 float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise(float x) { float i = floor(x); float f = fract(x); return mix(hash(i), hash(i + 1.0), f * f * (3.0 - 2.0 * f)); }
 // an sRGB colour (0..255) as linear light
 vec3 C(float r, float g, float b) { return pow(vec3(r, g, b) / 255.0, vec3(2.2)); }
 float box(vec2 p, vec2 b) { vec2 d = abs(p) - b; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }
 float rbox(vec2 p, vec2 b, float r) { return box(p, b - r) - r; }
+float fillOf(float d) { return clamp(0.5 - d / PX, 0.0, 1.0); }
+// a shape in colour c with an ink rim lw wide round it
+vec3 paint(vec3 col, float d, vec3 c, float lw) {
+  col = mix(col, C(27., 22., 52.), fillOf(d - lw));
+  return mix(col, c, fillOf(d));
+}
 
-// one layer of skyline: buildings w wide standing on the line y0, up to h tall; returns the coverage, the roof line and the building index
-float skyline(vec2 p, float w, float y0, float h, float seed, out float top, out float k) {
+// one row of rounded buildings w apart standing on y0, up to h tall: the distance to the building in p's slot
+float town(vec2 p, float w, float y0, float h, float seed, out float k, out float top, out float bw) {
   k = floor(p.x / w);
   float hk = hash(k + seed);
-  float bw = w * (0.72 + 0.28 * hash(k + seed + 7.0));
-  top = y0 + h * (0.25 + 0.75 * hk * hk);
-  // some get a stepped crown or a spire
+  bw = w * (0.7 + 0.2 * hash(k + seed + 7.0));
+  top = y0 + h * (0.3 + 0.7 * hk);
   float cx = (k + 0.5) * w;
-  float crown = step(0.7, hash(k + seed + 3.0)) * step(abs(p.x - cx), bw * 0.22) * h * 0.18;
-  float spire = step(0.86, hash(k + seed + 5.0)) * step(abs(p.x - cx), w * 0.03) * h * 0.4;
-  float t = top + max(crown, spire);
-  float inside = step(abs(p.x - cx), bw * 0.5) * step(p.y, t) * step(y0 - 0.2, p.y);
-  return inside;
+  float d = rbox(p - vec2(cx, (top + y0 - 0.4) * 0.5), vec2(bw * 0.5, (top - y0 + 0.4) * 0.5), min(bw * 0.3, 0.01));
+  // some wear a round dome, some a little hut on the roof
+  float r = hash(k + seed + 3.0);
+  if (r > 0.72) d = min(d, length(p - vec2(cx, top)) - bw * 0.3);
+  else if (r > 0.5) d = min(d, rbox(p - vec2(cx + bw * 0.15, top + 0.008), vec2(bw * 0.16, 0.012), 0.004));
+  return d;
 }
 
 void main() {
   vec2 p = vUv - 0.5;
   p.x *= uAspect;
+  PX = max(fwidth(p.y), 1e-4);
+  float LW = PX * 2.2;
   float t = uTime;
   float A = uAlert;
 
-  // ---- the wall: ribbed steel panels, a little lighter at the top
-  vec3 col = mix(C(9., 10., 26.), C(24., 22., 54.), smoothstep(-0.5, 0.5, p.y));
-  col *= 0.84 + 0.16 * (0.5 + 0.5 * cos(p.x * 150.0));
-  float seam = smoothstep(0.003, 0.0, abs(fract(p.y / 0.22 + 0.37) - 0.5) * 0.22);
-  col *= 1.0 - 0.3 * seam;
+  // ---- the wall: indigo panels, the seams drawn in ink
+  vec3 col = mix(C(38., 35., 86.), C(50., 45., 104.), step(0.5, fract(p.x / 0.36)));
+  col = mix(col, C(31., 27., 70.), fillOf(abs(fract(p.x / 0.18) - 0.5) * 0.18 - PX * 0.8));
+  col = mix(col, C(31., 27., 70.), fillOf(abs(p.y - 0.47) - PX * 0.8));
 
-  // ---- the big window, most of the width, from above the counter to near the top
+  // ---- the big window, most of the width, from above the shelf to near the top
   float ww = min(0.47 * uAspect, 0.95);
   float wy0 = -0.13;
-  float wy1 = 0.46;
+  float wy1 = 0.44;
   vec2 wc = vec2(0.0, (wy0 + wy1) * 0.5);
   vec2 wh = vec2(ww, (wy1 - wy0) * 0.5);
-  float dWin = box(p - wc, wh);
+  float dWin = rbox(p - wc, wh, 0.05);
   if (dWin < 0.0) {
-    // the sky: deep indigo, a magenta glow on the horizon
-    vec3 sky = mix(C(96., 30., 112.), C(20., 18., 62.), smoothstep(-0.06, 0.2, p.y));
-    sky = mix(sky, C(6., 8., 30.), smoothstep(0.2, 0.46, p.y));
-    sky += C(40., 150., 190.) * 0.12 * exp(-pow((p.y + 0.02) * 18.0, 2.0));
-    // stars
-    vec2 g = floor((p + 2.0) * 90.0);
+    // the sky in three flat bands, bluest at the top
+    float h = p.y;
+    vec3 sky = h > 0.24 ? C(30., 36., 104.) : h > 0.1 ? C(48., 46., 132.) : h > 0.0 ? C(78., 58., 152.) : C(118., 74., 160.);
+    // stars: dots, and a few four-pointed sparkles that twinkle
+    vec2 g = floor((p + 2.0) * 46.0);
     float s = hash2(g);
-    vec2 f = fract((p + 2.0) * 90.0) - 0.5;
-    sky += step(0.985, s) * (0.5 + 0.5 * sin(t * (1.0 + s * 3.0) + s * 50.0)) * smoothstep(0.2, 0.0, length(f)) * smoothstep(0.08, 0.3, p.y) * 0.9;
-    // the moon, with a soft halo and two craters
-    vec2 mc = vec2(-ww * 0.72, 0.36);
+    vec2 f = fract((p + 2.0) * 46.0) - 0.5;
+    float tw = 0.5 + 0.5 * sin(t * (1.2 + s * 2.5) + s * 40.0);
+    float star = step(0.93, s) * fillOf(length(f) / 46.0 - PX * (0.8 + 0.8 * tw));
+    float big = step(0.985, s) * fillOf(min(abs(f.x) * 2.5 + abs(f.y) * 0.5, abs(f.y) * 2.5 + abs(f.x) * 0.5) / 46.0 - PX * 1.2 * (0.6 + 0.4 * tw));
+    sky = mix(sky, C(255., 244., 200.), max(star, big) * step(0.06, h));
+    // the moon: a cream disc with craters, in a flat halo
+    vec2 mc = vec2(-ww * 0.84, 0.33);
     float md = length(p - mc);
-    sky += C(150., 170., 255.) * exp(-md * md * 300.0) * 0.35;
-    float moon = smoothstep(0.034, 0.031, md);
-    vec3 mcol = mix(C(255., 244., 220.), C(205., 200., 220.), smoothstep(0.0, 0.03, length(p - mc - vec2(0.008, -0.006))));
-    mcol *= 1.0 - 0.18 * smoothstep(0.009, 0.006, length(p - mc - vec2(-0.01, 0.008))) - 0.12 * smoothstep(0.006, 0.004, length(p - mc - vec2(0.012, -0.01)));
-    sky = mix(sky, mcol * 1.25, moon);
-    // wisps of cloud drifting past
-    float cl = noise(p.x * 9.0 + t * 0.05) * noise(p.x * 23.0 - t * 0.03 + 4.0);
-    sky += C(120., 90., 170.) * 0.18 * cl * exp(-pow((p.y - 0.3 - 0.03 * sin(p.x * 3.0)) * 30.0, 2.0));
-    // searchlights sweeping up from the city
+    sky = mix(sky, sky * 1.25 + C(20., 18., 40.), fillOf(md - 0.075));
+    sky = paint(sky, md - 0.05, C(255., 240., 196.), LW);
+    sky = mix(sky, C(232., 210., 160.), fillOf(length(p - mc - vec2(0.015, -0.012)) - 0.012) + fillOf(length(p - mc - vec2(-0.017, 0.01)) - 0.008));
+    // two clouds drifting by: three puffs and a flat bottom each
     for (int i = 0; i < 2; i++) {
       float fi = float(i);
-      vec2 o = vec2((fi * 2.0 - 1.0) * ww * 0.55, -0.06);
-      vec2 d = p - o;
-      float aim = (fi * 2.0 - 1.0) * -0.35 + 0.45 * sin(t * (0.23 + 0.11 * fi) + fi * 2.0);
-      float a = atan(d.x, d.y);
-      float beam = smoothstep(0.06, 0.0, abs(a - aim)) * smoothstep(0.7, 0.05, length(d)) * step(0.0, d.y);
-      sky += mix(C(170., 210., 255.), C(255., 80., 60.), A) * beam * 0.12;
+      float span = ww * 2.0 + 0.4;
+      vec2 cc = vec2(ww + 0.2 - mod(t * (0.006 + fi * 0.003) + fi * 0.9 + 0.3, span), 0.2 + fi * 0.09);
+      vec2 q = p - cc;
+      float sc = 1.0 - 0.3 * fi;
+      float dc = min(min(length(q - vec2(-0.035, 0.0) * sc) - 0.025 * sc, length(q - vec2(0.0, 0.012) * sc) - 0.033 * sc), length(q - vec2(0.037, 0.0) * sc) - 0.022 * sc);
+      dc = max(dc, -(q.y + 0.012 * sc));
+      sky = paint(sky, dc, mix(C(94., 92., 176.), C(118., 112., 196.), fi), LW * 0.8);
     }
-    // lightning over the city in the Power Grid
-    sky += C(170., 190., 255.) * uFlash * 0.55 * smoothstep(-0.1, 0.4, p.y);
-    float bx = uBoltX + 0.025 * (noise(p.y * 40.0 + uBoltX * 30.0) - 0.5) + 0.012 * (noise(p.y * 140.0) - 0.5);
-    sky += vec3(1.2, 1.25, 1.6) * uFlash * exp(-abs(p.x - bx) * 900.0) * step(0.02, p.y);
-    // a blimp drifting across with a lit sign and a blinking light
-    float span = ww * 2.0 + 0.4;
-    vec2 bc = vec2(ww + 0.2 - mod(t * 0.012 + 0.3, span), 0.27 + 0.006 * sin(t * 0.4));
-    vec2 q = p - bc;
-    float body = length(q / vec2(0.095, 0.027)) - 1.0;
-    float fin = box(q - vec2(0.088, 0.0), vec2(0.014, 0.024 - abs(q.x - 0.088) * 0.5));
-    float gond = rbox(q - vec2(0.0, -0.03), vec2(0.022, 0.006), 0.003);
-    float bd = min(min(body * 0.027, fin), gond);
-    if (bd < 0.002) {
-      vec3 bcol = mix(C(30., 26., 62.), C(92., 84., 150.), smoothstep(-0.025, 0.025, q.y));
-      bcol += C(150., 140., 220.) * 0.5 * smoothstep(0.006, 0.0, abs(body + 0.12)) * step(0.0, q.y);
-      float sign = step(abs(q.x + 0.005), 0.05) * step(abs(q.y + 0.002), 0.009);
-      float scroll = step(0.5, fract((q.x + t * 0.02) * 40.0)) * 0.6 + 0.4;
-      bcol += mix(C(92., 242., 255.), C(255., 63., 210.), step(0.5, fract(t * 0.25))) * sign * scroll * 1.4;
-      sky = mix(sky, bcol, smoothstep(0.002, 0.0, bd));
+    // a little blimp with a sign and a blinking light
+    {
+      float span = ww * 2.0 + 0.4;
+      vec2 bc = vec2(-ww - 0.2 + mod(t * 0.01 + 0.5, span), 0.36 + 0.005 * sin(t * 0.5));
+      vec2 q = p - bc;
+      float body = (length(q / vec2(0.06, 0.02)) - 1.0) * 0.02;
+      float fin = box(q - vec2(-0.058, 0.0), vec2(0.008, 0.018 - abs(q.x + 0.058) * 0.6));
+      float gond = rbox(q - vec2(0.0, -0.022), vec2(0.014, 0.005), 0.003);
+      sky = paint(sky, min(min(body, fin), gond), C(150., 142., 222.), LW * 0.8);
+      sky = mix(sky, mix(C(255., 210., 110.), C(255., 130., 180.), step(0.5, fract(t * 0.25))), fillOf(rbox(q - vec2(0.004, 0.0), vec2(0.028, 0.006), 0.003)));
+      sky = mix(sky, C(255., 80., 70.), fillOf(length(q - vec2(0.062, 0.0)) - 0.004) * step(0.5, fract(t * 0.8)));
     }
-    sky += C(255., 40., 30.) * smoothstep(0.005, 0.0, length(q - vec2(-0.09, 0.0))) * step(0.5, fract(t * 0.8)) * 2.0;
-    // the skyline: far, mid and near
-    float top; float k;
-    float far = skyline(p, 0.032, -0.08, 0.17, 1.0, top, k);
-    sky = mix(sky, mix(C(58., 34., 98.), C(40., 26., 70.), smoothstep(-0.1, 0.1, p.y)), far * 0.9);
-    float mid = skyline(p + vec2(0.013, 0.0), 0.048, -0.1, 0.22, 11.0, top, k);
-    if (mid > 0.5) {
-      vec3 b = C(18., 14., 40.);
-      // lit windows on a grid; some flicker, and the city browns out in the alarm
-      vec2 wg = floor((p + vec2(0.013, 0.0)) / vec2(0.007, 0.011));
-      vec2 wf = fract((p + vec2(0.013, 0.0)) / vec2(0.007, 0.011));
-      float on = step(0.66, hash2(wg + k * 3.1)) * step(abs(wf.x - 0.5), 0.28) * step(abs(wf.y - 0.5), 0.26) * step(p.y, top - 0.008);
+    // cartoon lightning over the city in the Power Grid: the sky flashes and a bolt strikes
+    sky = mix(sky, C(150., 150., 230.), uFlash * 0.45 * step(0.0, h));
+    if (uFlash > 0.0) {
+      float zig = uBoltX + 0.018 * (abs(fract(p.y * 9.0 + uBoltX * 3.0) * 2.0 - 1.0) * 2.0 - 1.0);
+      float db = abs(p.x - zig) - 0.006 * (0.4 + 0.6 * smoothstep(0.0, 0.44, h));
+      db = max(db, -h);
+      sky = mix(sky, paint(sky, db, C(255., 246., 170.), LW), step(0.35, uFlash));
+    }
+    // the town: a far row in one flat tone, a near row ink-outlined with warm windows and red roof lights
+    float k; float top; float bw;
+    float far = town(p, 0.05, -0.1, 0.17, 1.0, k, top, bw);
+    sky = mix(sky, C(66., 54., 132.), fillOf(far));
+    float near = town(p + vec2(0.021, 0.0), 0.075, -0.13, 0.14, 23.0, k, top, bw);
+    vec3 bcol = mix(C(44., 36., 98.), C(54., 42., 112.), step(0.5, hash(k + 5.0)));
+    if (near < LW + PX) {
+      vec3 b = bcol;
+      vec2 wg = floor((p + vec2(0.021, 0.0)) / vec2(0.014, 0.02));
+      vec2 wf = fract((p + vec2(0.021, 0.0)) / vec2(0.014, 0.02)) - 0.5;
+      float cx = (k + 0.5) * 0.075 - 0.021;
+      float on = step(0.45, hash2(wg + k * 3.1)) * step(abs(p.x - cx), bw * 0.5 - 0.008) * step(p.y, top - 0.016);
       on *= 1.0 - A * step(0.5, hash2(wg + floor(t * 3.0)));
-      vec3 wcol = mix(C(255., 196., 120.), C(120., 220., 255.), step(0.6, hash2(wg + 9.0)));
-      b += wcol * on * (0.7 + 0.3 * sin(t * 2.0 + hash2(wg) * 30.0));
-      sky = mix(sky, b, mid);
+      b = mix(b, mix(C(255., 214., 110.), C(255., 182., 96.), step(0.6, hash2(wg + 9.0))), on * fillOf(rbox(wf * vec2(0.014, 0.02), vec2(0.0036, 0.005), 0.0015)));
+      float roof = step(0.6, hash(k + 41.0)) * fillOf(length(p - vec2(cx, top + 0.006)) - 0.0035) * step(0.5, fract(t * 0.7 + hash(k)));
+      b = mix(b, C(255., 70., 60.), roof);
+      sky = paint(sky, near, b, LW * 0.8);
     }
-    float near = skyline(p + vec2(0.031, 0.0), 0.075, -0.13, 0.15, 23.0, top, k);
-    if (near > 0.5) {
-      vec3 b = C(9., 8., 22.);
-      // a neon sign on some of them, and a red light on every roof
-      float cx = (k + 0.5) * 0.075 - 0.031;
-      float hs = hash(k + 41.0);
-      vec2 sq = p - vec2(cx + (hs - 0.5) * 0.02, top - 0.03 - hs * 0.03);
-      float sgn = step(0.45, hs) * smoothstep(0.003, 0.0, rbox(sq, vec2(0.006, 0.018), 0.003));
-      vec3 sc = hs < 0.6 ? C(255., 63., 210.) : hs < 0.8 ? C(92., 242., 255.) : C(255., 210., 60.);
-      b += sc * sgn * (1.3 + 0.5 * step(0.5, fract(t * (0.5 + hs)))) * (1.0 - 0.6 * A * step(0.5, fract(t * 4.0 + hs * 7.0)));
-      sky = mix(sky, b, near);
-    }
-    // the glass: a faint sheen and two diagonal reflections
-    float sheen = smoothstep(0.02, 0.0, abs(fract((p.x - p.y * 0.6) * 2.2 + 0.2) - 0.5) - 0.02) * 0.04;
-    sky += vec3(0.6, 0.8, 1.0) * sheen;
-    col = sky * mix(1.0, 0.85, smoothstep(-0.03, 0.0, dWin + 0.03));
+    col = sky;
   }
-  // the frame and its mullions: six panes across, three down
-  float mul = min(abs(fract((p.x / ww) * 3.0 + 0.5) - 0.5) * ww / 3.0, min(abs(p.y - 0.08), abs(p.y - 0.27)));
-  float frame = max(smoothstep(0.006, 0.003, abs(dWin) - 0.004), step(dWin, 0.0) * smoothstep(0.0045, 0.002, mul));
-  col = mix(col, C(14., 15., 32.), frame);
-  col += C(60., 70., 120.) * 0.25 * smoothstep(0.003, 0.0, abs(dWin + 0.008)) * step(dWin, 0.0) * step(0.0, p.y - wy1 + 0.02);
+  // the frame: a fat lilac frame between two ink lines, and its mullions
+  float mul = min(abs(fract((p.x / ww) * 2.0 + 0.5) - 0.5) * ww / 2.0, abs(p.y - 0.17));
+  float frame = max(fillOf(abs(dWin) - 0.008), step(dWin, 0.0) * fillOf(mul - 0.004));
+  float frameInk = max(fillOf(abs(dWin) - 0.008 - LW), step(dWin, 0.0) * fillOf(mul - 0.004 - LW));
+  col = mix(col, C(27., 22., 52.), frameInk);
+  col = mix(col, C(92., 86., 168.), frame);
 
-  // ---- the counter under the window and the spare parts on it
+  // ---- the shelf under the window and the spare parts on it
   float cy = -0.165;
   if (p.y < cy + 0.07 && p.y > cy - 0.2) {
-    float k = floor(p.x / 0.06);
-    float h = hash(k + 3.0);
-    float x0 = (k + 0.5) * 0.06 + (hash(k + 8.0) - 0.5) * 0.02;
+    float kk = floor(p.x / 0.07);
+    float hk = hash(kk + 3.0);
+    float x0 = (kk + 0.5) * 0.07 + (hash(kk + 8.0) - 0.5) * 0.015;
     vec2 q = p - vec2(x0, cy);
-    vec3 sil = C(7., 7., 18.);
-    float d = 1.0;
-    float eye = 0.0;
-    if (h < 0.32) {
+    if (hk < 0.3) {
       // a crate
-      float bh = 0.012 + 0.03 * hash(k + 1.0);
-      d = box(q - vec2(0.0, bh), vec2(0.02 + 0.008 * hash(k + 2.0), bh));
-    } else if (h < 0.58) {
-      // a robot head left on the shelf, eyes glowing; now and then it blinks
-      d = rbox(q - vec2(0.0, 0.019), vec2(0.019, 0.016), 0.006);
-      d = min(d, box(q - vec2(0.0, 0.04), vec2(0.0015, 0.008)));
-      vec2 e = vec2(abs(q.x) - 0.0075, q.y - 0.021);
-      float blink = step(0.985, fract(t * 0.13 + h * 7.0));
-      eye = smoothstep(0.0035, 0.0015, length(e / vec2(1.0, 1.0 - 0.9 * blink))) * (1.0 - A * 0.5);
-    } else if (h < 0.72) {
+      float bh = 0.014 + 0.018 * hash(kk + 1.0);
+      col = paint(col, rbox(q - vec2(0.0, bh), vec2(0.021, bh), 0.004), mix(C(214., 132., 78.), C(84., 178., 168.), step(0.5, hash(kk + 2.0))), LW * 0.8);
+    } else if (hk < 0.58) {
+      // a robot head left on the shelf; now and then it blinks
+      float dh = min(rbox(q - vec2(0.0, 0.02), vec2(0.02, 0.017), 0.007), length(q - vec2(0.0, 0.044)) - 0.004);
+      col = paint(col, dh, C(160., 172., 214.), LW * 0.8);
+      col = mix(col, C(30., 36., 84.), fillOf(rbox(q - vec2(0.0, 0.021), vec2(0.014, 0.01), 0.004)));
+      float blink = step(0.985, fract(t * 0.13 + hk * 7.0));
+      float eye = fillOf(length((vec2(abs(q.x) - 0.006, q.y - 0.021)) / vec2(1.0, 1.0 - 0.9 * blink)) - 0.003);
+      col = mix(col, mix(C(140., 246., 255.), C(255., 90., 70.), A), eye);
+    } else if (hk < 0.74) {
       // a gear standing on edge
       vec2 g = q - vec2(0.0, 0.022);
       float a = atan(g.y, g.x);
-      d = length(g) - 0.02 - 0.004 * step(0.0, sin(a * 9.0 + k));
-      d = max(d, -(length(g) - 0.006));
-    } else if (h < 0.84) {
+      float dg = length(g) - 0.019 - 0.004 * step(0.0, sin(a * 8.0 + kk));
+      col = paint(col, max(dg, -(length(g) - 0.006)), C(236., 176., 74.), LW * 0.8);
+    } else if (hk < 0.86) {
       // an oil can
-      d = min(rbox(q - vec2(0.0, 0.016), vec2(0.011, 0.016), 0.003), box(q - vec2(0.012, 0.03), vec2(0.008, 0.0015)));
+      float dc = min(rbox(q - vec2(0.0, 0.016), vec2(0.011, 0.016), 0.004), box(q - vec2(0.013, 0.03), vec2(0.008, 0.002)));
+      col = paint(col, dc, C(226., 84., 96.), LW * 0.8);
     }
-    col = mix(col, sil, smoothstep(0.0015, -0.0005, d));
-    vec3 ec = mix(C(92., 242., 255.), C(255., 60., 40.), A);
-    col += ec * eye * 1.6;
-    // the counter top, lit along its edge, and the cabinet under it
-    col = mix(col, C(16., 15., 34.), step(p.y, cy) * step(cy - 0.012, p.y));
-    col += C(255., 190., 120.) * 0.12 * smoothstep(0.003, 0.0, abs(p.y - cy)) * (1.0 - A);
-    if (p.y < cy - 0.012) {
-      vec3 cab = C(12., 11., 26.);
-      float door = abs(fract(p.x / 0.11) - 0.5) * 0.11;
-      cab *= 1.0 - 0.35 * smoothstep(0.002, 0.0, door - 0.001);
-      cab += C(80., 80., 110.) * 0.15 * smoothstep(0.0025, 0.0, length(vec2(door - 0.012, p.y - cy + 0.06)));
+    // the shelf top with a light edge, the cupboard under it
+    if (p.y < cy) {
+      vec3 cab = C(54., 42., 104.);
+      float door = abs(fract(p.x / 0.12) - 0.5) * 0.12;
+      cab = mix(cab, C(27., 22., 52.), fillOf(door - PX * 0.8));
+      cab = mix(cab, C(236., 176., 74.), fillOf(length(vec2(door - 0.012, p.y - cy + 0.06)) - 0.003));
       col = cab;
+      col = mix(col, C(84., 70., 150.), step(cy - 0.012, p.y));
+      col = mix(col, C(27., 22., 52.), fillOf(abs(p.y - cy + 0.012) - PX * 0.8) + fillOf(abs(p.y - cy) - PX * 0.8));
     }
   }
 
-  // ---- the floor, from the machine's feet down (on tall phones that is higher up)
+  // ---- the floor, from the machine's feet down (on tall phones that is higher up): flat checks
   float fy = max(cy - 0.19, uFloor + 0.004);
   if (p.y < fy) {
-    vec3 fl = mix(C(16., 14., 34.), C(5., 5., 14.), smoothstep(fy, -0.5, p.y));
-    // planks in perspective
-    float z = 1.0 / max(0.02, fy - p.y + 0.06);
-    fl *= 0.9 + 0.1 * step(0.5, fract(p.x * z * 0.35));
-    // the machine's neon spills onto the floor
-    fl += mix(C(40., 160., 200.), C(255., 40., 30.), A) * 0.18 * exp(-pow(p.x / (0.35 * max(0.6, uAspect * 0.6)), 2.0)) * smoothstep(-0.5, fy, p.y);
+    float z = 1.0 / max(0.02, fy - p.y + 0.08);
+    vec2 cq = vec2(p.x * z * 0.5, z * 0.35);
+    float chk = mod(floor(cq.x) + floor(cq.y), 2.0);
+    vec3 fl = mix(C(44., 36., 90.), C(54., 44., 106.), chk);
+    fl = mix(fl, C(27., 22., 52.), fillOf(abs(p.y - fy) - PX));
+    // the machine's shadow on the floor
+    fl *= 1.0 - 0.35 * fillOf(length((p - vec2(0.0, fy - 0.03)) / vec2(0.42, 0.05)) - 1.0 + 0.02);
     col = fl;
   }
 
-  // ---- two work lamps hanging from the ceiling, dust drifting in their beams
+  // ---- two lamps hanging from the ceiling, throwing soft flat cones
   for (int i = 0; i < 2; i++) {
     float sgn = i == 0 ? -1.0 : 1.0;
     float lx = sgn * min(0.62 * uAspect * 0.5 + 0.12, ww * 0.82);
-    float ly = 0.43;
-    // the cord and the shade
-    col = mix(col, C(6., 6., 14.), smoothstep(0.0015, 0.0005, abs(p.x - lx)) * step(ly, p.y));
-    vec2 sq = p - vec2(lx, ly);
-    float shade = max(abs(sq.x) - (0.018 + (ly - p.y) * 0.9), max(sq.y - 0.012, -(sq.y + 0.02)));
-    col = mix(col, C(30., 32., 50.), smoothstep(0.0015, -0.0005, shade));
+    float ly = 0.41;
     float on = 1.0 - A * 0.85;
-    col += C(255., 214., 150.) * smoothstep(0.012, 0.0, length(sq + vec2(0.0, 0.02))) * 2.5 * on;
-    // the beam
+    // the cone, in two flat steps
     vec2 d = p - vec2(lx, ly - 0.02);
     float a = abs(atan(d.x, -d.y));
-    float beam = smoothstep(0.42, 0.18, a) * step(d.y, 0.0) * smoothstep(0.75, 0.0, -d.y);
-    col += C(255., 200., 140.) * beam * 0.07 * on;
-    // dust motes in it
-    vec2 mg = (p + vec2(0.0, t * 0.006)) * 70.0;
-    vec2 cell = floor(mg);
-    vec2 mf = fract(mg) - 0.5 - (vec2(hash2(cell + 1.3), hash2(cell + 7.1)) - 0.5) * 0.6;
-    float mote = step(0.86, hash2(cell + float(i) * 17.0)) * smoothstep(0.09, 0.0, length(mf));
-    col += C(255., 225., 180.) * mote * beam * 0.9 * (0.6 + 0.4 * sin(t * 1.3 + hash2(cell) * 20.0)) * on;
+    float inCone = step(a, 0.36) * step(d.y, 0.0) * step(-0.62, d.y);
+    col = mix(col, col * 1.18 + C(40., 34., 20.), inCone * on * 0.55);
+    col = mix(col, col * 1.1 + C(30., 26., 14.), step(a, 0.2) * step(d.y, 0.0) * step(-0.5, d.y) * on * 0.5);
+    // the cord and the shade
+    col = mix(col, C(27., 22., 52.), fillOf(abs(p.x - lx) - PX * 0.9) * step(ly, p.y));
+    vec2 sq = p - vec2(lx, ly);
+    float shade = max(abs(sq.x) - (0.016 + (0.012 - sq.y) * 0.9), max(sq.y - 0.012, -(sq.y + 0.022)));
+    col = paint(col, shade, C(255., 205., 60.), LW * 0.8);
+    col = mix(col, mix(C(255., 244., 210.), C(120., 100., 90.), A * 0.85), fillOf(length(sq + vec2(0.0, 0.024)) - 0.008));
   }
 
-  // ---- red alert: the room drops to dark red, Volt's beacon sweeps it, the whole place throbs
+  // ---- red alert: the room goes red and Volt's beacon sweeps it in flat beams
   if (A > 0.0) {
     float lum = dot(col, vec3(0.3, 0.59, 0.11));
-    col = mix(col, vec3(lum * 1.5, lum * 0.24, lum * 0.22) + C(30., 2., 6.) * 0.4, A * 0.68);
+    col = mix(col, vec3(lum * 1.45, lum * 0.32, lum * 0.36) + C(26., 4., 10.) * 0.5, A * 0.72);
     vec2 d = p - uBeacon;
     float ang = atan(d.y, d.x);
     float beam = 0.0;
     for (int i = 0; i < 2; i++) {
       float da = abs(mod(ang - uBeamA - float(i) * 3.14159 + 3.14159, 6.28318) - 3.14159);
-      beam += smoothstep(0.32, 0.0, da) * smoothstep(1.6, 0.0, length(d));
+      beam += step(da, 0.2) * step(length(d), 1.4);
     }
-    col += C(255., 40., 25.) * beam * 0.22 * A;
-    col *= 1.0 + 0.12 * A * sin(t * 7.0);
+    col = mix(col, col * 1.3 + C(90., 16., 12.), min(1.0, beam) * 0.45 * A);
   }
   // overclocked: a warm glow rises behind the machine
-  col += C(255., 110., 40.) * 0.07 * uHot * exp(-pow(p.x / 0.5, 2.0)) * smoothstep(0.2, -0.4, p.y);
+  col += C(255., 120., 50.) * 0.06 * uHot * exp(-pow(p.x / 0.5, 2.0)) * smoothstep(0.2, -0.4, p.y);
   // the heartbeat of a last respin, and celebrations: the edges pulse
-  float edge = smoothstep(0.3, 0.9, length(p * vec2(0.8, 1.0)));
-  col += C(255., 30., 30.) * 0.14 * uPulse * edge;
-  col *= 1.0 - 0.42 * edge;
+  float edge = smoothstep(0.35, 0.9, length(p * vec2(0.8, 1.0)));
+  col += C(255., 40., 40.) * 0.12 * uPulse * edge;
+  col *= 1.0 - 0.3 * edge;
   gl_FragColor = vec4(col, 1.0);
 }`
 
@@ -490,22 +478,21 @@ void main() {
   float blur = vWin.y;
   q.y /= 1.0 + blur * 2.2;
   float d = ghost(q, h);
-  float fill = smoothstep(0.04 + blur * 0.1, -0.02, d);
-  float rim = smoothstep(0.025 + blur * 0.08, 0.0, abs(d + 0.012));
-  // kept dim, so a spinning socket never looks like a full one
+  // flat cartoon shapes, smeared only by the speed; kept dim, so a spinning socket never looks like a full one
+  float fill = smoothstep(0.012 + blur * 0.1, -0.012, d);
+  float rim = smoothstep(0.012 + blur * 0.06, 0.0, abs(d + 0.02) - 0.012);
   vec3 c = mix(vTint, tone(h), 0.6);
-  vec3 col = c * (fill * 0.13 + rim * 0.42);
-  // streaks of light smeared by the speed, and a payline across the middle
-  col += vTint * 0.12 * blur * smoothstep(0.55, 0.0, abs(q.x)) * (0.6 + 0.4 * sin(vUv.y * 40.0 + vWin.x * 9.0));
-  col += vTint * 0.16 * exp(-pow((vUv.y - 0.5) * 26.0, 2.0)) * vWin.z;
-  // darker towards the top and bottom, like a drum behind glass
-  float drum = 0.35 + 0.65 * sin(vUv.y * 3.14159);
+  vec3 col = c * (fill * 0.2 + rim * 0.22);
+  // a payline across the middle
+  col += vTint * 0.12 * step(abs(vUv.y - 0.5), 0.012) * vWin.z;
+  // darker towards the top and bottom, like a drum behind glass (in two flat steps)
+  float drum = 0.45 + 0.55 * step(0.42, sin(vUv.y * 3.14159));
   float edge = smoothstep(0.0, 0.12, vUv.y) * smoothstep(1.0, 0.88, vUv.y) * smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
   col = (col * drum * vWin.z + vec3(0.75, 0.85, 1.0) * vWin.w * 0.45) * edge;
   gl_FragColor = vec4(col, 1.0);
 }`
 
-/** the energy column in a held tube: light flowing up the middle, brighter at the core */
+/** the energy column in a held tube: bands of light flowing up the middle, in flat steps, brightest at the core */
 const BEAM_VERT = /* glsl */ `
 attribute vec4 aBeam;
 varying vec2 vUv;
@@ -526,7 +513,9 @@ void main() {
   float flow2 = 0.5 + 0.5 * sin(vUv.y * 37.0 - uTime * 14.0 - x * 4.0);
   float a = core * (0.35 + 0.65 * pow(flow, 3.0)) + exp(-x * x * 30.0) * 0.6 + core * pow(flow2, 6.0) * 0.5;
   a *= smoothstep(0.0, 0.08, vUv.y) * smoothstep(1.0, 0.92, vUv.y);
-  gl_FragColor = vec4(vBeam.rgb * a * vBeam.w, 1.0);
+  // in flat cartoon steps rather than a soft glow: a pale band, a bright one and a white-hot core
+  float k = step(0.22, a) * 0.32 + step(0.5, a) * 0.38 + step(0.85, a) * 0.3;
+  gl_FragColor = vec4(mix(vBeam.rgb, vec3(1.0), step(0.85, a) * 0.5) * k * vBeam.w, 1.0);
 }`
 
 /* ------------------------------------------------------------------ */
@@ -1035,7 +1024,7 @@ interface Pose {
 
 /** a point relative to where Volt stands, laid out for him at DESIGN scale */
 const vp = (x: number, y: number, z: number) => new THREE.Vector3(VOLT_AT.x + x * VK, VOLT_AT.y + y * VK, VOLT_AT.z + z * VK)
-/** his claws resting on the marquee's top edge (he leans on it: it comes up to his chest) */
+/** his claws resting on the header (he leans on it: it comes up to his belly) */
 const REST_CLAW = [vp(-1.05, 0.78, 0.85), vp(1.05, 0.78, 0.85)]
 /** robot dance poses, one per beat: left claw, right claw */
 const DANCE: [THREE.Vector3, THREE.Vector3][] = [
@@ -1092,11 +1081,9 @@ export class RoboScene {
   private readonly machine: MachineRig
   private readonly volt: HostRig
   private readonly lever: LeverRig
-  private readonly glassMat: THREE.MeshPhysicalMaterial
-  private readonly glassRim: THREE.Color
-  private readonly glassEnv: number
+  private readonly glassMat: THREE.MeshBasicMaterial
   private readonly tubeNeon: THREE.MeshBasicMaterial[]
-  private readonly lettersMat: THREE.MeshBasicMaterial
+  private readonly lettersMat: THREE.MeshToonMaterial
   private readonly beamMesh: THREE.InstancedMesh
   private readonly beamAttr: THREE.InstancedBufferAttribute
   private readonly beamMat: THREE.ShaderMaterial
@@ -1256,12 +1243,10 @@ export class RoboScene {
     const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: mobile ? 2 : 4 })
     this.composer = new EffectComposer(this.renderer, rt)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.35, 0.5, 0.85)
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.2, 0.4, 1)
     this.composer.addPass(this.bloom)
     this.composer.addPass(new OutputPass())
 
-    // the reflections every PBR material in the models uses, made once for this renderer
-    useEnvironment(this.renderer)
     const lights = makeLights()
     this.key = lights.getObjectByName('key') as THREE.DirectionalLight
     this.rim = lights.getObjectByName('rim') as THREE.DirectionalLight
@@ -1300,11 +1285,9 @@ export class RoboScene {
     // the machine, Volt behind its marquee and his lever
     this.machine = buildMachine({ cols: COLS, rows: ROWS, cell: 1 })
     this.scene.add(this.machine.root)
-    this.glassMat = this.machine.tubes[0].glass.material as THREE.MeshPhysicalMaterial
-    this.glassRim = (this.glassMat.userData.rim as { value: THREE.Color }).value.clone()
-    this.glassEnv = this.glassMat.envMapIntensity
+    this.glassMat = this.machine.tubes[0].glass.material as THREE.MeshBasicMaterial
     this.tubeNeon = this.machine.tubes.map((t) => t.neon.material as THREE.MeshBasicMaterial)
-    this.lettersMat = this.machine.letters.material as THREE.MeshBasicMaterial
+    this.lettersMat = this.machine.letters.material as THREE.MeshToonMaterial
     this.volt = buildHost()
     this.volt.root.position.copy(VOLT_AT)
     this.volt.root.scale.setScalar(VOLT_SCALE)
@@ -2968,12 +2951,14 @@ export class RoboScene {
     this.overlays[0].visible = this.black > 0.003
     this.overlays[1].visible = this.flashA > 0.003
 
-    // lights: warm key and neon rims by night, everything red in the alarm
+    // lights: a warm key and a soft fill by night, everything reddened in the alarm
     this.key.color.copy(KEY_NIGHT).lerp(KEY_ALARM, a)
-    this.key.intensity = 2.4 - 0.4 * a
-    this.rim.color.copy(RIM_NIGHT).lerp(RIM_ALARM, a)
+    this.key.intensity = 2 - 0.35 * a
+    this.rim.color.copy(RIM_NIGHT).lerp(RIM_ALARM, a * 0.6)
     this.rim2.color.copy(RIM2_NIGHT).lerp(RIM2_ALARM, a)
-    this.ambient.intensity = 0.25 - 0.04 * a
+    this.rim.intensity = 0.3
+    this.ambient.color.copy(AMB_NIGHT).lerp(AMB_ALARM, a)
+    this.ambient.intensity = 0.95 - 0.1 * a
 
     // Volt's beacon turns in the alarm; its light sweeps the machine and the room
     if (a > 0.001) this.beacon += real * 6.5
@@ -2982,7 +2967,7 @@ export class RoboScene {
     ;(this.volt.lamp.material as THREE.MeshBasicMaterial).color.copy(RED).multiplyScalar(0.6 + a * (0.8 + 4 * front ** 3))
     const bw = this.volt.beacon.getWorldPosition(this.beaconAt)
     this.beaconLight.position.set(bw.x + Math.sin(this.beacon) * 0.9, bw.y, bw.z + Math.cos(this.beacon) * 0.9)
-    this.beaconLight.intensity = a * 16 * (0.25 + 0.75 * front * front)
+    this.beaconLight.intensity = a * 1.6 * (0.25 + 0.75 * front * front)
 
     // lightning over the city now and then in the alarm
     if (a > 0.5 && this.clock > this.boltAt) {
@@ -2999,7 +2984,7 @@ export class RoboScene {
       this.pulse = Math.exp(-(((b - 0.05) / 0.05) ** 2)) + 0.7 * Math.exp(-(((b - 0.25) / 0.05) ** 2))
     } else this.pulse = Math.max(0, this.pulse - real * 3)
 
-    this.bloom.strength = 0.35 + 0.1 * a
+    this.bloom.strength = 0.2 + 0.08 * a
     this.dim += (this.dimTo - this.dim) * Math.min(1, dt * 10)
     if (Math.abs(this.dim - this.dimTo) < 0.002) this.dim = this.dimTo
     this.dimMat.opacity = Math.max(this.dim * 0.55, this.tease * 0.25)
@@ -3021,8 +3006,7 @@ export class RoboScene {
 
     // the glass slides away while the sockets are out
     const g = 1 - smooth(clamp01(this.sock))
-    ;(this.glassMat.userData.rim as { value: THREE.Color }).value.copy(this.glassRim).multiplyScalar(g)
-    this.glassMat.envMapIntensity = this.glassEnv * g
+    this.glassMat.opacity = g
     for (const t of this.machine.tubes) t.glass.visible = g > 0.01
     this.beamMat.uniforms.uTime.value = this.clock
   }
@@ -3044,12 +3028,12 @@ export class RoboScene {
       if (a > 0) c.lerp(tmp.copy(RED).multiplyScalar(1 + 0.8 * Math.max(0, Math.sin(T * 6 - col * 0.9))), a)
       const w = this.tubeWin[col]
       if (w) c.lerp(tmp.copy(w).multiplyScalar(1.2 + 0.5 * Math.sin(T * 10)), this.dim)
-      if (tz > 0) c.lerp(tmp.copy(GOLD).multiplyScalar(2.4 + 1.2 * Math.sin(T * 14)), tz)
-      c.addScalar(2 * this.tubeFlash[col])
+      if (tz > 0) c.lerp(tmp.copy(GOLD).multiplyScalar(1.35 + 0.35 * Math.sin(T * 14)), tz)
+      c.addScalar(1.2 * this.tubeFlash[col])
       this.tubeNeon[col].color.copy(c)
       // the energy column in a held tube
       const k = tz * (0.85 + 0.15 * Math.sin(T * 9 + col))
-      this.beamAttr.setXYZW(col, GOLD.r * 1.6, GOLD.g * 1.5, GOLD.b * 1.2, k)
+      this.beamAttr.setXYZW(col, GOLD.r * 0.9, GOLD.g * 0.85, GOLD.b * 0.7, k)
       beams = Math.max(beams, k)
       if (tz > 0.5 && Math.random() < real * 24) this.sparks.emit(cellX(col) + rnd(-0.35, 0.35), rnd(-WIN_H, WIN_H), 0.35, 0, rnd(0.8, 2), 0, GOLD.clone().multiplyScalar(2.2), rnd(0.1, 0.18), rnd(0.4, 0.7), 0, 1)
       // arcs crawl up the held tube's rails
@@ -3081,7 +3065,7 @@ export class RoboScene {
     this.needle += this.needleV * real
     this.machine.needles.forEach((n, i) => (n.rotation.z = 2.2 - 4.4 * clamp01(this.needle * (i ? 0.94 : 1) + 0.01 * Math.sin(T * 13 + i))))
 
-    // the marquee: a neon buzz now and then, and a blink with the beacon in the alarm
+    // the marquee: its letters flicker now and then, and blink with the beacon in the alarm
     if (T > this.flickerAt) {
       this.flickerAt = T + rnd(5, 11)
       this.flicker = 1
@@ -3089,19 +3073,20 @@ export class RoboScene {
     this.flicker = Math.max(0, this.flicker - real * 3)
     const buzz = this.flicker > 0 && Math.sin(T * 60) > 0.2 ? 0.45 : 1
     const alarmBlink = 1 - a * 0.45 * (Math.cos(this.beacon) > 0.3 ? 0 : 1)
-    this.lettersMat.color.setScalar(1.35 * buzz * alarmBlink)
+    this.lettersMat.color.setScalar(buzz * alarmBlink)
 
     // in the alarm: arcs crawl along the frame and the vents hiss
     if (a > 0.5 && T > this.crawlAt) {
       this.crawlAt = T + rnd(0.2, 0.55)
       const s = Math.random() < 0.5 ? -1 : 1
       if (Math.random() < 0.7) {
-        const x = s * 2.55
+        const x = s * (this.machine.size.halfW - 0.16)
         const y = rnd(-2.4, 1.6)
         this.arcs.emit(V3(x, y, 0.42), V3(x + rnd(-0.06, 0.06), y + rnd(0.6, 1.2), 0.42), '#ff6a4a', { life: 0.24, width: 0.06, jag: 0.35 })
       } else {
         const x = rnd(-2.2, 1.2)
-        this.arcs.emit(V3(x, 2.66, 0.45), V3(x + rnd(0.6, 1.1), 2.66, 0.45), '#ff8a5a', { life: 0.22, width: 0.055, jag: 0.35 })
+        const y = this.machine.size.ledge - 0.09
+        this.arcs.emit(V3(x, y, 0.45), V3(x + rnd(0.6, 1.1), y, 0.45), '#ff8a5a', { life: 0.22, width: 0.055, jag: 0.35 })
       }
     }
     if (a > 0.5 && T > this.steamAt) {
@@ -3684,7 +3669,7 @@ export class RoboScene {
 
     // the glow behind winners, arrivals and bots at work
     p.glowAmt += (Math.max(p.glowTo, p.charge * 0.8) - p.glowAmt) * Math.min(1, dt * 8)
-    const glow = p.glowAmt * (0.32 + 0.08 * Math.sin(this.clock * 9))
+    const glow = p.glowAmt * (0.2 + 0.05 * Math.sin(this.clock * 9))
     p.glow.material.opacity = glow
     p.glow.visible = glow > 0.01
     if (p.glow.visible) p.glow.scale.setScalar(1.35 + 0.25 * w)
@@ -3914,7 +3899,7 @@ export class RoboScene {
     for (const o of this.own) o.dispose()
     for (const pass of this.composer.passes) pass.dispose()
     this.composer.dispose()
-    // the shared models (materials, atlas, environment map) belong to this renderer: free them with it
+    // the shared models (materials, atlas, toon ramp) belong to this renderer: free them with it
     disposeModels()
     // the glow and ring textures are shared module-level caches (lib/three/fx); disposing them drops this renderer's
     // listeners on them, which would otherwise keep the whole renderer alive (the next scene uploads them again)

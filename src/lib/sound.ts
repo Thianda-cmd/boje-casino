@@ -255,6 +255,48 @@ function crackle(dur: number, gain: number, delay = 0) {
   for (let i = 0; i < n; i++) noise(0.008 + Math.random() * 0.01, gain * (0.4 + Math.random() * 0.6), 2500 + Math.random() * 4500, 'bandpass', delay + (i / n) * dur + Math.random() * 0.01)
 }
 
+/* voices of the Duck Derby recipes (sfx.derby) */
+
+/** a sawtooth through a vocal formant: the nasal part of a quack */
+function nasal(f: number, dur: number, gain: number, delay: number, slideTo: number, formant: number) {
+  const a = ac()
+  if (!a) return
+  const t = a.currentTime + delay
+  const o = osc(a, t, f, dur, 'sawtooth', slideTo)
+  const bp = a.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.setValueAtTime(formant, t)
+  bp.frequency.exponentialRampToValueAtTime(formant * 0.8, t + dur)
+  bp.Q.value = 2.4
+  const lp = a.createBiquadFilter()
+  lp.type = 'lowpass'
+  lp.frequency.value = 3400
+  const g = a.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.014)
+  g.gain.setValueAtTime(gain, t + dur * 0.45)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+  o.connect(bp).connect(lp).connect(g).connect(out(a))
+}
+
+/** each duck's voice, by lane: Sir Waddles low, Nugget a squeaky little thing */
+const DUCK_VOICE = [1, 1.1, 0.8, 1.18, 1.04, 1.36]
+const derbyGate = { quack: gate(90), splash: gate(70) }
+
+/** steady filtered noise swelling in and out over `dur`: a crowd layer, the river */
+function swell(dur: number, gain: number, kind: BiquadFilterType, freq: number, q: number, attack: number, delay = 0) {
+  const a = ac()
+  if (!a) return
+  const t = a.currentTime + delay
+  const f = noiseThrough(a, t, dur, kind, freq, q)
+  const g = a.createGain()
+  g.gain.setValueAtTime(0, t)
+  g.gain.linearRampToValueAtTime(gain, t + attack)
+  g.gain.setValueAtTime(gain, t + dur * 0.6)
+  g.gain.linearRampToValueAtTime(0, t + dur)
+  f.connect(g).connect(out(a))
+}
+
 export const sfx = {
   click: () => tone(520, 0.05, 'triangle', 0.04),
   bet: () => tone(330, 0.08, 'triangle', 0.06, 0, 440),
@@ -796,6 +838,74 @@ export const sfx = {
         ;[1568, 2093, 2637, 3136].forEach((f, i) => tone(f, 0.6, 'sine', 0.018, 0.42 + i * 0.08, undefined, [7, 10]))
       }
     },
+    // one reel of a stack comes to rest (rarity 0-4, i its place in the stack): a soft clack, pitched up the stack, with
+    // a little bell for anything from rare up; gated so a stack landing together never piles up
+    stop: (() => {
+      const pass = gate(40)
+      return (rarity = 0, i = 0) => {
+        if (!pass()) return
+        const k = 2 ** ((i * 2) / 12)
+        noise(0.03, 0.08, 1800 * k, 'bandpass')
+        tone(260 * k, 0.09, 'triangle', 0.05, 0, 190 * k)
+        if (rarity >= 2) tone([0, 0, 1319, 1568, 2093][rarity] * k, 0.3, 'sine', 0.02, 0.02, undefined, [6, 8])
+      }
+    })(),
+  },
+  /* case battles */
+  battles: {
+    // the countdown before the first round: 3, 2, 1 as short beeps, then a bright go (n = 0)
+    count: (n = 0) => {
+      if (n > 0) {
+        tone(660, 0.12, 'triangle', 0.06)
+        tone(1320, 0.08, 'sine', 0.015)
+      } else {
+        tone(988, 0.22, 'triangle', 0.07)
+        tone(1319, 0.3, 'sine', 0.035, 0.02)
+        sweep(0.3, 0.04, 600, 3200, 'bandpass', 1.2)
+      }
+    },
+    // every reel pushes off at once: a low whoosh under a rising rush of air
+    push: () => {
+      sweep(0.5, 0.05, 300, 2400, 'bandpass', 0.9)
+      tone(110, 0.22, 'sine', 0.06, 0, 165)
+    },
+    // a seat fills: a two-note pop up
+    join: () => {
+      tone(523, 0.1, 'triangle', 0.06)
+      tone(784, 0.16, 'triangle', 0.06, 0.08)
+      noise(0.02, 0.05, 3600, 'highpass')
+    },
+    // a seat empties, or the battle is called off: the same two notes down, softer
+    leave: () => {
+      tone(659, 0.1, 'triangle', 0.045)
+      tone(440, 0.18, 'triangle', 0.045, 0.08)
+    },
+    // the house bots roll in: three quick robot blips
+    bots: () => {
+      ;[880, 1175, 1568].forEach((f, i) => tone(f, 0.06, 'square', 0.022, i * 0.07))
+      tone(196, 0.24, 'sine', 0.05, 0, 392)
+    },
+    // the last round is in and the winner is about to show: a snare roll that swells for `dur` seconds
+    roll: (dur = 1.2) => {
+      const n = Math.round(dur / 0.045)
+      for (let i = 0; i < n; i++) noise(0.03, 0.025 + (i / n) * 0.06, 1800 + (i % 2) * 300, 'bandpass', i * 0.045)
+      tone(98, dur, 'sine', 0.03, 0, 147)
+    },
+    // the winner: a fanfare for a win (or a share of a split pot), a soft low fall for a loss
+    reveal: (won = false) => {
+      if (won) {
+        noise(0.12, 0.1, 900, 'lowpass')
+        tone(65, 0.6, 'sine', 0.12, 0, 49)
+        ;[523, 659, 784, 1046].forEach((f, i) => tone(f, 0.26, 'triangle', 0.06, i * 0.08))
+        ;[1046, 1319, 1568].forEach((f) => hold(f, 0.8, 'sawtooth', 0.006, 0.32, undefined, [5, 6]))
+        ;[1568, 2093, 2637].forEach((f, i) => tone(f, 0.5, 'sine', 0.016, 0.4 + i * 0.09, undefined, [7, 10]))
+      } else {
+        noise(0.1, 0.06, 600, 'lowpass')
+        tone(392, 0.2, 'triangle', 0.045)
+        tone(330, 0.24, 'triangle', 0.04, 0.12)
+        tone(262, 0.4, 'sine', 0.04, 0.24, 196)
+      }
+    },
   },
   /* baccarat */
   baccarat: {
@@ -848,6 +958,160 @@ export const sfx = {
       const notes = winner === 'P' ? [659, 988] : winner === 'B' ? [880, 659] : [784, 988, 1175]
       notes.forEach((f, i) => tone(f, 0.32, 'sine', 0.035, i * 0.1))
       tone(notes[notes.length - 1] * 2, 0.5, 'sine', 0.008, notes.length * 0.1)
+    },
+  },
+  /* duck derby */
+  derby: {
+    // a duck's quack, in its own voice (lane 0-5): a short "qua" and a longer falling "ack"
+    quack: (lane = 0) => {
+      if (!derbyGate.quack()) return
+      const k = DUCK_VOICE[lane] ?? 1
+      const f = 470 * k * (0.96 + Math.random() * 0.08)
+      nasal(f, 0.075, 0.07, 0, f * 0.86, 1500 * Math.sqrt(k))
+      nasal(f * 0.97, 0.15, 0.08, 0.072, f * 0.6, 1200 * Math.sqrt(k))
+      noise(0.03, 0.03, 2400, 'bandpass', 0.07)
+    },
+    // a bet goes on the slip: a rubber duck squeezed
+    squeeze: () => {
+      tone(1250, 0.11, 'triangle', 0.035, 0, 1750, [26, 55])
+      tone(1300, 0.11, 'sine', 0.03, 0, 1800, [26, 55])
+      noise(0.05, 0.025, 3800, 'bandpass', 0.02)
+    },
+    // and comes off it: the squeak let go
+    release: () => tone(1500, 0.1, 'triangle', 0.03, 0, 900, [22, 40]),
+    // the countdown pips: two short ones, then the horn
+    pip: () => {
+      tone(784, 0.12, 'square', 0.022)
+      tone(1568, 0.1, 'sine', 0.014)
+    },
+    // the starting horn: a brassy chord held, bending up into the note
+    horn: () => {
+      ;[233, 294, 349, 466].forEach((f, i) => hold(f * 0.94, 0.95, 'sawtooth', i === 3 ? 0.012 : 0.022, 0, f, [5, 2]))
+      hold(117, 0.95, 'square', 0.02, 0, 117)
+      noise(0.12, 0.05, 1200, 'bandpass')
+    },
+    // the river under the race; returns a function that fades it out
+    river: () => {
+      const a = ac()
+      if (!a) return () => {}
+      const t = a.currentTime
+      const len = Math.floor(a.sampleRate * 2)
+      const buf = a.createBuffer(1, len, a.sampleRate)
+      const d = buf.getChannelData(0)
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1
+      const src = a.createBufferSource()
+      src.buffer = buf
+      src.loop = true
+      const lp = a.createBiquadFilter()
+      lp.type = 'lowpass'
+      lp.frequency.value = 650
+      const bp = a.createBiquadFilter()
+      bp.type = 'bandpass'
+      bp.frequency.value = 1900
+      bp.Q.value = 1.6
+      const g = a.createGain()
+      const g2 = a.createGain()
+      g.gain.setValueAtTime(0, t)
+      g.gain.linearRampToValueAtTime(0.05, t + 0.8)
+      g2.gain.value = 0.012
+      // a slow wobble on the bright layer: water rushing past
+      const lfo = a.createOscillator()
+      const depth = a.createGain()
+      lfo.frequency.value = 0.35
+      depth.gain.value = 700
+      lfo.connect(depth).connect(bp.frequency)
+      src.connect(lp).connect(g).connect(out(a))
+      src.connect(bp).connect(g2).connect(g)
+      src.start(t)
+      lfo.start(t)
+      // bubbles now and then
+      const timer = setInterval(() => {
+        if (Math.random() < 0.6) tone(260 + Math.random() * 380, 0.09, 'sine', 0.018, Math.random() * 0.2, 520 + Math.random() * 500)
+      }, 380)
+      let stopped = false
+      return () => {
+        if (stopped) return
+        stopped = true
+        clearInterval(timer)
+        const n = a.currentTime
+        g.gain.cancelScheduledValues(n)
+        g.gain.setValueAtTime(g.gain.value, n)
+        g.gain.linearRampToValueAtTime(0, n + 0.6)
+        src.stop(n + 0.65)
+        lfo.stop(n + 0.65)
+      }
+    },
+    // a splash (size 0-1): a slap on the water and a blub
+    splash: (size = 1) => {
+      if (!derbyGate.splash()) return
+      noise(0.22 + size * 0.15, 0.1 + size * 0.08, 1400, 'lowpass')
+      noise(0.12, 0.05 * size, 4200, 'highpass', 0.02)
+      tone(210 + Math.random() * 60, 0.16, 'sine', 0.05 * size, 0.03, 95)
+    },
+    // straight into the log: a hollow wooden thunk, a cartoon boing and birds tweeting round a dizzy head
+    bonk: () => {
+      tone(240, 0.14, 'sine', 0.13, 0, 120)
+      noise(0.05, 0.14, 650, 'lowpass')
+      tone(330, 0.42, 'sine', 0.05, 0.05, 640, [11, 40])
+      ;[2300, 2600, 2300].forEach((f, i) => tone(f, 0.06, 'sine', 0.018, 0.32 + i * 0.11, f * 1.15))
+    },
+    // the whirlpool: a swirling sweep and a dizzy falling whistle
+    whirl: () => {
+      sweep(1.3, 0.05, 320, 1800, 'bandpass', 3)
+      sweep(1.1, 0.04, 1800, 380, 'bandpass', 3, 0.55)
+      tone(950, 1.3, 'sine', 0.022, 0.05, 320, [6, 50])
+    },
+    // a wave picks a duck up: a whoosh and a rising "wheee"
+    wave: () => {
+      sweep(0.7, 0.07, 400, 3200, 'bandpass', 0.8)
+      noise(0.5, 0.035, 5000, 'highpass', 0.15)
+      tone(520, 0.55, 'triangle', 0.022, 0.05, 1250, [7, 14])
+    },
+    // the waterfall: a roar and a falling whistle
+    falls: () => {
+      swell(1.6, 0.09, 'lowpass', 700, 0.7, 0.15)
+      sweep(1.2, 0.04, 2200, 500, 'bandpass', 1.2, 0.05)
+      tone(880, 0.6, 'triangle', 0.024, 0, 220)
+    },
+    // white water
+    rapids: () => {
+      for (let i = 0; i < 7; i++) noise(0.2, 0.05, 1300 + Math.random() * 1600, 'bandpass', i * 0.16 + Math.random() * 0.05)
+    },
+    // the crowd (level 0-1) for `dur` seconds: layered voices, a few whoops and a whistle
+    crowd: (level = 1, dur = 3) => {
+      swell(dur, 0.045 * level, 'bandpass', 750, 0.8, 0.5)
+      swell(dur, 0.03 * level, 'bandpass', 1500, 0.9, 0.4)
+      swell(dur * 0.85, 0.016 * level, 'bandpass', 2900, 1.2, 0.3)
+      for (let i = 0; i < Math.round(3 + level * 5); i++) {
+        const d = Math.random() * dur * 0.7
+        const f = 380 + Math.random() * 320
+        tone(f, 0.45, 'triangle', 0.01 * level, d, f * 1.5, [5, 8])
+      }
+      if (level > 0.7) {
+        tone(2300, 0.18, 'sine', 0.02, 0.3, 3100)
+        tone(3100, 0.3, 'sine', 0.02, 0.5, 2200)
+      }
+    },
+    // the finish-line camera: a shutter and the flash charging back up
+    shutter: () => {
+      noise(0.02, 0.16, 3200, 'highpass')
+      noise(0.03, 0.1, 1300, 'bandpass', 0.045)
+      tone(2800, 0.45, 'sine', 0.008, 0.08, 6200)
+    },
+    // the result for the player: a fanfare when the slip pays (bigger for a big win)
+    fanfare: (big = false) => {
+      ;[392, 523, 659].forEach((f, i) => hold(f, 0.12, 'sawtooth', 0.016, i * 0.11))
+      hold(784, 0.5, 'sawtooth', 0.018, 0.33, 784, [5, 5])
+      ;[523, 659, 784].forEach((f) => tone(f, 0.6, 'triangle', 0.03, 0.33))
+      if (big) {
+        ;[1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.5, 'sine', 0.02, 0.7 + i * 0.08, undefined, [6, 8]))
+        hold(1047, 0.7, 'sawtooth', 0.01, 0.7, 1047, [5, 5])
+      }
+    },
+    // nothing came in: a soft cartoon "wah-wah"
+    lose: () => {
+      tone(392, 0.28, 'triangle', 0.035, 0, 370, [5, 6])
+      tone(349, 0.5, 'triangle', 0.035, 0.3, 311, [5, 9])
     },
   },
 }

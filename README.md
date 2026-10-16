@@ -1,8 +1,8 @@
 # Boje Casino (play money)
 
-A Stake-style casino with eighteen games. Originals: Chicken Road, Crash, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
-Wheel and Cases. Table and machine games: Blackjack, Live Blackjack, Baccarat, Roulette, Video Poker, Chompers, Pop
-Party and Robo Riot.
+A Stake-style casino with twenty games. Originals: Chicken Road, Crash, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
+Wheel, Cases, Case Battles and Duck Derby. Table and machine games: Blackjack, Live Blackjack, Baccarat, Roulette,
+Video Poker, Chompers, Pop Party and Robo Riot.
 Vault Heist is a free skill game that pays coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
 
@@ -28,7 +28,8 @@ Chicken Road is the only pixel-art game (src/lib/pixel.ts, sprites in `src/games
 of palette keys rendered once to tiny canvases and scaled up with `image-rendering: pixelated`.
 Every other game and the site UI use a modern casino style. Its art is vector SVG drawn in React components in
 `src/art/` (cards, chips, gems, bomb, rocket, roulette wheel, prize wheel, vault, avatars, VIP badges) and the lobby
-covers in `src/components/covers.tsx`; the Cases crates and loot are in `src/games/cases/art.tsx`. The slot symbols
+covers in `src/components/covers.tsx`; the Cases crates and loot are in `src/games/cases/art.tsx` (Case Battles
+reuses them, with its own badges in `src/games/battles/art.tsx`). The slot symbols
 are 3D models built in code (`models.ts` in
 `src/games/chompers/`, `src/games/popparty/` and `src/games/roboriot/`). No image files ship.
 
@@ -49,7 +50,9 @@ Vercel functions in `api/`:
 - `setup.js`: applies the schema when its version changes (`POST /api/setup`). Needs `POSTGRES_URL`.
 - `auth.js`: sign-up (rate limited per IP) and account deletion, which need the service key.
 - `config.js`: the public Supabase URL and key for the browser.
-- `selftest.js`: an end-to-end check of Crash, Live Blackjack (on the hidden test table 99) and accounts. It only answers `?key=` matching the `SELFTEST_KEY` env var (set in Vercel; keep a copy in an untracked `.env.local`).
+- `selftest.js`: an end-to-end check of Crash, Live Blackjack (on the hidden test table 99), Case Battles (on hidden
+  battles of `g_selftest` guests, left out of the lobby) and accounts. It only answers `?key=` matching the
+  `SELFTEST_KEY` env var (set in Vercel; keep a copy in an untracked `.env.local`).
 
 Without the backend (or in the single-file preview) Crash runs the same rules locally for one player and
 accounts are hidden.
@@ -75,6 +78,28 @@ and pays out wherever you are in the app: while a stake is open, `App.tsx` keeps
 Without the backend the same rules run in the browser (`engine.ts`, `local.ts`) with house bots, marked BOT;
 that code is its own chunk, fetched only when the shared tables don't answer.
 
+## Case Battles
+Two to four players open the same crates, one per round, side by side: 1v1, 1v1v1, 1v1v1v1 or 2v2 (the team totals
+decide), with up to ten crates of any tiers at a stake of 1 to 10,000 per crate (a seat costs at most 100,000). The
+biggest total wins the whole pot, or in a crazy battle the smallest; ties split it. Anyone can join an open battle
+from the lobby or a shared link, and whoever sits in one can call the house bots to fill every empty seat. Everything
+runs in Postgres functions (`cb_list`, `cb_state`, `cb_create`, `cb_join`, `cb_bots`, `cb_leave`, `cb_result`) under a
+per-battle advisory lock: when the last seat fills, the same transaction draws every item, decides the winners and
+sets the clock (a 3 s countdown, a round every 4.8 s, the winner 1.5 s after the last). Nothing can change after that,
+so the browser gets the results at once and plays them on the server clock: every seat's reel is one Web Animation
+whose time is set from the server, so everyone sees the same spins land at the same moment, and a page opened (or
+reloaded) mid-battle picks the spin up where it is. Open battles nobody fills are called off after 15 minutes, lazily,
+and a creator who leaves calls the battle off; battles are kept for a week after they end, so a stake left open
+settles whenever its browser comes back. A player may sit in three open battles at once. Browsers poll `cb_state`
+(quickly while a battle waits for players, then only to confirm the end) and `cb_list` in the lobby. The seat's cost
+leaves the wallet when the create or join is sent and sits in a per-battle ledger in localStorage under a Web Lock
+(`src/games/battles/ledger.ts`): it is paid out once when the winner is shown, refunded if the battle is called off or
+the seat was never taken (a lost answer is resolved with `cb_result`, and a create whose answer was lost is found
+among your own battles), and a battle you walk away from still pays out wherever you are, because `App.tsx` (and any
+battle page you're watching) keeps calling `cb_result` while a stake is open. Without the backend the same rules run
+in the browser (`engine.ts`, `local.ts`, battles kept in localStorage) against the house bots, who also open battles
+of their own to keep the lobby busy; that code is its own chunk.
+
 ## Accounts
 Email and password through Supabase Auth, with a username and one of 16 avatars. Signing up from a guest wallet
 carries its coins into the new account. The wallet is cached on the device and saved a moment after it changes
@@ -92,7 +117,7 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
 - Emergency refill: 50 coins, only below 10 coins, once per 30 minutes.
 - Vault Heist: crack up to eight dials by timing each pick; the bag holds 10, 25, 50, 90, 150, 250, 400 and 650
   coins after each vault, banked whenever you like and lost on a miss. Three lockpicks, one back every 45 min.
-- Challenges: 19 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
+- Challenges: 21 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
   Crash, a 2% Dice win); Live Blackjack rounds count towards Explorer and High Roller. Only bets of 25+ count.
 
 ## Game math
@@ -120,9 +145,24 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   (src/games/cases/rules.ts). Wooden (low) 0.3× to 10×, 1× or more 36.8% of the time; Steel (medium) 0.2× to 100×,
   26.8%; Gold (high) 0.1× to 500×, 13.5%; Obsidian (extreme) 0.1× to 1,000×, 7.2%, with 100× or more 1 in 571. The
   item is drawn when the crate opens and the reel is built to stop on it, its fillers drawn from the same table.
+  Open one to five crates at once: one item is drawn for each, separately, and their reels stack up and land one
+  after another; the stake is bet × crates and the round settles once, with the best multiplier recorded.
   Rarity follows the multiplier: under 1× common, 1× uncommon, 2× rare, 10× epic, 100× legendary
   (`node --experimental-strip-types --import ./tools/ts-resolve.mjs tools/cases-test.ts` checks the sums and samples
   the picker).
+- Case Battles: every seat pays unit × crates and draws from the same Cases tables, so each seat's expected return
+  is 98% of its cost in every mode (the seats are symmetric): exactly 98% with whole-coin stakes, a hair under when
+  odd cents or a three-way split leave a fraction of a cent. The pot is unit × the sum of every multiplier drawn,
+  floored to the cent, and each winner gets floor(pot / winners × 100) / 100; the offline stand-in decides with the
+  same arithmetic (`tools/battles-sql/crosscheck.mjs` checks it against the SQL battle by battle).
+- Duck Derby: six ducks; before each race the chances 32/22/16/12/10/8% are dealt to them at random. The whole
+  finishing order is drawn when the race starts by successive weighted sampling (Harville: the winner by the chances,
+  then second from the rest renormalised, and so on). Win (first), Place (first or second, P = pᵢ + Σⱼ pⱼpᵢ/(1 − pⱼ))
+  and Forecast (exact first and second, P = pₐp_b/(1 − pₐ)) each pay 0.97 / P exactly, so every bet returns 97%: Win
+  3.03× to 12.13×, Place 1.68× to 5.54×, Forecast 9.37× to 111.55×. One stake for the whole slip (up to 12 bets),
+  one settle when the podium shows; the race (src/games/derby/race.ts) is built to end in the drawn order
+  (`node --experimental-strip-types --import ./tools/ts-resolve.mjs tools/derby-test.ts` enumerates all 720 orders
+  on all 720 deals with exact fractions; `tools/derby-race-test.ts` checks thousands of planned races).
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
 - Pop Party: 7 × 7 floor; 5+ touching balloons pay, winners pop and the rest float up until nothing wins. Every
   pop lights the tile underneath, and each further pop doubles it up to ×128; a win is multiplied by the sum of

@@ -1535,3 +1535,25 @@ export function warmUp() {
   for (const s of Object.keys(BUILD) as Sym[]) proto(s, BUILD[s])
   buildOctoHat()
 }
+
+/**
+ * Lets go of a renderer that is closing. Every material, texture and geometry cached here (and the shared toon ramp,
+ * glow texture and sprite quad) holds a 'dispose' listener from each renderer that drew it, and through it the whole
+ * renderer, so every visit used to leave one behind. Disposing them drops those listeners and the GPU copies; the
+ * objects themselves stay cached, and the next scene uploads them again without rebuilding a single model.
+ */
+export function releaseModels() {
+  for (const m of [cast, stageCast, disco, stageDisco, halo]) m?.dispose()
+  badges?.dispose()
+  popCard?.dispose()
+  discoGeo?.dispose()
+  garland?.dispose()
+  for (const p of protos.values())
+    p.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.geometry.dispose()
+    })
+  toonRamp(RAMP).dispose()
+  glowTexture().dispose()
+  // three's sprites all share one quad
+  new THREE.Sprite().geometry.dispose()
+}

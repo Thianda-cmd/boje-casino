@@ -13,6 +13,8 @@ import { carried, logout } from './lib/account'
 import { guestId } from './lib/identity'
 import { migrateGuest, pendingAll } from './games/livebj/ledger'
 import type { TableServer } from './games/livebj/types'
+import { hasShared as hasBattleStakes, isNew as isNewBattle, migrateGuest as migrateBattleGuest, pendingAll as pendingBattles } from './games/battles/ledger'
+import type { BattleServer } from './games/battles/types'
 import { GameIcon } from './components/GameIcon'
 import { GameCover } from './components/covers'
 import { Toasts } from './components/Toasts'
@@ -37,6 +39,8 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   roulette: lazy(() => import('./games/roulette/Roulette')),
   chompers: lazy(() => import('./games/chompers/Chompers')),
   cases: lazy(() => import('./games/cases/Cases')),
+  battles: lazy(() => import('./games/battles/CaseBattles')),
+  derby: lazy(() => import('./games/derby/DuckDerby')),
   baccarat: lazy(() => import('./games/baccarat/Baccarat')),
   popparty: lazy(() => import('./games/popparty/PopParty')),
   roboriot: lazy(() => import('./games/roboriot/RoboRiot')),
@@ -59,6 +63,7 @@ export default function App() {
   const authReady = useAuth((s) => s.status !== 'loading')
   const m = route.match(/^\/game\/(\w+)/)
   useLiveBjPayouts(who, authReady && m?.[1] !== 'livebj')
+  useBattlePayouts(who, authReady && m?.[1] !== 'battles')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -152,6 +157,45 @@ function useLiveBjPayouts(who: string, on: boolean) {
         const f = await server.tables()
         // only the tab that controls the seat touches the wallet, as in the Live Blackjack lobby
         if (!stop && (!f.mine || f.mine.active)) await settleMissed(server, who, 'shared', null, [])
+      } catch {
+        /* offline: try again on the next tick */
+      } finally {
+        busy = false
+      }
+    }
+    run()
+    const id = setInterval(run, 5000)
+    const onVisible = () => !document.hidden && run()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      stop = true
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [who, on])
+}
+
+/* A Case Battle plays out on the server's clock whether or not anyone watches. The Case Battles pages settle their own;
+   everywhere else this asks about the shared battles you paid into (cb_result) and pays each one out once its winner
+   is shown, or refunds it if it was called off. It only polls while such a stake is pending (games/battles/ledger.ts). */
+function useBattlePayouts(who: string, on: boolean) {
+  useEffect(() => {
+    if (!on) return
+    const c = carried()
+    if (c) migrateBattleGuest(c.to, guestId, c.at)
+    let stop = false
+    let busy = false
+    let server: BattleServer | null = null
+    const run = async () => {
+      if (busy || !hasBattleStakes(who)) return
+      busy = true
+      try {
+        const [net, { settleMissed }] = await Promise.all([import('./games/battles/net'), import('./games/battles/settle')])
+        server ??= await net.tryShared()
+        if (!server || stop) return
+        // a create whose answer was lost is found among your own battles in the lobby feed
+        const mine = Object.keys(pendingBattles(who)).some(isNewBattle) ? (await server.list()).mine : null
+        if (!stop) await settleMissed(server, who, { mine })
       } catch {
         /* offline: try again on the next tick */
       } finally {
