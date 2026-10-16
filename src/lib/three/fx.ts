@@ -298,3 +298,83 @@ export class AutoQuality {
     return false
   }
 }
+
+/**
+ * AutoQuality that copes with frame-rate caps. It judges each window of 40 frames by its median gap, so a GC pause
+ * or a late shader compile costs no resolution. And when two steps down in a row buy no faster frames, the gap is
+ * not the GPU's doing but a cap (iOS Low Power Mode or a browser's energy saver: 30 Hz) or the CPU: it gives the
+ * resolution back and from then on judges against the gap it gets anyway. Used like AutoQuality.
+ */
+export class PacedQuality {
+  q = 1
+  private ceil = 1
+  private prev = 0
+  private n = 0
+  private readonly gaps = new Float32Array(40)
+  private good = 0
+  /** the frame gap the browser delivers whatever the resolution, once a run of steps down has shown it; 0 until then */
+  private cadence = 0
+  /** during a run of steps down: the median gap before it, the q to go back to, and how many steps bought nothing */
+  private before = 0
+  private restoreTo = 1
+  private noGain = 0
+  constructor(private readonly min = 0.5) {}
+
+  /** Call on every drawn frame with the frame timestamp; `chained` says the frame before was drawn too.
+   *  Returns true when `q` changed. */
+  frame(now: number, chained: boolean) {
+    const gap = now - this.prev
+    this.prev = now
+    if (!chained || gap > 1000 || document.hidden) return false
+    this.gaps[this.n] = gap
+    if (++this.n < this.gaps.length) return false
+    this.n = 0
+    const med = this.gaps.slice().sort()[this.gaps.length >> 1]
+    const slow = this.cadence ? med > this.cadence * 1.35 : med > 23
+    if (slow && (this.q > this.min || this.before)) {
+      if (!this.before || med < this.before * 0.9) {
+        // the first step of a run, or the last step helped: carry on from here
+        this.before = med
+        this.restoreTo = this.q
+        this.noGain = 0
+      } else if (++this.noGain >= 2 || this.q <= this.min) {
+        // fewer pixels made frames no faster: give them back, and take the gap as the cadence from now on
+        this.cadence = this.before
+        this.q = this.ceil = this.restoreTo
+        this.before = this.noGain = this.good = 0
+        return true
+      }
+      this.ceil = this.q
+      this.q = Math.max(this.min, this.q * 0.78)
+      this.good = 0
+      return true
+    }
+    this.before = this.noGain = 0
+    if (med < (this.cadence ? this.cadence * 1.1 : 18.5) && this.q < this.ceil * 0.9) {
+      if (++this.good < 6) return false
+      this.good = 0
+      this.q = Math.min(this.ceil * 0.9, this.q * 1.12)
+      return true
+    }
+    this.good = 0
+    return false
+  }
+}
+
+let ringTex: THREE.CanvasTexture | null = null
+/** a soft white ring (inner radius 0.72, outer 0.92 of the half size), for ring bursts */
+export function ringTexture() {
+  if (ringTex) return ringTex
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')!
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64)
+  grad.addColorStop(0.68, 'rgba(255,255,255,0)')
+  grad.addColorStop(0.76, 'rgba(255,255,255,1)')
+  grad.addColorStop(0.88, 'rgba(255,255,255,1)')
+  grad.addColorStop(0.96, 'rgba(255,255,255,0)')
+  g.fillStyle = grad
+  g.fillRect(0, 0, 128, 128)
+  ringTex = new THREE.CanvasTexture(c)
+  return ringTex
+}

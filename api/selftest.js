@@ -1,8 +1,9 @@
 import { auth, cfg, createAccount, deleteUser, rpc } from './_lib/supa.js'
 
 /*
-  End-to-end check of the live backend: Crash functions, sign-up, sign-in, profile and wallet
-  saves, then removes the test account. Only answers when ?key= matches the SELFTEST_KEY env var; reports pass/fail only.
+  End-to-end check of the live backend: Crash, Live Blackjack (on the hidden test table 99) and accounts: sign-up,
+  sign-in, profile and wallet saves, then removes the test account. Only answers when ?key= matches the SELFTEST_KEY
+  env var; reports pass/fail only.
 */
 
 export default async function handler(req, res) {
@@ -44,6 +45,39 @@ export default async function handler(req, res) {
     const r = await fetch(`${c.url}/rest/v1/crash_round?select=seed&limit=1`, { headers: { apikey: c.anon, ...(c.anon.startsWith('eyJ') ? { authorization: `Bearer ${c.anon}` } : {}) } })
     must(r.status === 401 || r.status === 403 || r.status === 404, `status ${r.status}`)
     return { status: r.status }
+  })
+
+  const bjGuest = 'g_selftest' + Math.random().toString(36).slice(2, 12).padEnd(10, '0')
+  await step('bj_tables as guest', async () => {
+    const r = await rpc('bj_tables', { p_player: bjGuest, p_sid: null })
+    must(r.ok && Array.isArray(r.body?.tables) && r.body.tables.length >= 1 && !r.body.tables.some((t) => t.id === 99), `status ${r.status} ${JSON.stringify(r.body).slice(0, 120)}`)
+    return { tables: r.body.tables.length }
+  })
+  await step('bj_state on the test table', async () => {
+    const r = await rpc('bj_state', { p_table: 99, p_player: bjGuest, p_sid: null, p_etag: null })
+    must(r.ok && r.body?.round?.id && !JSON.stringify(r.body).includes('"shoe"'), `status ${r.status} ${JSON.stringify(r.body).slice(0, 120)}`)
+    return { round: r.body.round.id, phase: r.body.round.phase }
+  })
+  await step('direct read of bj_table is blocked', async () => {
+    const r = await fetch(`${c.url}/rest/v1/bj_table?select=shoe&limit=1`, { headers: { apikey: c.anon, ...(c.anon.startsWith('eyJ') ? { authorization: `Bearer ${c.anon}` } : {}) } })
+    must(r.status === 401 || r.status === 403 || r.status === 404, `status ${r.status}`)
+    return { status: r.status }
+  })
+  await step('internal bj function is blocked', async () => {
+    const r = await rpc('_bj_advance', { t_id: 99, now_ms: 0 })
+    must(!r.ok, `status ${r.status}`)
+    return { status: r.status }
+  })
+  await step('bj_sit + bj_leave on the test table', async () => {
+    for (let seat = 1; seat <= 5; seat++) {
+      const s = await rpc('bj_sit', { p_table: 99, p_seat: seat, p_player: bjGuest, p_sid: null, p_name: 'Selftest', p_avatar: 0 })
+      if (s.body?.error === 'taken') continue
+      must(s.ok && s.body?.ok && s.body.sid, `status ${s.status} ${JSON.stringify(s.body).slice(0, 120)}`)
+      const l = await rpc('bj_leave', { p_table: 99, p_player: bjGuest, p_sid: s.body.sid })
+      must(l.ok && l.body?.ok, `leave ${l.status}`)
+      return { seat }
+    }
+    return { seat: null, note: 'test table full' }
   })
 
   const tag = Math.random().toString(36).slice(2, 8)

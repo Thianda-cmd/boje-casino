@@ -1,4 +1,4 @@
-export type GameId = 'chicken' | 'crash' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'slots' | 'chompers' | 'blackjack' | 'roulette' | 'videopoker'
+export type GameId = 'chicken' | 'crash' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'slots' | 'chompers' | 'popparty' | 'blackjack' | 'livebj' | 'roulette' | 'videopoker'
 
 export type Category = 'originals' | 'table'
 
@@ -24,7 +24,9 @@ export const GAMES: GameInfo[] = [
   { id: 'wheel', name: 'Wheel', category: 'originals', tagline: 'Spin the wheel, pick your risk.', accent: '#ff7a45' },
   { id: 'slots', name: 'Slots', category: 'originals', tagline: 'Gems pay anywhere, tumble, and multiply in free spins.', accent: '#e05cff', tag: 'new' },
   { id: 'chompers', name: 'Chompers', category: 'originals', tagline: 'Cartoon monsters chomp every donut on the reels.', accent: '#2ee87f', tag: 'new' },
+  { id: 'popparty', name: 'Pop Party', category: 'originals', tagline: 'Balloon animals pop on a light-up floor; every pop lights a multiplier.', accent: '#ff4fb8', tag: 'new' },
   { id: 'blackjack', name: 'Blackjack', category: 'table', tagline: 'Six decks, dealer stands on soft 17, blackjack pays 3 to 2.', accent: '#4f8bff' },
+  { id: 'livebj', name: 'Live Blackjack', category: 'table', tagline: 'Real players, one shoe. Pull up a seat at a shared table.', accent: '#f2a93b', tag: 'live' },
   { id: 'roulette', name: 'Roulette', category: 'table', tagline: 'European single zero. Red, black, or your lucky number.', accent: '#ff4d61' },
   { id: 'videopoker', name: 'Video Poker', category: 'table', tagline: 'Jacks or Better. Hold, draw, chase the royal flush.', accent: '#2fb8ff', tag: 'new' },
 ]

@@ -20,6 +20,7 @@ interface Meta {
 }
 
 const metaKey = (uid: string) => `lumen.wallet.acct.${uid}.meta`
+const CARRIED_KEY = 'lumen.carried'
 const readMeta = (uid: string): Meta | null => {
   try {
     return JSON.parse(safeStorage.getItem(metaKey(uid)) ?? 'null')
@@ -151,6 +152,8 @@ async function enterAccount(uid: string, email: string | null, metaName: string 
   if (resetGuestOnEnter) {
     resetGuestOnEnter = false
     safeStorage.removeItem(GUEST_WALLET_KEY)
+    // Live Blackjack moves the guest's open stakes into this account (games/livebj/ledger.ts)
+    safeStorage.setItem(CARRIED_KEY, JSON.stringify({ to: uid, at: Date.now() }))
   }
   startSync()
   if (dirty) schedule(500)
@@ -163,6 +166,16 @@ function enterGuest() {
   switchWallet(GUEST_WALLET_KEY)
   applying = false
   useAuth.setState({ status: 'guest', uid: null, email: null, profile: null, sync: 'idle' })
+}
+
+/** The last sign-up on this device that carried the guest wallet into an account. */
+export function carried(): { to: string; at: number } | null {
+  try {
+    const c = JSON.parse(safeStorage.getItem(CARRIED_KEY) ?? 'null')
+    return typeof c?.to === 'string' && Number.isFinite(Number(c.at)) ? { to: c.to, at: Number(c.at) } : null
+  } catch {
+    return null
+  }
 }
 
 /* ---------------- wallet sync ---------------- */
@@ -243,6 +256,11 @@ function applyResult(r: { ok: boolean; rev?: number; error?: string; wallet?: Re
     useAuth.setState({ sync: 'error' })
   }
   writeMeta()
+}
+
+/** What a raw REST call needs (keepalive requests that outlive the page), or null without a backend. */
+export function restAuth(): { url: string; key: string; token: string | null } | null {
+  return cfg ? { url: cfg.url, key: cfg.key, token } : null
 }
 
 /** When the page is being hidden or closed: send the save in a request that outlives the page. */

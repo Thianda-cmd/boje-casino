@@ -225,6 +225,15 @@ export const CHALLENGES: Challenge[] = [
     step: (e, p) => (e.game === 'chompers' && Number(e.meta?.level) >= 3 ? 1 : p),
   },
   {
+    id: 'popparty-floor',
+    game: 'popparty',
+    title: 'Floor Filler',
+    desc: 'Light a Pop Party disco tile all the way to ×128.',
+    reward: 3500,
+    goal: 1,
+    step: (e, p) => (e.game === 'popparty' && Number(e.meta?.maxTile) >= 128 ? 1 : p),
+  },
+  {
     id: 'poker-quads',
     game: 'videopoker',
     title: 'Four of a Kind',

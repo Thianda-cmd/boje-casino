@@ -1,7 +1,8 @@
 import { backend, rpc } from '../../lib/backend'
-import { rand } from '../../lib/rng'
-import { safeStorage } from '../../lib/storage'
+import { guestId } from '../../lib/identity'
 import { crashFromSeed, newSeed, sha256Hex } from './fair'
+
+export { guestId, defaultName, saveName } from '../../lib/identity'
 
 /* Where Crash rounds come from: the shared rounds in the database when it is reachable, otherwise
    a local stand-in with the same rules, so the game still works offline and in the preview. */
@@ -45,24 +46,6 @@ export interface CrashServer {
   cashout(round: number): Promise<CashResult>
   roundInfo(round: number): Promise<RoundInfo | null>
 }
-
-/* ---------- identity ---------- */
-
-function stored(key: string, make: () => string, valid: (v: string) => boolean = () => true) {
-  const v = safeStorage.getItem(key)
-  if (v && valid(v)) return v
-  const n = make()
-  safeStorage.setItem(key, n)
-  return n
-}
-/** Guests are told apart by a random id kept on this device; signed-in players by their account. */
-export const guestId = stored(
-  'lumen.crash.gid',
-  () => 'g_' + Array.from({ length: 20 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(rand() * 36)]).join(''),
-  (v) => /^g_[a-z0-9]{12,40}$/.test(v),
-)
-export const defaultName = () => stored('lumen.crash.name', () => `Player${Math.floor(1000 + rand() * 9000)}`)
-export const saveName = (n: string) => safeStorage.setItem('lumen.crash.name', n)
 
 /* ---------- shared rounds ---------- */
 

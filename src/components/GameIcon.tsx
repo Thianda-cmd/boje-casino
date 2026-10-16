@@ -101,6 +101,24 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
           <path d="M7.5 15h9M9 15l1 1.6 1-1.6 1 1.6 1-1.6 1 1.6 1-1.6" />
         </svg>
       )
+    case 'popparty':
+      return (
+        <svg {...p}>
+          <path d="M11 3c-3.6 0-6.2 2.8-6.2 6.4 0 3.9 3.1 6.9 6.2 7.7 3.1-.8 6.2-3.8 6.2-7.7C17.2 5.8 14.6 3 11 3Z" />
+          <path d="M10 17.2l1 1.6 1-1.6" />
+          <path d="M11 18.8c-1.2.9 1.2 1.6 0 2.7" />
+          <path d="M8.2 6.6c-.9.7-1.4 1.7-1.5 2.8" opacity=".6" />
+          <path d="M19.5 2.8v3.4M17.8 4.5h3.4" />
+        </svg>
+      )
+    case 'livebj':
+      return (
+        <svg {...p}>
+          <rect x="2.5" y="6" width="10" height="14" rx="1.8" transform="rotate(-8 7.5 13)" />
+          <rect x="9" y="5" width="10" height="14" rx="1.8" transform="rotate(6 14 12)" />
+          <circle cx="20" cy="4.5" r="2.2" fill="currentColor" stroke="none" />
+        </svg>
+      )
     case 'videopoker':
       return (
         <svg {...p}>

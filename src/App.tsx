@@ -9,7 +9,10 @@ import { AuthModal } from './components/AuthModal'
 import { BojeLoader, Spinner } from './components/Loader'
 import { Avatar } from './art/Avatar'
 import { useAuth } from './store/auth'
-import { logout } from './lib/account'
+import { carried, logout } from './lib/account'
+import { guestId } from './lib/identity'
+import { migrateGuest, pendingAll } from './games/livebj/ledger'
+import type { TableServer } from './games/livebj/types'
 import { GameIcon } from './components/GameIcon'
 import { GameCover } from './components/covers'
 import { Toasts } from './components/Toasts'
@@ -33,6 +36,8 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   roulette: lazy(() => import('./games/roulette/Roulette')),
   slots: lazy(() => import('./games/slots/Slots')),
   chompers: lazy(() => import('./games/chompers/Chompers')),
+  popparty: lazy(() => import('./games/popparty/PopParty')),
+  livebj: lazy(() => import('./games/livebj/LiveBlackjack')),
   videopoker: lazy(() => import('./games/videopoker/VideoPoker')),
 }
 const Heist = lazy(() => import('./games/heist/Heist'))
@@ -48,6 +53,9 @@ export default function App() {
   const [search, setSearch] = useState(false)
   // a different player means a different wallet: start the page over
   const who = useAuth((s) => s.uid ?? 'guest')
+  const authReady = useAuth((s) => s.status !== 'loading')
+  const m = route.match(/^\/game\/(\w+)/)
+  useLiveBjPayouts(who, authReady && m?.[1] !== 'livebj')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -61,7 +69,8 @@ export default function App() {
   }, [])
 
   let page: ReactNode
-  const m = route.match(/^\/game\/(\w+)/)
+  // a game's own sub-routes (Live Blackjack tables) keep the page mounted
+  const pageKey = m && m[1] in gamePages ? `/game/${m[1]}` : route
   if (m && m[1] in gamePages) {
     const Game = gamePages[m[1] as GameId]
     page = (
@@ -89,7 +98,7 @@ export default function App() {
           <div className="mx-auto w-full max-w-[1480px] px-3 pt-3 sm:px-5 sm:pt-5">
             <AnimatePresence mode="wait">
               <motion.div
-                key={`${route}|${who}`}
+                key={`${pageKey}|${who}`}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
@@ -107,6 +116,48 @@ export default function App() {
       <Toasts />
     </div>
   )
+}
+
+/* A Live Blackjack round plays on after you leave the table (your hands stand when their turn runs out). The Live
+   Blackjack page settles its own rounds; everywhere else in the app this keeps finishing the shared rounds you still
+   have a stake in and pays them out, so a win lands seconds after its results rather than when you next open the
+   tables. It only polls while such a stake is pending (games/livebj/ledger.ts). */
+function useLiveBjPayouts(who: string, on: boolean) {
+  useEffect(() => {
+    if (!on) return
+    // stakes a guest had open when signing up were paid from the wallet the account took over: they settle there
+    const c = carried()
+    if (c) migrateGuest(c.to, guestId, c.at)
+    let stop = false
+    let busy = false
+    let server: TableServer | null = null
+    const run = async () => {
+      if (busy || !Object.values(pendingAll(who)).some((p) => p.src === 'shared')) return
+      busy = true
+      try {
+        const [net, { settleMissed }] = await Promise.all([import('./games/livebj/net'), import('./games/livebj/settle')])
+        server ??= await net.tryShared()
+        if (!server) return
+        // bj_tables advances every table that is due, so a round nobody is watching still plays out
+        const f = await server.tables()
+        // only the tab that controls the seat touches the wallet, as in the Live Blackjack lobby
+        if (!stop && (!f.mine || f.mine.active)) await settleMissed(server, who, 'shared', null, [])
+      } catch {
+        /* offline: try again on the next tick */
+      } finally {
+        busy = false
+      }
+    }
+    run()
+    const id = setInterval(run, 5000)
+    const onVisible = () => !document.hidden && run()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      stop = true
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [who, on])
 }
 
 function Sidebar({ route, collapsed }: { route: string; collapsed: boolean }) {

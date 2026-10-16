@@ -4,6 +4,7 @@ import { Px } from './pixelui'
 import { asphalt, bush, chicken, curb, flower, grass, vehicle } from '../games/chicken/sprites'
 import type { GameId } from '../store/games'
 import { useUid } from '../art/ids'
+import { Avatar } from '../art/Avatar'
 import { CardBack, CardFace } from '../art/Card'
 import { Chip } from '../art/Chip'
 import { Gem } from '../art/Gem'
@@ -50,6 +51,10 @@ export function GameCover({ id }: { id: GameId }) {
       return <SlotsCover />
     case 'chompers':
       return <ChompersCover />
+    case 'popparty':
+      return <PopPartyCover />
+    case 'livebj':
+      return <LiveBlackjackCover />
     case 'videopoker':
       return <VideoPokerCover />
   }
@@ -495,6 +500,261 @@ function ChompersCover() {
       </g>
       {[[56, 196, 3], [146, 200, 2.5], [138, 186, 2], [62, 208, 2]].map(([x, y, r], i) => (
         <circle key={i} cx={x} cy={y} r={r} fill="#e39a4b" stroke={INK} strokeWidth="1.5" />
+      ))}
+    </Scene>
+  )
+}
+
+const PARTY_COLORS = ['#ff4fb8', '#ffcc29', '#3fc4ff', '#9a6bff', '#29d8c4']
+
+/** The bunting string M-5 28 Q100 48 205 24 at x; its x runs evenly with t, so t falls straight out of x. */
+function buntY(x: number) {
+  const t = (x + 5) / 210
+  return 28 * (1 - t) ** 2 + 96 * t * (1 - t) + 24 * t * t
+}
+
+/** A poodle pom-pom: a circle with a scalloped edge. */
+function pom(cx: number, cy: number, r: number) {
+  const n = r > 10 ? 9 : 7
+  const p = (i: number) => {
+    const a = (i / n) * 2 * Math.PI - Math.PI / 2
+    return `${(cx + Math.cos(a) * r * 0.86).toFixed(1)} ${(cy + Math.sin(a) * r * 0.86).toFixed(1)}`
+  }
+  const b = (r * 0.86 * Math.sin(Math.PI / n) * 1.3).toFixed(1)
+  return `M${p(0)}${Array.from({ length: n }, (_, i) => ` A${b} ${b} 0 0 1 ${p(i + 1)}`).join('')}Z`
+}
+
+/** A star polygon around the origin with n points. */
+function burst(n: number, ro: number, ri: number) {
+  return Array.from({ length: n * 2 }, (_, i) => {
+    const a = (i * Math.PI) / n - Math.PI / 2
+    const r = i % 2 ? ri : ro
+    return `${(Math.cos(a) * r).toFixed(1)},${(Math.sin(a) * r).toFixed(1)}`
+  }).join(' ')
+}
+
+/** A four-point twinkle. */
+function Sparkle({ x, y, r }: { x: number; y: number; r: number }) {
+  const k = r * 0.22
+  return <path d={`M${x} ${y - r} Q${x + k} ${y - k} ${x + r} ${y} Q${x + k} ${y + k} ${x} ${y + r} Q${x - k} ${y + k} ${x - r} ${y} Q${x - k} ${y - k} ${x} ${y - r}Z`} fill="#fff" />
+}
+
+/** A party balloon on a curly string. */
+function CoverBalloon({ x, y, rx, ry, color, light, dark }: { x: number; y: number; rx: number; ry: number; color: string; light: string; dark: string }) {
+  const u = useUid()
+  const b = y + ry
+  return (
+    <g>
+      <defs>
+        <radialGradient id={u} cx=".34" cy=".28" r=".8">
+          <stop offset="0" stopColor={light} />
+          <stop offset=".55" stopColor={color} />
+          <stop offset="1" stopColor={dark} />
+        </radialGradient>
+      </defs>
+      <path d={`M${x} ${b + 5} c-7 7 7 12 0 19 s7 12 0 19 s7 12 0 19`} fill="none" stroke={INK} strokeWidth="1.8" strokeLinecap="round" />
+      <path d={`M${x} ${b - 1} l-4.5 6.5 h9 Z`} fill={color} stroke={INK} strokeWidth="2.5" strokeLinejoin="round" />
+      <ellipse cx={x} cy={y} rx={rx} ry={ry} fill={`url(#${u})`} stroke={INK} strokeWidth="3" />
+      <ellipse cx={x - rx * 0.42} cy={y - ry * 0.42} rx={rx * 0.2} ry={ry * 0.3} fill="#fff" opacity=".85" transform={`rotate(32 ${x - rx * 0.42} ${y - ry * 0.42})`} />
+    </g>
+  )
+}
+
+/** Pop Party: Fifi the balloon poodle dancing on a lit disco floor under the bunting and the mirror ball. */
+function PopPartyCover() {
+  const u = useUid()
+  const dark = '#2a1a4f'
+  const floor = [
+    ['#2fd3ff', '#6dff5a', '#ffe23d', '#ff4fd8'],
+    [dark, '#ff9a2e', '#2fd3ff', dark],
+  ]
+  const pills = [
+    [76, 209, '×4', '#6dff5a'],
+    [76, 237, '×16', '#ff9a2e'],
+  ] as const
+  const confetti = [
+    [84, 62, 0, 30], [98, 70, 2, 0], [70, 98, 4, -24], [178, 108, 1, 45], [190, 140, 3, 0],
+    [166, 158, 2, 16], [188, 176, 0, -30], [12, 124, 1, 0], [10, 158, 3, 20], [150, 146, 4, 0],
+  ] as const
+  return (
+    <Scene from="#62d4ff" to="#ff5fb8">
+      <defs>
+        <radialGradient id={`${u}d`} cx=".34" cy=".3" r=".8">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#9aa3c2" />
+        </radialGradient>
+        <radialGradient id={`${u}h`}>
+          <stop offset="0" stopColor="#fff" stopOpacity=".7" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${u}t`} cy=".6" r=".6">
+          <stop offset="0" stopColor="#fff" stopOpacity=".55" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${u}r`} cx="160" cy="64" r="190" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#fff" stopOpacity=".4" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${u}p`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ff86d0" />
+          <stop offset=".55" stopColor="#ff4fb8" />
+          <stop offset="1" stopColor="#e2349c" />
+        </linearGradient>
+        <radialGradient id={`${u}q`} cx=".38" cy=".32" r=".75">
+          <stop offset="0" stopColor="#ffe3f6" />
+          <stop offset="1" stopColor="#ff9fdc" />
+        </radialGradient>
+        <clipPath id={`${u}c`}>
+          <circle cx="160" cy="64" r="22" />
+        </clipPath>
+        <filter id={`${u}g`} x="-40%" y="-80%" width="180%" height="260%">
+          <feGaussianBlur stdDeviation="5" />
+        </filter>
+      </defs>
+
+      {/* light beams from the mirror ball, then the dance floor, whose lit tiles glow up into the room */}
+      <path d="M160 64 L-10 112 L-10 142 Z M160 64 L36 250 L70 250 Z M160 64 L138 250 L160 250 Z" fill={`url(#${u}r)`} />
+      <rect y="192" width="200" height="58" fill={INK} />
+      <g filter={`url(#${u}g)`} opacity=".9">
+        {floor.map((row, r) => row.map((c, i) => c !== dark && <rect key={`${r}${i}`} x={6 + i * 48} y={197 + r * 28} width="44" height="24" rx="6" fill={c} />))}
+      </g>
+      {floor.map((row, r) =>
+        row.map((c, i) => (
+          <g key={`${r}${i}`}>
+            <rect x={6 + i * 48} y={197 + r * 28} width="44" height="24" rx="6" fill={c} stroke={INK} strokeWidth="2.5" />
+            {c !== dark && <rect x={6 + i * 48} y={197 + r * 28} width="44" height="24" rx="6" fill={`url(#${u}t)`} />}
+            <rect x={11 + i * 48} y={200 + r * 28} width="34" height="3" rx="1.5" fill="#fff" opacity={c === dark ? 0.08 : 0.5} />
+          </g>
+        )),
+      )}
+
+      {[14, 38, 62, 86, 110, 134, 186].map((c, i) => {
+        const y0 = buntY(c - 8)
+        const y1 = buntY(c + 8)
+        const n = Math.hypot(16, y1 - y0)
+        const tip = `${(c - ((y1 - y0) / n) * 20).toFixed(1)} ${((y0 + y1) / 2 + (16 / n) * 20).toFixed(1)}`
+        return <path key={c} d={`M${c - 8} ${y0.toFixed(1)} L${c + 8} ${y1.toFixed(1)} L${tip}Z`} fill={PARTY_COLORS[i % 5]} stroke={INK} strokeWidth="2.5" strokeLinejoin="round" />
+      })}
+      <path d="M-5 28 Q100 48 205 24" fill="none" stroke={INK} strokeWidth="2.5" />
+
+      <CoverBalloon x={52} y={58} rx={12} ry={14} color="#3fc4ff" light="#c4f0ff" dark="#1d8fd6" />
+      <CoverBalloon x={30} y={78} rx={15} ry={18} color="#ff8a2a" light="#ffd2a4" dark="#e0600c" />
+
+      {/* the mirror ball hangs from the bunting */}
+      <circle cx="160" cy="64" r="36" fill={`url(#${u}h)`} />
+      <path d={`M160 ${buntY(160).toFixed(1)} V40`} stroke={INK} strokeWidth="2" />
+      <circle cx="160" cy="64" r="22" fill={`url(#${u}d)`} />
+      <g clipPath={`url(#${u}c)`} fill="none" stroke="#7d86a8" strokeWidth="1.5">
+        {[-11, 0, 11].map((dy) => {
+          const w = Math.sqrt(22 * 22 - dy * dy)
+          return <path key={dy} d={`M${160 - w} ${64 + dy} A${w} ${w * 0.3} 0 0 0 ${160 + w} ${64 + dy}`} />
+        })}
+        {[9, 17].map((w) => (
+          <path key={w} d={`M160 42 A${w} 22 0 0 0 160 86 M160 42 A${w} 22 0 0 1 160 86`} />
+        ))}
+        <rect x="145" y="49" width="6" height="6" rx="1" fill="#fff" stroke="none" transform="rotate(-12 148 52)" />
+        <rect x="152.5" y="45" width="5" height="5" rx="1" fill="#fff" stroke="none" opacity=".85" transform="rotate(-8 155 47.5)" />
+        <rect x="165" y="70" width="5" height="5" rx="1" fill="#ff9fdc" stroke="none" opacity=".8" />
+        <rect x="151" y="74" width="5" height="5" rx="1" fill="#9ff0ff" stroke="none" opacity=".8" />
+      </g>
+      <circle cx="160" cy="64" r="22" fill="none" stroke={INK} strokeWidth="3.5" />
+      <g transform="translate(160 41)" fill="#ff4fb8" stroke={INK} strokeWidth="2" strokeLinejoin="round">
+        <path d="M0 0 L-10 -6 L-10 6 Z M0 0 L10 -6 L10 6 Z" />
+        <circle r="3.4" />
+      </g>
+      <Sparkle x={192} y={62} r={5} />
+      <Sparkle x={185} y={94} r={4} />
+      <Sparkle x={134} y={74} r={3} />
+
+      {confetti.map(([x, y, c, a], i) =>
+        i % 2 ? (
+          <circle key={i} cx={x} cy={y} r="2.2" fill={PARTY_COLORS[c]} />
+        ) : (
+          <rect key={i} x={x - 3} y={y - 1.5} width="6" height="3" rx="1" fill={PARTY_COLORS[c]} transform={`rotate(${a} ${x} ${y})`} />
+        ),
+      )}
+
+      <g style={{ filter: 'drop-shadow(0 12px 16px rgba(0,0,0,.35))' }}>
+        <g stroke={INK} strokeWidth="4" strokeLinejoin="round">
+          <rect x="82" y="156" width="14" height="34" rx="7" fill="#d8399b" />
+          <rect x="124" y="156" width="14" height="34" rx="7" fill="#d8399b" />
+          <path d={pom(89, 187, 9)} fill="#f07fc9" strokeWidth="3" />
+          <path d={pom(131, 187, 9)} fill="#f07fc9" strokeWidth="3" />
+          <rect x="68" y="158" width="14" height="34" rx="7" fill={`url(#${u}p)`} />
+          <rect x="110" y="158" width="14" height="34" rx="7" fill={`url(#${u}p)`} />
+          <path d="M70 148 Q57 140 51 123" fill="none" strokeWidth="18" strokeLinecap="round" />
+          <path d="M70 148 Q57 140 51 123" fill="none" stroke="#ff4fb8" strokeWidth="10" strokeLinecap="round" />
+          <path d={pom(46, 116, 13)} fill={`url(#${u}q)`} strokeWidth="3" />
+          <rect x="119" y="117" width="18" height="34" rx="9" fill={`url(#${u}p)`} transform="rotate(-20 128 134)" />
+          <rect x="64" y="140" width="74" height="30" rx="15" fill={`url(#${u}p)`} />
+          <path d={pom(75, 190, 9)} fill={`url(#${u}q)`} strokeWidth="3" />
+          <path d={pom(117, 190, 9)} fill={`url(#${u}q)`} strokeWidth="3" />
+          <circle cx="124" cy="104" r="24" fill={`url(#${u}p)`} />
+          <path d={pom(102, 116, 13)} fill={`url(#${u}q)`} strokeWidth="3" />
+          <path d={pom(122, 78, 13)} fill={`url(#${u}q)`} strokeWidth="3" />
+          <rect x="136" y="108" width="34" height="18" rx="9" fill={`url(#${u}p)`} />
+          <ellipse cx="130" cy="98" rx="8" ry="9" fill="#fff" strokeWidth="2.5" />
+        </g>
+        <g transform="translate(112 68) rotate(-20)" fill="#b6ff3b" stroke={INK} strokeWidth="2.5" strokeLinejoin="round">
+          <path d="M0 0 L-9 -6 L-9 6 Z M0 0 L9 -6 L9 6 Z" />
+          <circle r="3" />
+        </g>
+        <circle cx="168" cy="111" r="5" fill={INK} />
+        <circle cx="166.5" cy="109.5" r="1.5" fill="#fff" />
+        <circle cx="132.5" cy="99.5" r="4" fill={INK} />
+        <circle cx="134" cy="97.5" r="1.5" fill="#fff" />
+        <path d="M135 91 L139 87 M131 89.5 L133 85" stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
+        <ellipse cx="122" cy="114" rx="5.5" ry="3.2" fill="#ff9ccf" />
+        <path d="M146 121 Q153 127 161 122" fill="none" stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M76 147 Q84 144 96 144" fill="none" stroke="#fff" strokeOpacity=".55" strokeWidth="4" strokeLinecap="round" />
+        <ellipse cx="113" cy="92" rx="6" ry="3.5" fill="#fff" opacity=".55" transform="rotate(-40 113 92)" />
+      </g>
+
+      {pills.map(([x, y, t, c]) => (
+        <g key={t}>
+          <rect x={x - 15} y={y - 8} width="30" height="16" rx="8" fill={c} stroke={INK} strokeWidth="2.5" />
+          <text x={x} y={y + 4} textAnchor="middle" fontSize="11" fontWeight="900" fill="#fff" stroke={INK} strokeWidth="3" paintOrder="stroke" fontFamily="Manrope, system-ui, sans-serif">
+            {t}
+          </text>
+        </g>
+      ))}
+
+      <g transform="translate(42 176) rotate(-12)" style={{ filter: 'drop-shadow(0 6px 8px rgba(0,0,0,.3))' }}>
+        <polygon points={burst(12, 26, 16)} fill="#ffe23d" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
+        <text y="5.5" textAnchor="middle" fontSize="16" fontWeight="900" fill="#ff3b55" stroke="#fff" strokeWidth="3" paintOrder="stroke" fontFamily="Manrope, system-ui, sans-serif">
+          POP!
+        </text>
+      </g>
+    </Scene>
+  )
+}
+
+/** Live Blackjack: the dealer's hand at the top of a shared table, players and their stakes around the rail. */
+function LiveBlackjackCover() {
+  // [avatar x, y, design, chip value]: players round the table edge, each with a stake on the felt
+  const seats: [number, number, number, number][] = [
+    [28, 138, 9, 10],
+    [100, 156, 2, 100],
+    [172, 138, 5, 25],
+  ]
+  return (
+    <Scene from="#f2a93b" to="#0a3027">
+      <ellipse cx="100" cy="52" rx="124" ry="96" fill="#0f5a42" stroke="#f7c548" strokeOpacity=".7" strokeWidth="2.5" />
+      <ellipse cx="100" cy="52" rx="108" ry="80" fill="none" stroke="#fff" strokeOpacity=".14" strokeWidth="1.5" strokeDasharray="5 5" />
+      <g transform="rotate(-9 76 46)" style={{ filter: 'drop-shadow(0 6px 8px rgba(0,0,0,.35))' }}>
+        <CardFace rank="A" suit="♠" x={52} y={12} width={48} height={67} />
+      </g>
+      <g transform="rotate(8 124 48)" style={{ filter: 'drop-shadow(0 6px 8px rgba(0,0,0,.35))' }}>
+        <CardBack x={100} y={14} width={48} height={67} />
+      </g>
+      {seats.map(([x, y, a, v]) => (
+        <g key={x}>
+          <Chip value={v} size={24} x={x - 12 + (100 - x) * 0.12} y={y - 44} />
+          <circle cx={x} cy={y} r="18" fill="#0a3027" stroke="#f7c548" strokeOpacity=".55" strokeWidth="1.5" />
+          <g transform={`translate(${x - 15} ${y - 15})`}>
+            <Avatar index={a} size={30} />
+          </g>
+        </g>
       ))}
     </Scene>
   )

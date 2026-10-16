@@ -12,6 +12,10 @@ import { useUid } from '../art/ids'
 import { Rocket } from '../art/Rocket'
 import { useAuth } from '../store/auth'
 import { VaultDoor } from '../art/Vault'
+import { Avatar } from '../art/Avatar'
+import { CardBack, CardFace } from '../art/Card'
+import { Chip } from '../art/Chip'
+import type { Suit } from '../art/suits'
 
 export default function Lobby() {
   return (
@@ -91,6 +95,40 @@ const SLIDES: Slide[] = [
     to: '/game/crash',
     bg: 'linear-gradient(110deg,#171338 0%,#1d1650 55%,#2b1f6e 100%)',
     art: <HeroCrash />,
+  },
+  {
+    key: 'popparty',
+    eyebrow: 'New slot',
+    tone: 'text-[#ff4fb8] bg-[#ff4fb8]/15',
+    title: (
+      <>
+        Pop the
+        <br />
+        Party
+      </>
+    ),
+    text: 'Balloon animals pop on a light-up floor. Every pop lights a tile, and in Disco Night the tiles stay lit and double up to ×128.',
+    cta: 'Play Pop Party',
+    to: '/game/popparty',
+    bg: 'linear-gradient(110deg,#251236 0%,#3a1748 55%,#552058 100%)',
+    art: <HeroFan ids={['chompers', 'slots', 'popparty', 'blackjack', 'mines']} />,
+  },
+  {
+    key: 'livebj',
+    eyebrow: 'Multiplayer',
+    tone: 'text-[#f7c548] bg-[#f2a93b]/15',
+    title: (
+      <>
+        Pull up a seat.
+        <br />
+        Play together.
+      </>
+    ),
+    text: 'Real players share one shoe at live blackjack tables. Bet together and watch every card land at the same moment.',
+    cta: 'Join a table',
+    to: '/game/livebj',
+    bg: 'linear-gradient(110deg,#0b241d 0%,#0e3027 55%,#2a2812 100%)',
+    art: <HeroLiveTable />,
   },
   {
     key: 'heist',
@@ -247,6 +285,152 @@ function HeroCrash() {
         <text x="236" y="120" fontSize="34" fontWeight="900" fill="#fff" fontFamily="Manrope, system-ui, sans-serif">
           12.48×
         </text>
+      </svg>
+    </div>
+  )
+}
+
+/* Live Blackjack's table, dealer at the top: five players on the rail, each with a stake and a hand on the felt, and
+   your turn up. The players sit at the right, clear of the slide's text; the felt runs on to the left under the fade. */
+const TABLE = { x: 272, y: -40, rx: 230, ry: 250 }
+interface HeroSeat {
+  x: number
+  avatar: number
+  name: string
+  chip: number
+  cards: [string, Suit][]
+  score?: string
+  chat?: string
+  me?: boolean
+}
+const HERO_SEATS: HeroSeat[] = [
+  { x: 164, avatar: 3, name: 'Mia', chip: 25, cards: [['9', '♣'], ['7', '♦']], chat: 'Nice hand!' },
+  { x: 218, avatar: 9, name: 'Leo', chip: 100, cards: [['A', '♥'], ['K', '♠']], score: 'BJ' },
+  { x: 272, avatar: 0, name: 'You', chip: 10, cards: [['10', '♠'], ['9', '♥']], score: '19', me: true },
+  { x: 326, avatar: 10, name: 'Ava', chip: 5, cards: [['Q', '♦'], ['6', '♣']] },
+  { x: 380, avatar: 14, name: 'Sam', chip: 500, cards: [['8', '♠'], ['8', '♥']] },
+]
+const LIVE_SEATS = HERO_SEATS.map((s) => {
+  // each seat on the rim; its stake and hand lie inward on the felt, fanned a little towards the dealer
+  const y = TABLE.y + TABLE.ry * Math.sqrt(1 - ((s.x - TABLE.x) / TABLE.rx) ** 2)
+  const dx = TABLE.x - s.x
+  const dy = -200 - y
+  const n = Math.hypot(dx, dy)
+  const at = (d: number) => [s.x + (dx / n) * d, y + (dy / n) * d].map((v) => +v.toFixed(1))
+  const [chipX, chipY] = at(30)
+  const [hx, hy] = at(66)
+  return { ...s, y: +y.toFixed(1), chipX, chipY, hx, hy, tilt: +((Math.atan2(dx, -dy) * 180 * 0.8) / Math.PI).toFixed(1) }
+})
+const HERO_FONT = 'Manrope, system-ui, sans-serif'
+const TURN_RING = 2 * Math.PI * 19
+
+function HeroLiveTable() {
+  const u = useUid()
+  const { x: tx, y: ty, rx, ry } = TABLE
+  return (
+    <div className="absolute inset-y-0 right-0 hidden w-[60%] sm:block [mask-image:linear-gradient(to_right,transparent,black_40%)]">
+      <svg className="h-full w-full" viewBox="0 12 400 246" preserveAspectRatio="xMaxYMid meet" overflow="visible" aria-hidden>
+        <defs>
+          <radialGradient id={`${u}f`} cx=".5" cy=".42" r=".62">
+            <stop offset="0" stopColor="#1f7a5c" />
+            <stop offset=".6" stopColor="#125240" />
+            <stop offset="1" stopColor="#0a3027" />
+          </radialGradient>
+          <radialGradient id={`${u}w`} cx=".5" cy=".5" r=".5">
+            <stop offset="0" stopColor="#f2a93b" stopOpacity=".26" />
+            <stop offset="1" stopColor="#f2a93b" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id={`${u}t`} cx=".5" cy=".5" r=".5">
+            <stop offset=".5" stopColor="#22d36f" stopOpacity=".5" />
+            <stop offset="1" stopColor="#22d36f" stopOpacity="0" />
+          </radialGradient>
+          <path id={`${u}a`} d={`M${tx - 55} 83 A110 142 0 0 0 ${tx + 55} 83`} />
+        </defs>
+        <ellipse cx="290" cy="165" rx="210" ry="140" fill={`url(#${u}w)`} />
+
+        {/* the table: a dark rail, the felt with its gold rim, the betting line and the payout */}
+        <ellipse cx={tx} cy={ty} rx={rx + 8} ry={ry + 8} fill="none" stroke="#04110d" strokeOpacity=".55" strokeWidth="12" />
+        <ellipse cx={tx} cy={ty} rx={rx} ry={ry} fill={`url(#${u}f)`} stroke="#f7c548" strokeOpacity=".75" strokeWidth="2.5" />
+        <ellipse cx={tx} cy={ty} rx="190" ry="214" fill="none" stroke="#f7c548" strokeOpacity=".35" strokeWidth="1.5" />
+        <ellipse cx={tx} cy={ty} rx="176" ry="200" fill="none" stroke="#fff" strokeOpacity=".12" strokeWidth="1.2" strokeDasharray="5 5" />
+        <text fontSize="7" fontWeight="800" letterSpacing="1.6" fill="#f7c548" fillOpacity=".6" fontFamily={HERO_FONT}>
+          <textPath href={`#${u}a`} startOffset="50%" textAnchor="middle">
+            BLACKJACK PAYS 3 TO 2
+          </textPath>
+        </text>
+
+        {/* cards and chips share one shadow */}
+        <g style={{ filter: 'drop-shadow(0 4px 5px rgba(0,0,0,.4))' }}>
+          <g transform={`rotate(-6 ${tx - 10} 50)`}>
+            <CardFace rank="K" suit="♥" x={tx - 34} y={22} width={40} height={56} />
+          </g>
+          <g transform={`rotate(6 ${tx + 18} 50)`}>
+            <CardBack x={tx - 4} y={24} width={40} height={56} />
+          </g>
+          {LIVE_SEATS.map((s) => (
+            <g key={s.name}>
+              <Chip value={s.chip} size={17} x={s.chipX - 8.5} y={s.chipY - 8.5} />
+              <g transform={`rotate(${s.tilt} ${s.hx} ${s.hy})`}>
+                <CardFace rank={s.cards[0][0]} suit={s.cards[0][1]} x={s.hx - 16} y={s.hy - 15} width={24} height={34} />
+                <CardFace rank={s.cards[1][0]} suit={s.cards[1][1]} x={s.hx - 8} y={s.hy - 19} width={24} height={34} />
+              </g>
+            </g>
+          ))}
+        </g>
+
+        {LIVE_SEATS.map((s) => (
+          <g key={s.name}>
+            {s.me && <circle cx={s.x} cy={s.y} r="29" fill={`url(#${u}t)`} />}
+            <circle cx={s.x} cy={s.y} r="16.5" fill="#08251f" stroke={s.me ? '#22d36f' : '#f7c548'} strokeOpacity={s.me ? 0.3 : 0.55} strokeWidth="1.5" />
+            {/* your decision clock */}
+            {s.me && (
+              <circle
+                cx={s.x}
+                cy={s.y}
+                r="19"
+                fill="none"
+                stroke="#22d36f"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                strokeDasharray={`${(TURN_RING * 0.72).toFixed(1)} ${TURN_RING.toFixed(1)}`}
+                transform={`rotate(-90 ${s.x} ${s.y.toFixed(1)})`}
+              />
+            )}
+            <g transform={`translate(${s.x - 13} ${(s.y - 13).toFixed(1)})`}>
+              <Avatar index={s.avatar} size={26} />
+            </g>
+            <rect x={s.x - 15} y={s.y + 20} width="30" height="13" rx="6.5" fill={s.me ? '#22d36f' : '#071a14'} fillOpacity={s.me ? 1 : 0.85} />
+            <text x={s.x} y={s.y + 29.3} textAnchor="middle" fontSize="8" fontWeight="800" fill={s.me ? '#032412' : '#fff'} fontFamily={HERO_FONT}>
+              {s.name}
+            </text>
+            {s.score && (
+              <g transform={`translate(${s.hx - 2} ${s.hy - 29})`}>
+                <rect x="-11" y="-7.5" width="22" height="15" rx="7.5" fill={s.me ? '#22d36f' : '#f7c548'} />
+                <text y="3" textAnchor="middle" fontSize="8.5" fontWeight="900" fill={s.me ? '#032412' : '#2a1c00'} fontFamily={HERO_FONT}>
+                  {s.score}
+                </text>
+              </g>
+            )}
+            {/* table chat, in the game's speech bubble over the player's hand */}
+            {s.chat && (
+              <g transform={`translate(${s.hx} ${s.hy - 34})`} style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,.35))' }}>
+                <rect x="-27" y="-9" width="54" height="17" rx="8.5" fill="#fff" />
+                <rect x="-3" y="4" width="6" height="6" rx="1" fill="#fff" transform="rotate(45 0 7)" />
+                <text y="2.8" textAnchor="middle" fontSize="8" fontWeight="900" fill="#0b1520" fontFamily={HERO_FONT}>
+                  {s.chat}
+                </text>
+              </g>
+            )}
+          </g>
+        ))}
+
+        <g transform="translate(366 26)">
+          <rect x="-24" y="-9" width="48" height="18" rx="9" fill="#071a14" fillOpacity=".8" stroke="#fff" strokeOpacity=".12" />
+          <circle cx="-13" cy="0" r="3" fill="#ff4d61" />
+          <text x="4" y="3" textAnchor="middle" fontSize="8" fontWeight="900" letterSpacing="1.2" fill="#fff" fontFamily={HERO_FONT}>
+            LIVE
+          </text>
+        </g>
       </svg>
     </div>
   )
