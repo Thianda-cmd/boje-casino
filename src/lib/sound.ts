@@ -27,6 +27,7 @@ let partyDepth = 0
 let partyBus: AudioNode | null = null
 
 function out(a: AudioContext): AudioNode {
+  if (plunderDepth) return plunderOut(a)
   if (roboDepth) return roboOut(a)
   if (!partyDepth) return a.destination
   if (!partyBus) {
@@ -253,6 +254,319 @@ const roboGate = { vac: gate(45), beep: gate(60), cell: gate(40), zap: gate(40),
 function crackle(dur: number, gain: number, delay = 0) {
   const n = Math.max(3, Math.round(dur / 0.018))
   for (let i = 0; i < n; i++) noise(0.008 + Math.random() * 0.01, gain * (0.4 + Math.random() * 0.6), 2500 + Math.random() * 4500, 'bandpass', delay + (i / n) * dur + Math.random() * 0.01)
+}
+
+/* Plunder Bay's recipes (sfx.plunder) play through a compressor of their own, like Pop Party's: one cascade can blast
+   twenty symbols at once on top of a coin shower and a cannon. `plunderDepth` is only non-zero while a plunder recipe
+   runs, so nothing else is routed through it. */
+let plunderDepth = 0
+let plunderBus: AudioNode | null = null
+
+function plunderOut(a: AudioContext): AudioNode {
+  if (!plunderBus) {
+    const c = a.createDynamicsCompressor()
+    c.threshold.value = -15
+    c.knee.value = 10
+    c.ratio.value = 4.5
+    c.attack.value = 0.003
+    // opens instantly for its first moments (see the party bus), then settles to the real release
+    c.release.value = 0
+    c.release.setValueAtTime(0.16, a.currentTime + 0.06)
+    const trim = a.createGain()
+    trim.gain.value = 0.68
+    c.connect(trim).connect(a.destination)
+    plunderBus = c
+  }
+  return plunderBus
+}
+
+function viaPlunderBus<T extends Record<string, (...args: never) => unknown>>(group: T): T {
+  const routed: Record<string, (...args: never) => unknown> = {}
+  for (const [name, play] of Object.entries(group))
+    routed[name] = (...args) => {
+      plunderDepth++
+      try {
+        return play(...args)
+      } finally {
+        plunderDepth--
+      }
+    }
+  return routed as T
+}
+const plunderGate = { land: gate(30), crew: gate(80), ways: gate(55), map: gate(45), blast: gate(38) }
+
+/** Plunder Bay's ambience and shanty (sfx.plunder.bed()): see plunderBed */
+export interface PlunderBed {
+  /** the sunset deck (sea, creaks, gulls) or the Treasure Hunt night (a calmer sea under the squeezebox shanty) */
+  mode(m: 'day' | 'night'): void
+  /** the shanty picks up the pace (the multiplier reached ×10) */
+  fast(on: boolean): void
+  /** dips the bed under a big moment for `sec` seconds */
+  duck(sec: number, db?: number): void
+  /** fades it out for good */
+  stop(): void
+}
+
+/**
+ * The bed under Plunder Bay: a looping sea wash that swells like waves, spray, the ship's timbers creaking now and then
+ * and a gull or two by day; at night the sea calms and a squeezebox shanty plays over an oom-pah bass (an original tune
+ * in D Dorian, 4 bars round and round), faster from ×10. Quiet by design, through the plunder compressor, it follows
+ * the mute switch and goes silent while the tab is hidden. Notes are scheduled a quarter second ahead on a timer.
+ */
+function plunderBed(): PlunderBed | null {
+  const a = ac()
+  if (!a) return null
+  const bus = a.createGain()
+  bus.gain.value = 0
+  const soft = a.createBiquadFilter()
+  soft.type = 'lowpass'
+  soft.frequency.value = 9000
+  bus.connect(soft).connect(plunderOut(a))
+  const level = a.createGain()
+  level.gain.value = 1
+  level.connect(bus)
+  // the sea: looping noise through a lowpass, its level swelling with the waves; spray above it
+  const buf = a.createBuffer(1, a.sampleRate * 2, a.sampleRate)
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
+  const sea = a.createBufferSource()
+  sea.buffer = buf
+  sea.loop = true
+  const seaLp = a.createBiquadFilter()
+  seaLp.type = 'lowpass'
+  seaLp.frequency.value = 520
+  const seaG = a.createGain()
+  seaG.gain.value = 0.034
+  const spray = a.createBufferSource()
+  spray.buffer = buf
+  spray.loop = true
+  spray.loopStart = 0.7
+  const sprayBp = a.createBiquadFilter()
+  sprayBp.type = 'bandpass'
+  sprayBp.frequency.value = 2600
+  sprayBp.Q.value = 0.6
+  const sprayG = a.createGain()
+  sprayG.gain.value = 0.0045
+  sea.connect(seaLp).connect(seaG).connect(level)
+  spray.connect(sprayBp).connect(sprayG).connect(level)
+  // the waves: a slow swell on the sea and the spray (two LFOs a little out of step)
+  const swell = a.createOscillator()
+  swell.frequency.value = 0.16
+  const swellD = a.createGain()
+  swellD.gain.value = 0.02
+  swell.connect(swellD).connect(seaG.gain)
+  const swell2 = a.createOscillator()
+  swell2.frequency.value = 0.11
+  const swell2D = a.createGain()
+  swell2D.gain.value = 0.004
+  swell2.connect(swell2D).connect(sprayG.gain)
+  const t0 = a.currentTime + 0.02
+  for (const s of [sea, spray, swell, swell2]) s.start(t0)
+  bus.gain.setTargetAtTime(1, t0, 0.8)
+
+  // the shanty's own bus (it fades in and out with the night)
+  const music = a.createGain()
+  music.gain.value = 0
+  const musicLp = a.createBiquadFilter()
+  musicLp.type = 'lowpass'
+  musicLp.frequency.value = 2800
+  music.connect(musicLp).connect(level)
+
+  const voice = (f: number, dur: number, type: OscillatorType, gain: number, at: number, to: AudioNode, vib?: [number, number]) => {
+    const o = osc(a, at, f, dur, type, undefined, vib)
+    const g = a.createGain()
+    const rel = Math.min(0.08, dur * 0.4)
+    g.gain.setValueAtTime(0, at)
+    g.gain.linearRampToValueAtTime(gain, at + 0.015)
+    g.gain.setValueAtTime(gain, at + Math.max(0.02, dur - rel))
+    g.gain.linearRampToValueAtTime(0, at + dur)
+    o.connect(g).connect(to)
+  }
+  /** a squeezebox reed pair a hair apart */
+  const reed = (f: number, dur: number, gain: number, at: number) => {
+    voice(f, dur, 'square', gain, at, music, [5.5, 2])
+    voice(f * 1.004, dur, 'sawtooth', gain * 0.5, at, music)
+  }
+  const creak = (at: number, gain: number) => {
+    const o = osc(a, at, 112 + Math.random() * 20, 0.5, 'sawtooth', 150 + Math.random() * 30, [24 + Math.random() * 8, 18])
+    const g = a.createGain()
+    g.gain.setValueAtTime(0, at)
+    g.gain.linearRampToValueAtTime(gain, at + 0.12)
+    g.gain.linearRampToValueAtTime(0, at + 0.5)
+    const f = a.createBiquadFilter()
+    f.type = 'bandpass'
+    f.frequency.value = 600
+    f.Q.value = 1.4
+    o.connect(f).connect(g).connect(level)
+  }
+  const gull = (at: number) => {
+    for (let i = 0; i < 2 + Math.floor(Math.random() * 2); i++) {
+      const t = at + i * 0.24
+      const f0 = 1700 + Math.random() * 300
+      const o = osc(a, t, f0, 0.2, 'sawtooth', f0 * 1.35)
+      const bp = a.createBiquadFilter()
+      bp.type = 'bandpass'
+      bp.frequency.value = 2300
+      bp.Q.value = 3
+      const g = a.createGain()
+      g.gain.setValueAtTime(0, t)
+      g.gain.linearRampToValueAtTime(0.006, t + 0.03)
+      g.gain.linearRampToValueAtTime(0, t + 0.2)
+      o.connect(bp).connect(g).connect(level)
+    }
+  }
+
+  // D Dorian: the tune in eighths (scale steps from D, R a rest), eight bars over i, VII, IV and v
+  const D = 293.66
+  const SCALE = [0, 2, 3, 5, 7, 9, 10]
+  const hz = (step: number) => D * 2 ** ((SCALE[((step % 7) + 7) % 7] + 12 * Math.floor(step / 7)) / 12)
+  const R = -99
+  const TUNE = [0, 2, 4, 4, 3, 2, 1, 0, -1, 1, 3, 3, 2, 1, 0, R, 0, 2, 4, 4, 5, 4, 3, 2, 4, 3, 2, 1, 0, R, 0, R, 4, 4, 7, 7, 6, 5, 4, R, 3, 3, 6, 6, 5, 4, 3, R, 4, 5, 4, 3, 2, 3, 4, 2, 1, -1, 0, R, 0, 0, 0, R]
+  // chord roots per half bar (scale steps; -1 is the C below), the third and fifth stacked on each
+  const ROOTS = [0, 0, -1, -1, 0, 3, 4, 0, 0, -1, 3, 3, 0, 3, 4, 0]
+  let mode: 'day' | 'night' = 'day'
+  let quick = false
+  let stopped = false
+  let next = a.currentTime + 0.1
+  let step = 0
+  let creakAt = a.currentTime + 4 + Math.random() * 6
+  let gullAt = a.currentTime + 6 + Math.random() * 8
+  let on = true
+  const timer = setInterval(() => {
+    if (stopped) return
+    const want = !isMuted() && document.visibilityState !== 'hidden'
+    if (want !== on) {
+      on = want
+      bus.gain.cancelScheduledValues(a.currentTime)
+      bus.gain.setTargetAtTime(want ? 1 : 0, a.currentTime, want ? 0.5 : 0.08)
+      next = a.currentTime + 0.1
+    }
+    if (!on) return
+    const now = a.currentTime
+    if (now > creakAt) {
+      creak(now + 0.05, mode === 'day' ? 0.005 : 0.0035)
+      creakAt = now + (mode === 'day' ? 7 : 11) + Math.random() * 8
+    }
+    if (mode === 'day' && now > gullAt) {
+      gull(now + 0.05)
+      gullAt = now + 9 + Math.random() * 12
+    }
+    if (mode !== 'night') {
+      next = now + 0.1
+      step = 0
+      return
+    }
+    const s8 = 60 / (quick ? 138 : 116) / 2
+    while (next < now + 0.25) {
+      const at = Math.max(next, now + 0.005)
+      const i = step % TUNE.length
+      const n = TUNE[i]
+      if (n !== R) reed(hz(n + 7), s8 * (TUNE[(i + 1) % TUNE.length] === R ? 1.9 : 0.92), 0.0075, at)
+      const root = ROOTS[Math.floor(i / 4) % ROOTS.length]
+      // oom on the beat, pah (the chord) on the off-beat
+      if (i % 2 === 0) voice(hz(root) / 2, s8 * 0.9, 'triangle', 0.026, at, music)
+      else for (const k of [0, 2, 4]) voice(hz(root + k), s8 * 0.7, 'square', 0.0032, at, music)
+      next += s8
+      step++
+    }
+  }, 60)
+
+  return {
+    mode: (m) => {
+      if (m === mode || stopped) return
+      mode = m
+      const n = a.currentTime
+      seaLp.frequency.setTargetAtTime(m === 'night' ? 380 : 520, n, 0.6)
+      seaG.gain.setTargetAtTime(m === 'night' ? 0.024 : 0.034, n, 0.6)
+      music.gain.cancelScheduledValues(n)
+      music.gain.setTargetAtTime(m === 'night' ? 1 : 0, n, m === 'night' ? 0.5 : 0.25)
+      next = n + 0.4
+      step = 0
+    },
+    fast: (v) => {
+      quick = v
+    },
+    duck: (sec, db = -10) => {
+      if (stopped) return
+      const n = a.currentTime
+      const low = 10 ** (db / 20)
+      level.gain.cancelScheduledValues(n)
+      level.gain.setValueAtTime(level.gain.value, n)
+      level.gain.linearRampToValueAtTime(low, n + 0.05)
+      level.gain.setValueAtTime(low, n + 0.05 + sec)
+      level.gain.linearRampToValueAtTime(1, n + 0.05 + sec + 0.8)
+    },
+    stop: () => {
+      if (stopped) return
+      stopped = true
+      clearInterval(timer)
+      const n = a.currentTime
+      bus.gain.cancelScheduledValues(n)
+      bus.gain.setValueAtTime(bus.gain.value, n)
+      bus.gain.linearRampToValueAtTime(0, n + 0.5)
+      for (const s of [sea, spray, swell, swell2]) s.stop(n + 0.6)
+      setTimeout(() => bus.disconnect(), 900)
+    },
+  }
+}
+
+/** a ship's bell: the struck note and the inharmonic partials that make it ring on */
+function shipBell(f: number, gain: number, delay = 0, len = 1.4) {
+  tone(f, len, 'sine', gain, delay)
+  tone(f * 2.76, len * 0.55, 'sine', gain * 0.45, delay)
+  tone(f * 5.4, len * 0.3, 'sine', gain * 0.22, delay)
+  tone(f * 8.93, len * 0.16, 'sine', gain * 0.1, delay)
+  noise(0.02, gain * 0.8, 5000, 'highpass', delay)
+}
+
+/** a gold coin or brass plate struck: a short metallic clang */
+function coinClang(f: number, gain: number, delay = 0) {
+  tone(f, 0.28, 'triangle', gain, delay)
+  tone(f * 2.41, 0.18, 'sine', gain * 0.6, delay)
+  tone(f * 3.87, 0.12, 'sine', gain * 0.4, delay)
+  noise(0.03, gain * 1.4, 3500, 'highpass', delay)
+}
+
+/** sea spray thrown up and falling away */
+function waterSplash(gain: number, delay = 0) {
+  sweep(0.26, gain, 3200, 600, 'bandpass', 0.8, delay)
+  noise(0.05, gain * 0.9, 4200, 'highpass', delay)
+  noise(0.12, gain * 0.6, 500, 'lowpass', delay)
+}
+
+/** a squeezebox chord: two reeds a hair apart over a soft bass reed */
+function squeezebox(f: number, dur: number, gain: number, delay = 0) {
+  hold(f, dur, 'square', gain, delay, undefined, [5.5, 2])
+  hold(f * 1.004, dur, 'square', gain * 0.8, delay)
+  hold(f / 2, dur, 'triangle', gain * 1.2, delay)
+}
+
+/** a brass note with a little growl in it */
+function brassNote(f: number, dur: number, gain: number, delay = 0) {
+  hold(f, dur, 'sawtooth', gain, delay, undefined, [5, 4])
+  hold(f * 1.003, dur, 'sawtooth', gain * 0.6, delay)
+  tone(f * 2, Math.min(dur, 0.3), 'triangle', gain * 0.8, delay)
+}
+
+/** a ship's cannon: the deep boom, the blast of air and the crack */
+function cannonBoom(gain: number, delay = 0) {
+  tone(62, 0.6, 'sine', gain, delay, 30)
+  noise(0.5, gain * 1.1, 420, 'lowpass', delay)
+  noise(0.06, gain, 2600, 'highpass', delay)
+}
+
+/** a parrot's squawk: a raspy nasal call that jumps up, then falls; k scales the pitch */
+function parrotCall(k: number, delay = 0) {
+  nasal(1050 * k, 0.11, 0.05, delay, 1650 * k, 2300)
+  nasal(1500 * k, 0.17, 0.045, delay + 0.1, 850 * k, 2100)
+  tone(1300 * k, 0.26, 'sawtooth', 0.006, delay, 900 * k, [42, 140])
+  noise(0.08, 0.03, 3200, 'bandpass', delay + 0.02)
+}
+
+/** rope and timber creaking */
+function timberCreak(dur: number, gain: number, delay = 0) {
+  tone(118, dur, 'sawtooth', gain, delay, 152, [26, 20])
+  tone(236, dur * 0.8, 'square', gain * 0.35, delay + dur * 0.1, 300, [31, 30])
 }
 
 /* voices of the Duck Derby recipes (sfx.derby) */
@@ -773,6 +1087,219 @@ export const sfx = {
         tone(f0 * 2, d, 'sine', 0.012, t, f1 * 2)
       }
     },
+  }),
+  /* plunder bay: timber and rope, sea spray, gold coins, the ship's bell and cannon, brass and squeezebox shanty
+     flourishes, and Captain Polly's squawk */
+  plunder: viaPlunderBus({
+    // the spin: the frame creaks and the old symbols rush out of the bottom
+    spin: () => {
+      timberCreak(0.22, 0.012)
+      sweep(0.32, 0.05, 2400, 500, 'bandpass', 1.1, 0.04)
+    },
+    // a reel lands: a wooden thock, a step higher along the frame
+    land: (reel = 0) => {
+      if (!plunderGate.land()) return
+      const k = 2 ** ((reel * 2) / 12)
+      tone(170 * k, 0.1, 'sine', 0.1, 0, 86 * k)
+      noise(0.045, 0.08, 900 + reel * 140, 'bandpass')
+      tone(560 * k, 0.05, 'triangle', 0.018, 0.01)
+    },
+    // one of the crew lands with it: a cheeky little chirp
+    crew: (reel = 0) => {
+      if (!plunderGate.crew()) return
+      const f = [1175, 1319, 1480, 1568, 1760, 1976][reel % 6]
+      tone(f, 0.07, 'triangle', 0.018, 0.02, f * 1.25)
+    },
+    // the ways counter rolls on: a ratchet tick, higher the more ways (64 to 117,649)
+    ways: (n = 64) => {
+      if (!plunderGate.ways()) return
+      const k = Math.log2(Math.max(64, n) / 64) / Math.log2(117649 / 64)
+      tone(900 + 1300 * k, 0.03, 'square', 0.009)
+      noise(0.012, 0.03, 3500, 'bandpass')
+    },
+    // a treasure map comes to rest: parchment unrolling and a chime a step higher for each map in the spin
+    map: (n = 0) => {
+      if (!plunderGate.map()) return
+      const f = 659 * 2 ** ((Math.min(n, 6) * 3) / 12)
+      noise(0.14, 0.05, 2400, 'bandpass')
+      tone(f, 0.22, 'triangle', 0.05, 0.03)
+      tone(f * 1.5, 0.32, 'sine', 0.03, 0.08, undefined, [6, 8])
+    },
+    // enough maps to count: a bright sting and the bell
+    mapsReady: () => {
+      ;[784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.16, 'triangle', 0.04, i * 0.05))
+      shipBell(1568, 0.025, 0.2, 0.9)
+    },
+    // reels held back for the last map: a drone rising over a drum roll, for `secs`
+    tease: (secs = 1.1) => {
+      const d = Math.max(0.5, secs)
+      hold(98, d, 'sawtooth', 0.016, 0, 196, [7, 5])
+      hold(147, d, 'triangle', 0.02, 0, 294)
+      const n = Math.round(d / 0.07)
+      for (let i = 0; i < n; i++) noise(0.04, 0.03 + (0.04 * i) / n, 300, 'lowpass', i * 0.07)
+    },
+    // winners light up: a sparkling swish, brighter the longer the cascade
+    glow: (i = 0) => {
+      const k = 2 ** (Math.min(i, 8) / 12)
+      sweep(0.2, 0.035, 900 * k, 4200 * k, 'bandpass', 2)
+      tone(1568 * k, 0.12, 'sine', 0.02, 0.06)
+    },
+    // a step wins: a jaunty run on the squeezebox, longer for bigger wins (size 0-2)
+    win: (size = 0) => {
+      const notes = size >= 2 ? [587, 740, 880, 1175, 1480] : size === 1 ? [740, 880, 1175] : [880, 1175]
+      notes.forEach((f, i) => {
+        tone(f, 0.14, 'square', 0.016, i * 0.065)
+        tone(f, 0.18, 'triangle', 0.03, i * 0.065)
+      })
+      if (size >= 1) squeezebox(notes[notes.length - 1], 0.3, 0.01, notes.length * 0.065)
+    },
+    // the ×multiplier joins an amount: a coin flipped onto the table
+    chip: (mult = 2) => coinClang(1319 * 2 ** (Math.min(mult, 24) / 36), 0.03),
+    // the multiplied amount lands: a thump and a chord, higher for a bigger multiplier
+    slam: (mult = 2) => {
+      const k = 2 ** (Math.min(mult, 24) / 24)
+      tone(98 * k, 0.18, 'sine', 0.11, 0, 49 * k)
+      noise(0.08, 0.1, 700, 'lowpass')
+      ;[587, 740, 880].forEach((f) => tone(f * k, 0.26, 'triangle', 0.03, 0.02))
+    },
+    // a gold coin flies off to the medallion
+    coinFly: () => {
+      sweep(0.28, 0.04, 700, 3800, 'bandpass', 1.6)
+      tone(2093, 0.05, 'square', 0.01, 0.02)
+    },
+    // the medallion stamps up to ×n: a heavy clang, a little higher each time; every fifth rings the bell too
+    stamp: (n = 2) => {
+      const k = 2 ** ((Math.min(n, 30) - 2) / 30)
+      tone(110 * k, 0.2, 'sine', 0.13, 0, 55 * k)
+      noise(0.06, 0.12, 900, 'lowpass')
+      coinClang(880 * k, 0.045, 0.01)
+      if (n % 5 === 0) shipBell(1047 * k, 0.04, 0.08)
+    },
+    // the multiplier reaches ×10, ×20...: a cannon and a brass call
+    milestone: (n = 10) => {
+      const s = 2 ** (((Math.min(n / 10, 4) - 1) * 2) / 12)
+      cannonBoom(0.15)
+      ;[523, 659, 784].forEach((f, i) => brassNote(f * s, 0.12, 0.016, 0.08 + i * 0.1))
+      brassNote(1047 * s, 0.6, 0.016, 0.38)
+      shipBell(1568 * s, 0.03, 0.38)
+    },
+    // a winner bursts: a splash and a crack of wood, a little higher along the step
+    blast: (i = 0) => {
+      if (!plunderGate.blast()) return
+      const k = 2 ** (Math.min(i, 16) / 16)
+      waterSplash(0.07)
+      tone(240 * k, 0.09, 'square', 0.02, 0, 90 * k)
+      noise(0.03, 0.09, 1800 * k, 'bandpass', 0.01)
+    },
+    // the rest fall and new symbols drop in: a woody patter
+    cascade: () => {
+      for (let i = 0; i < 4; i++) noise(0.03, 0.05, 700 + i * 160, 'bandpass', 0.14 + i * 0.06)
+      tone(260, 0.12, 'sine', 0.035, 0.32, 150)
+    },
+    // a huge step: the cannon
+    cannon: () => cannonBoom(0.17),
+    // the maps flare for the treasure: the chest's lid creaks open on a spill of coins and a brass flourish
+    treasure: () => {
+      timberCreak(0.3, 0.012)
+      for (let i = 0; i < 10; i++) tone(1800 + Math.random() * 1600, 0.06, 'square', 0.008, 0.25 + i * 0.045 + Math.random() * 0.02)
+      ;[523, 659, 784, 1047].forEach((f, i) => brassNote(f, i === 3 ? 0.5 : 0.11, 0.015, 0.3 + i * 0.09))
+      shipBell(1047, 0.035, 0.57)
+    },
+    // Polly digs: three spade bites into the sand, then the clunk of the chest
+    dig: () => {
+      for (let i = 0; i < 3; i++) {
+        noise(0.11, 0.08, 1400 - i * 150, 'bandpass', i * 0.17)
+        tone(180, 0.06, 'sine', 0.04, i * 0.17 + 0.02, 120)
+      }
+      tone(120, 0.18, 'sine', 0.1, 0.55, 70)
+      noise(0.06, 0.1, 600, 'lowpass', 0.55)
+    },
+    // one map short: a sagging squeezebox "aww"
+    nearMiss: () => {
+      squeezebox(392, 0.26, 0.01)
+      hold(370, 0.5, 'square', 0.01, 0.28, 294, [5, 6])
+      hold(185, 0.5, 'triangle', 0.016, 0.28, 147)
+    },
+    // Captain Polly talks (startled 1: a little higher)
+    squawk: (startled = 0) => parrotCall(startled ? 1.18 : 1),
+    // the Treasure Hunt banner: a shanty brass fanfare over the timpani
+    intro: () => {
+      ;[0, 0.18].forEach((t) => tone(73, 0.3, 'sine', 0.13, t, 55))
+      ;([[587, 0, 0.12], [740, 0.13, 0.12], [880, 0.26, 0.12], [1175, 0.39, 0.5]] as const).forEach(([f, t, d]) => brassNote(f, d, 0.017, t))
+      ;[587, 740, 880].forEach((f) => tone(f, 0.9, 'triangle', 0.025, 0.4))
+      noise(0.6, 0.06, 6000, 'highpass', 0.39)
+      shipBell(1175, 0.03, 0.4)
+    },
+    // sailing into the night: a long falling whoosh, then a soft chord as the moon comes up
+    night: () => {
+      sweep(1.2, 0.05, 2400, 260, 'bandpass', 0.9)
+      ;[294, 370, 440, 587].forEach((f, i) => tone(f, 1.6, 'sine', 0.018, 0.4 + i * 0.12, undefined, [4, 3]))
+      shipBell(880, 0.025, 1.1, 1.6)
+    },
+    // the lanterns catch: two soft whoomps of flame
+    lanterns: () =>
+      [0, 0.14].forEach((t, i) => {
+        swell(0.35, 0.08, 'lowpass', 520 + i * 120, 1, 0.06, t)
+        tone(196 + i * 49, 0.3, 'sine', 0.03, t + 0.02, 247 + i * 49)
+      }),
+    // more spins: three strokes of the ship's bell
+    retrigger: () => {
+      ;[0, 0.22, 0.44].forEach((t) => shipBell(988, 0.04, t, 1.1))
+      ;[784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.14, 'triangle', 0.03, 0.66 + i * 0.05))
+    },
+    // the last free spin: a slow double drumbeat
+    heartbeat: () => {
+      tone(66, 0.14, 'sine', 0.11, 0, 44)
+      tone(66, 0.14, 'sine', 0.1, 0.2, 44)
+    },
+    // a win banner passes a tier: a brass stab three semitones higher each time, a cymbal, and a cannon from Mega up
+    tierUp: (k = 0) => {
+      const s = 2 ** ((k * 3) / 12)
+      ;[392, 494, 587, 784].forEach((f, i) => brassNote(f * s, i === 3 ? 0.42 : 0.1, 0.015, i * 0.07))
+      ;[784, 988, 1175].forEach((f) => tone(f * s, 0.5, 'triangle', 0.024, 0.28))
+      noise(0.5, 0.07, 6000, 'highpass', 0.28)
+      if (k >= 1) cannonBoom(0.12 + k * 0.02, 0.28)
+    },
+    // the max win: the full brass fanfare, two cannons and the bell
+    fanfare: () => {
+      reverseCymbal(0.3, 0.1)
+      cannonBoom(0.18, 0.3)
+      ;[587, 740, 880, 1175].forEach((f, i) => brassNote(f, 0.11, 0.017, 0.3 + i * 0.09))
+      ;[1175, 1480, 1760].forEach((f) => brassNote(f, 0.8, 0.011, 0.66))
+      ;[587, 880].forEach((f) => tone(f, 1, 'triangle', 0.035, 0.66))
+      shipBell(1175, 0.04, 0.66, 1.8)
+      cannonBoom(0.14, 0.9)
+    },
+    // back to the sunset deck: a rising chime and a gull or two
+    dawn: () => {
+      ;[587, 740, 880, 1175].forEach((f, i) => tone(f, 0.3, 'sine', 0.025, i * 0.09))
+      nasal(1900, 0.18, 0.02, 0.45, 1400, 2600)
+      nasal(2000, 0.22, 0.018, 0.66, 1300, 2600)
+    },
+    // a lot of ways: the bell
+    bell: () => shipBell(1319, 0.035, 0, 1.2),
+    // Polly's big map flies out and unrolls over the reels: a parchment whoosh, a flap and a rising shimmer
+    unfurl: () => {
+      sweep(0.38, 0.05, 500, 3400, 'bandpass', 1.2)
+      for (let i = 0; i < 4; i++) noise(0.05, 0.045, 1500 + i * 400, 'bandpass', 0.12 + i * 0.06)
+      ;[880, 1109, 1319, 1760].forEach((f, i) => tone(f, 0.3, 'sine', 0.018, 0.2 + i * 0.05, undefined, [6, 6]))
+    },
+    // the X stamps down on the big map: the cannon, a brass hit and the bell
+    xMarks: () => {
+      cannonBoom(0.17)
+      tone(92, 0.22, 'sine', 0.12, 0, 52)
+      ;[587, 740, 880, 1175].forEach((f) => brassNote(f, 0.34, 0.012, 0.02))
+      shipBell(1175, 0.04, 0.06, 1.6)
+      noise(0.5, 0.05, 6000, 'highpass', 0.04)
+    },
+    // the medallion glints through a dry run of free spins: a little shimmer
+    glint: () => {
+      ;[2093, 2637, 3136].forEach((f, i) => tone(f, 0.22, 'sine', 0.012, i * 0.05, undefined, [7, 10]))
+    },
+    // the ambience and the Treasure Hunt shanty (null while muted); see PlunderBed
+    bed: () => plunderBed(),
+    // silent: starts the audio engine (on the first press, so its start-up cost is out of the way of the first spin)
+    wake: () => void ac(),
   }),
   /* cases */
   cases: {
@@ -2116,6 +2643,460 @@ export const sfx = {
         ;[523, 659, 784, 1047].forEach((f) => hold(f, 1.2, 'sawtooth', 0.012, 1.2, f, [5, 4]))
         ;[1568, 2093, 2637, 3136].forEach((f, i) => tone(f, 1.2, 'sine', 0.014, 1.25 + i * 0.06, undefined, [6, 9]))
         tone(65, 1.4, 'sine', 0.12, 1.2, 49)
+      },
+    }
+  })(),
+  /* coin flip: the thumb's flick, the coin singing through the air, knocks on the velvet, the spin-down's rattle,
+     the fire of a streak and the music that climbs with it */
+  coinflip: (() => {
+    const g = { knock: gate(45), pick: gate(70), count: gate(45), tink: gate(120), clink: gate(38), pop: gate(90) }
+    /** a struck coin: the inharmonic partials of a disc, the higher ones dying first */
+    const ring = (f: number, dur: number, gain: number, delay = 0) => {
+      ;[
+        [1, 1, 1],
+        [2.32, 0.62, 0.62],
+        [3.68, 0.42, 0.42],
+        [5.14, 0.28, 0.25],
+      ].forEach(([m, d, k]) => tone(f * m, dur * d, 'sine', gain * k, delay, f * m * 0.997))
+    }
+    /** a looping noise source (one second, so it never repeats audibly under a filter) */
+    const loopNoise = (a: AudioContext) => {
+      const buf = a.createBuffer(1, a.sampleRate, a.sampleRate)
+      const d = buf.getChannelData(0)
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
+      const src = a.createBufferSource()
+      src.buffer = buf
+      src.loop = true
+      return src
+    }
+    /** a level that glides (setTargetAtTime) and never clicks */
+    const glide = (p: AudioParam, v: number, a: AudioContext, tc = 0.04) => {
+      p.cancelScheduledValues(a.currentTime)
+      p.setTargetAtTime(v, a.currentTime, tc)
+    }
+    // The beds (the streak's music and the fire's roar) play through one gain that every sting ducks by about 8 dB,
+    // so a win, a cash-out or a jackpot always stands clear of them, and comes back up after.
+    let bedCtx: AudioContext | null = null
+    let bed: GainNode | null = null
+    const bedNode = (a: AudioContext) => {
+      if (!bed || bedCtx !== a) {
+        bed = a.createGain()
+        bed.gain.value = 1
+        bed.connect(out(a))
+        bedCtx = a
+      }
+      return bed
+    }
+    const duck = (dur: number, db = -8) => {
+      const a = ac()
+      if (!a || !bed || bedCtx !== a) return
+      const n = a.currentTime
+      const p = bed.gain
+      const low = 10 ** (db / 20)
+      p.cancelScheduledValues(n)
+      p.setValueAtTime(p.value, n)
+      p.linearRampToValueAtTime(low, n + 0.03)
+      p.setValueAtTime(low, n + 0.03 + dur)
+      p.linearRampToValueAtTime(1, n + 0.03 + dur + 0.7)
+    }
+    /** the scale the wins climb: two octaves of a major scale from G */
+    const STEP = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24, 26]
+    const note = (n: number) => 392 * 2 ** (STEP[Math.max(0, Math.min(STEP.length - 1, n))] / 12)
+    return {
+      // calling a side: the gem chimes bright, the crown a touch lower and rounder
+      pick: (side: 'heads' | 'tails') => {
+        if (!g.pick()) return
+        if (side === 'heads') {
+          tone(1568, 0.12, 'sine', 0.035)
+          tone(2349, 0.2, 'sine', 0.025, 0.05)
+          tone(3136, 0.16, 'sine', 0.01, 0.08)
+        } else {
+          tone(784, 0.14, 'triangle', 0.04)
+          tone(1175, 0.24, 'triangle', 0.03, 0.06)
+          tone(1568, 0.18, 'sine', 0.01, 0.1)
+        }
+      },
+      // the thumbnail under the rim, the flick, and the coin's ping as it leaves
+      flick: () => {
+        noise(0.025, 0.11, 2400, 'bandpass')
+        tone(240, 0.05, 'triangle', 0.045, 0, 120)
+        ring(2960, 1.1, 0.03, 0.012)
+        sweep(0.3, 0.022, 900, 3200, 'bandpass', 1.2, 0.02)
+      },
+      // the coin singing through the air: a flutter at the spin's rate; set(rate Hz, level 0-1), stop()
+      whirr: () => {
+        const a = ac()
+        if (!a) return null
+        const src = loopNoise(a)
+        const bp = a.createBiquadFilter()
+        bp.type = 'bandpass'
+        bp.frequency.value = 1400
+        bp.Q.value = 0.9
+        const am = a.createGain()
+        am.gain.value = 0.5
+        const lfo = a.createOscillator()
+        lfo.type = 'triangle'
+        lfo.frequency.value = 18
+        const depth = a.createGain()
+        depth.gain.value = 0.5
+        lfo.connect(depth).connect(am.gain)
+        const v = a.createGain()
+        v.gain.value = 0
+        src.connect(bp).connect(am).connect(v).connect(out(a))
+        src.start()
+        lfo.start()
+        let stopped = false
+        return {
+          set: (rate: number, level: number) => {
+            if (stopped) return
+            glide(lfo.frequency, Math.max(4, Math.min(70, rate)), a, 0.03)
+            glide(bp.frequency, 900 + Math.min(70, rate) * 40, a, 0.05)
+            glide(v.gain, 0.05 * Math.max(0, Math.min(1, level)), a, 0.05)
+          },
+          stop: () => {
+            if (stopped) return
+            stopped = true
+            const n = a.currentTime
+            v.gain.cancelScheduledValues(n)
+            v.gain.setValueAtTime(v.gain.value, n)
+            v.gain.linearRampToValueAtTime(0, n + 0.08)
+            src.stop(n + 0.1)
+            lfo.stop(n + 0.1)
+          },
+        }
+      },
+      // a long streak in the air (k 0-1): a riser under the flight and a heartbeat for its fall, over `dur` seconds
+      // (kept under the stings: it builds the tension, the result is what lands)
+      riser: (k = 0.5, dur = 1) => {
+        sweep(dur, 0.011 + 0.016 * k, 280, 1800 + k * 1400, 'bandpass', 1.6)
+        const f = 110 * 2 ** ((k * 5) / 12)
+        hold(f, dur, 'triangle', 0.007 + 0.007 * k, 0, f * 1.12, [5, 1.5])
+        for (let i = 0; i < 2; i++) {
+          tone(58, 0.12, 'sine', 0.044 * (0.5 + k * 0.5), dur * 0.55 + i * 0.2, 40)
+          tone(52, 0.14, 'sine', 0.033 * (0.5 + k * 0.5), dur * 0.55 + i * 0.2 + 0.14, 38)
+        }
+      },
+      // time slows for the landing: a deep whoom and a swell
+      slowmo: (k = 1) => {
+        tone(70, 0.7, 'sine', 0.06 * k, 0, 40)
+        sweep(0.8, 0.03 * k, 2200, 300, 'bandpass', 1.4)
+        tone(1047, 0.9, 'sine', 0.007 * k, 0.05, 1035, [5, 6])
+      },
+      // gold on velvet (v: how hard): a muffled thud, and the coin's ring, brighter the harder it lands
+      knock: (v = 10, first = false) => {
+        if (!g.knock()) return
+        const k = Math.max(0.15, Math.min(1, v / 30))
+        noise(0.09, 0.07 * k, 420, 'lowpass')
+        tone(120, 0.14, 'sine', 0.055 * k, 0, 70)
+        noise(0.02, 0.04 * k, 3800, 'bandpass')
+        ring(first ? 2960 : 2960 * (0.98 + Math.random() * 0.04), (first ? 1.6 : 0.7) * (0.4 + k * 0.6), 0.022 * k)
+      },
+      // the spin-down on the rim, like Euler's disk: a rattle that quickens and fades; set(rate Hz, level), stop()
+      spin: () => {
+        const a = ac()
+        if (!a) return null
+        const src = loopNoise(a)
+        const bp = a.createBiquadFilter()
+        bp.type = 'bandpass'
+        bp.frequency.value = 2600
+        bp.Q.value = 2.2
+        const ringOsc = a.createOscillator()
+        ringOsc.frequency.value = 2960
+        const ringG = a.createGain()
+        ringG.gain.value = 0.18
+        const low = a.createBiquadFilter()
+        low.type = 'lowpass'
+        low.frequency.value = 260
+        // pulses: a sine at the rate, sharpened into clicks
+        const lfo = a.createOscillator()
+        lfo.frequency.value = 6
+        const shaper = a.createWaveShaper()
+        const curve = new Float32Array(256)
+        for (let i = 0; i < 256; i++) curve[i] = (i / 255) ** 6
+        shaper.curve = curve
+        const am = a.createGain()
+        am.gain.value = 0
+        lfo.connect(shaper).connect(am.gain)
+        const v = a.createGain()
+        v.gain.value = 0
+        src.connect(bp).connect(am)
+        ringOsc.connect(ringG).connect(am)
+        src.connect(low).connect(v)
+        am.connect(v)
+        v.connect(out(a))
+        src.start()
+        lfo.start()
+        ringOsc.start()
+        let stopped = false
+        return {
+          set: (rate: number, level: number) => {
+            if (stopped) return
+            const r = Math.max(2, Math.min(90, rate))
+            glide(lfo.frequency, r, a, 0.05)
+            glide(ringOsc.frequency, 2960 + r * 4, a, 0.1)
+            glide(v.gain, 0.09 * Math.max(0, Math.min(1, level)), a, 0.05)
+          },
+          stop: () => {
+            if (stopped) return
+            stopped = true
+            const n = a.currentTime
+            v.gain.cancelScheduledValues(n)
+            v.gain.setValueAtTime(v.gain.value, n)
+            v.gain.linearRampToValueAtTime(0, n + 0.12)
+            src.stop(n + 0.14)
+            lfo.stop(n + 0.14)
+            ringOsc.stop(n + 0.14)
+          },
+        }
+      },
+      // it lies still: one last little tink
+      settle: () => {
+        if (!g.tink()) return
+        ring(3020, 0.5, 0.012)
+        noise(0.03, 0.04, 500, 'lowpass')
+      },
+      // a little coin of the shower or the rain knocking the velvet or glancing off the big coin (k: how hard)
+      clink: (k = 0.5) => {
+        if (!g.clink()) return
+        ring(3300 * (0.9 + Math.random() * 0.25), 0.28, 0.009 * Math.max(0.2, Math.min(1, k)))
+      },
+      // a firework over the table at a legendary streak: a pop and a crackling fall
+      firework: () => {
+        if (!g.pop()) return
+        noise(0.06, 0.1, 700, 'lowpass')
+        tone(140, 0.12, 'sine', 0.05, 0, 60)
+        crackle(0.45, 0.018, 0.1)
+      },
+      // the coin catches fire (level 1-5): a whoomph and a scatter of sparks
+      ignite: (level = 1) => {
+        const k = Math.min(1, 0.4 + level * 0.15)
+        sweep(0.55, 0.09 * k, 260, 1600, 'lowpass', 0.7)
+        noise(0.4, 0.06 * k, 900, 'lowpass', 0.05)
+        tone(90, 0.4, 'sine', 0.08 * k, 0, 55)
+        crackle(0.5, 0.025 * k, 0.1)
+      },
+      // the streak's fire: a soft roar and crackles, ducked under the stings; level(0-1), stop()
+      fire: () => {
+        const a = ac()
+        if (!a) return null
+        const src = loopNoise(a)
+        const lp = a.createBiquadFilter()
+        lp.type = 'lowpass'
+        lp.frequency.value = 500
+        const v = a.createGain()
+        v.gain.value = 0
+        src.connect(lp).connect(v).connect(bedNode(a))
+        src.start()
+        let level = 0
+        let stopped = false
+        const timer = setInterval(() => {
+          if (stopped || level < 0.05) return
+          if (Math.random() < 0.35 + level * 0.5) noise(0.006 + Math.random() * 0.012, (0.012 + Math.random() * 0.02) * level, 1800 + Math.random() * 4000, 'bandpass', Math.random() * 0.08)
+          if (Math.random() < level * 0.25) tone(60 + Math.random() * 30, 0.12, 'sine', 0.02 * level, Math.random() * 0.05, 40)
+        }, 70)
+        return {
+          level: (l: number) => {
+            if (stopped) return
+            level = Math.max(0, Math.min(1, l))
+            glide(v.gain, 0.07 * level, a, 0.3)
+            glide(lp.frequency, 420 + level * 700, a, 0.3)
+          },
+          stop: () => {
+            if (stopped) return
+            stopped = true
+            clearInterval(timer)
+            const n = a.currentTime
+            v.gain.cancelScheduledValues(n)
+            v.gain.setValueAtTime(v.gain.value, n)
+            v.gain.linearRampToValueAtTime(0, n + 0.5)
+            src.stop(n + 0.55)
+          },
+        }
+      },
+      // the flames go out (k 0-1: how big the fire was): a hiss and a low gutter
+      douse: (k = 0.5) => {
+        sweep(0.7, 0.03 + 0.03 * k, 3000, 600, 'highpass', 0.8)
+        noise(0.5, 0.025 + 0.025 * k, 1200, 'bandpass', 0.05)
+        tone(80, 0.5, 'sine', 0.03 + 0.04 * k, 0.05, 45)
+      },
+      // the call came up: a chord a step higher up the scale for every win of the streak, and a sparkle
+      win: (n = 1) => {
+        duck(0.7)
+        const f = note(n - 1)
+        const k = 0.1 + 0.005 * Math.min(8, n)
+        ;[f, f * 2 ** (4 / 12), f * 2 ** (7 / 12)].forEach((x, i) => tone(x, 0.26, 'triangle', k, i * 0.06))
+        tone(f * 2, 0.6, 'sine', 0.05, 0.18, undefined, [6, 6])
+        tone(f / 2, 0.3, 'sine', 0.07, 0, f / 2)
+        for (let i = 0; i < 4 + Math.min(8, n); i++) tone(2600 + Math.random() * 1600, 0.07, 'sine', 0.016, 0.2 + i * 0.045)
+      },
+      // the other face (k: the wins the streak had): a soft fall on a first flip; a streak lost dives like a tape
+      // stopping, deeper and louder the more it was worth
+      lose: (k = 0) => {
+        duck(0.9, -12)
+        const kk = Math.max(0, Math.min(1, k / 8))
+        tone(392, 0.22, 'triangle', 0.034, 0, 370)
+        tone(311, 0.5, 'triangle', 0.034, 0.2, 262, [5, 5])
+        tone(78, 0.4, 'sine', 0.045, 0.2, 52)
+        if (k >= 1) {
+          tone(196, 0.7, 'triangle', 0.018 + 0.04 * kk, 0.04, 41)
+          tone(98, 0.8, 'sine', 0.03 + 0.08 * kk, 0.08, 30)
+          sweep(0.6, 0.012 + 0.03 * kk, 1800, 140, 'lowpass', 1, 0.04)
+        }
+      },
+      // cashing out: a bright chord and coins pouring into the tray (more of both for more), over a ducked bed
+      cashout: (mult = 2) => {
+        duck(1.4)
+        tone(131, 0.24, 'sine', 0.25, 0, 82)
+        ;[784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.26, 'triangle', 0.19, i * 0.06))
+        tone(1568 * 2, 0.7, 'sine', 0.04, 0.26, undefined, [6, 6])
+        const n = Math.min(28, 6 + Math.round(Math.log2(mult) * 2))
+        for (let i = 0; i < n; i++) {
+          const f = 2400 + Math.random() * 1500
+          const t = 0.16 + i * (0.035 + Math.random() * 0.02)
+          tone(f, 0.05, 'square', 0.016, t)
+          tone(f * 1.33, 0.09, 'sine', 0.026, t + 0.01)
+        }
+        if (mult >= 15) {
+          ;[523, 659, 784].forEach((f, i) => hold(f, 0.12, 'sawtooth', 0.022, 0.3 + i * 0.1))
+          hold(1047, 0.7, 'sawtooth', 0.026, 0.6, 1047, [5, 5])
+        }
+      },
+      // a jackpot streak (tier 1 at 10 wins, 2 at 13, 3 at all 16): a cymbal swell and a brass fanfare, the loudest
+      // moment of the game
+      jackpot: (tier = 1) => {
+        duck(3.2, -14)
+        const t = Math.max(1, Math.min(3, tier))
+        reverseCymbal(0.6, 0.08 + 0.02 * t)
+        const CH = [
+          [392, 494, 587],
+          [440, 554, 659],
+          [494, 622, 740],
+          [523, 659, 784],
+        ]
+        for (let i = 0; i <= t; i++) CH[i].forEach((f) => hold(f, 0.18, 'sawtooth', 0.026, 0.6 + i * 0.2))
+        const end = 0.6 + (t + 1) * 0.2
+        CH[t].forEach((f) => hold(f * 2, 1.3 + t * 0.2, 'sawtooth', 0.022, end, f * 2, [5, 4]))
+        CH[t].forEach((f) => hold(f / 2, 1.3 + t * 0.2, 'triangle', 0.05, end))
+        tone(55, 1.4, 'sine', 0.2, end, 41)
+        noise(0.5, 0.12, 5000, 'highpass', end)
+        for (let i = 0; i < 10 + t * 6; i++) tone(2200 + Math.random() * 1800, 0.08, 'sine', 0.02, end + i * 0.05)
+        if (t >= 3) {
+          // legendary: a second, higher fanfare
+          const e2 = end + 1.6
+          ;[784, 988, 1175, 1568].forEach((f, i) => hold(f, 0.16, 'sawtooth', 0.02, e2 + i * 0.12))
+          hold(2093, 1.2, 'sine', 0.03, e2 + 0.5, 2093, [6, 8])
+          tone(41, 1.6, 'sine', 0.18, e2 + 0.5, 30)
+        }
+      },
+      // the win counting up
+      count: (k = 0) => {
+        if (!g.count()) return
+        tone(1900 + k * 1400, 0.04, 'triangle', 0.02)
+      },
+      // the music of a streak: silent at 0, a soft pad and bass from the first win, then hats, an arpeggio, drums and
+      // a lead join in and the tempo climbs as the streak grows, ducked under every sting. set(streak) steers it;
+      // stop() fades it out, stop(true) stops it like a tape (a lost streak).
+      music: () => {
+        const a = ac()
+        if (!a) return null
+        let streak = 0
+        let stopped = false
+        let next = a.currentTime + 0.05
+        let step = 0
+        const bus = a.createGain()
+        bus.gain.value = 0.85
+        const lp = a.createBiquadFilter()
+        lp.type = 'lowpass'
+        lp.frequency.value = 18000
+        bus.connect(lp).connect(bedNode(a))
+        /** a note into the music's bus */
+        const play = (f: number, dur: number, type: OscillatorType, gain: number, at: number, slideTo?: number) => {
+          const o = osc(a, at, f, dur, type, slideTo)
+          const v = a.createGain()
+          v.gain.setValueAtTime(0.0001, at)
+          v.gain.exponentialRampToValueAtTime(gain, at + 0.012)
+          v.gain.exponentialRampToValueAtTime(0.0001, at + dur)
+          o.connect(v).connect(bus)
+        }
+        const hat = (gain: number, at: number) => {
+          const len = Math.floor(a.sampleRate * 0.04)
+          const buf = a.createBuffer(1, len, a.sampleRate)
+          const d = buf.getChannelData(0)
+          for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3
+          const s = a.createBufferSource()
+          s.buffer = buf
+          const f = a.createBiquadFilter()
+          f.type = 'highpass'
+          f.frequency.value = 7000
+          const v = a.createGain()
+          v.gain.value = gain
+          s.connect(f).connect(v).connect(bus)
+          s.start(at)
+        }
+        // Am, F, C, G: two beats each, round and round
+        const CHORDS = [
+          [220, 261.6, 329.6],
+          [174.6, 220, 261.6],
+          [196, 246.9, 293.7],
+          [164.8, 207.7, 246.9],
+        ]
+        const timer = setInterval(() => {
+          if (stopped) return
+          if (streak < 1) {
+            next = a.currentTime + 0.1
+            step = 0
+            return
+          }
+          const bpm = 96 + Math.min(16, streak) * 3.5
+          const s16 = 60 / bpm / 4
+          while (next < a.currentTime + 0.25) {
+            const at = Math.max(next, a.currentTime + 0.005)
+            const st = step % 32
+            const ch = CHORDS[Math.floor(st / 8) % 4]
+            // pad: the chord on each change
+            if (st % 8 === 0) ch.forEach((f, i) => play(f, s16 * 8.5, 'triangle', 0.02 - i * 0.003, at))
+            // bass: on beats one and three from the first win, every beat from the second
+            if (st % (streak >= 2 ? 4 : 8) === 0) play(ch[0] / 2, s16 * 2.4, 'sine', streak >= 2 ? 0.05 : 0.03, at, (ch[0] / 2) * 0.98)
+            // hats on the off-beats, sixteenths later
+            if (streak >= 3 && (st % 4 === 2 || (streak >= 6 && st % 2 === 1))) hat(st % 4 === 2 ? 0.05 : 0.025, at)
+            // a kick on every beat and a clap on two and four
+            if (streak >= 5 && st % 4 === 0) play(130, 0.16, 'sine', 0.08, at, 45)
+            if (streak >= 5 && st % 8 === 4) {
+              hat(0.06, at)
+              play(185, 0.08, 'triangle', 0.02, at, 120)
+            }
+            // the arpeggio
+            if (streak >= 4) {
+              const f = ch[st % 3] * (st % 6 < 3 ? 2 : 4)
+              if (st % 2 === 0 || streak >= 8) play(f, s16 * 1.6, 'triangle', 0.011, at)
+            }
+            // a shimmering lead an octave up, for the long streaks
+            if (streak >= 9 && st % 8 === 0) play(ch[2] * 4, s16 * 7, 'sine', 0.009, at, ch[2] * 4 * 1.005)
+            next += s16
+            step++
+          }
+        }, 60)
+        return {
+          set: (n: number) => {
+            streak = Math.max(0, n)
+          },
+          stop: (tape = false) => {
+            if (stopped) return
+            stopped = true
+            clearInterval(timer)
+            const n = a.currentTime
+            const end = tape ? 0.55 : 0.6
+            if (tape) {
+              lp.frequency.cancelScheduledValues(n)
+              lp.frequency.setValueAtTime(lp.frequency.value, n)
+              lp.frequency.exponentialRampToValueAtTime(150, n + end)
+            }
+            bus.gain.cancelScheduledValues(n)
+            bus.gain.setValueAtTime(bus.gain.value, n)
+            bus.gain.linearRampToValueAtTime(0, n + end)
+            setTimeout(() => bus.disconnect(), (end + 0.3) * 1000)
+          },
+        }
       },
     }
   })(),

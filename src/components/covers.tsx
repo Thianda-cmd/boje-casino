@@ -17,6 +17,7 @@ import { CrateArt, ItemArt } from '../games/cases/art'
 import { duckMarkup, type Expr } from '../games/derby/art'
 import { CoverSymbol } from '../games/scratch/coversymbols'
 import { bojeFacets } from '../art/brand'
+import { FaceDesign } from '../games/coinflip/art'
 
 /* Lobby art. Chicken Road keeps its pixel look; everything else is clean vector art on a bold gradient. */
 
@@ -65,6 +66,10 @@ export function GameCover({ id }: { id: GameId }) {
       return <PenaltyCover />
     case 'scratch':
       return <ScratchCover />
+    case 'coinflip':
+      return <CoinFlipCover />
+    case 'plunder':
+      return <PlunderCover />
     case 'cases':
       return <CasesCover />
     case 'baccarat':
@@ -2135,6 +2140,411 @@ function ScratchCover() {
       <Sparkle x={176} y={102} r={4.5} />
       <Sparkle x={26} y={186} r={4} />
       <Sparkle x={120} y={22} r={3.5} />
+    </Scene>
+  )
+}
+
+/**
+ * Coin Flip: the gold coin flicked high above plum velvet in a shaft of warm light, gem side up and on fire from its
+ * streak, the crown side of another coin resting in the pool below; a "2×" tag for what every win does.
+ */
+function CoinFlipCover() {
+  const u = useUid() + 'cf'
+  const RX = 60
+  const RY = 45
+  const EDGE = 10
+  // the reeding round the visible edge: short ticks along the lower half of the face's ellipse
+  const ticks = Array.from({ length: 34 }, (_, i) => {
+    const a = (Math.PI * (i + 0.5)) / 34
+    const x = Math.cos(a) * RX
+    const y = Math.sin(a) * RY
+    return { x, y, o: 0.25 + 0.5 * Math.sin(a) }
+  })
+  const beads = Array.from({ length: 36 }, (_, i) => {
+    const a = (i / 36) * Math.PI * 2
+    return [Math.cos(a) * 44.5, Math.sin(a) * 33.4] as const
+  })
+  // the fire trailing off the coin: an inked outer flame, a yellow inner flame and a white-hot core
+  const FIRE = 'M-54 4 C-66 30 -54 54 -38 62 C-42 50 -36 42 -27 38 C-32 58 -20 78 -5 88 C-9 72 -3 60 8 53 C8 70 19 84 34 87 C27 73 31 61 41 53 C45 63 55 69 64 66 C53 54 58 30 54 4 Z'
+  return (
+    <Scene from="#6b1a5f" to="#13041b">
+      <defs>
+        <linearGradient id={`${u}shaft`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff1cf" stopOpacity=".42" />
+          <stop offset=".75" stopColor="#ffd9a0" stopOpacity=".1" />
+          <stop offset="1" stopColor="#ffd9a0" stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id={`${u}lamp`}>
+          <stop offset="0" stopColor="#fffaf0" />
+          <stop offset=".3" stopColor="#ffe6b8" stopOpacity=".6" />
+          <stop offset="1" stopColor="#ffe6b8" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${u}velvet`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#3a0d3a" />
+          <stop offset="1" stopColor="#14041a" />
+        </linearGradient>
+        <radialGradient id={`${u}pool`}>
+          <stop offset="0" stopColor="#ffbe7a" stopOpacity=".6" />
+          <stop offset=".5" stopColor="#c8487a" stopOpacity=".25" />
+          <stop offset="1" stopColor="#c8487a" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${u}rim`} x1=".15" y1="0" x2=".85" y2="1">
+          <stop offset="0" stopColor="#fff4b8" />
+          <stop offset=".35" stopColor="#f9c947" />
+          <stop offset=".75" stopColor="#d88b1a" />
+          <stop offset="1" stopColor="#8f4a0c" />
+        </linearGradient>
+        <radialGradient id={`${u}field`} cx=".38" cy=".3" r=".8">
+          <stop offset="0" stopColor="#ffe48a" />
+          <stop offset=".6" stopColor="#f2b531" />
+          <stop offset="1" stopColor="#bf7313" />
+        </radialGradient>
+        <linearGradient id={`${u}edge`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#ffd866" />
+          <stop offset=".45" stopColor="#d48a1a" />
+          <stop offset="1" stopColor="#7d3f0a" />
+        </linearGradient>
+        <linearGradient id={`${u}fo`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ff8a2a" />
+          <stop offset="1" stopColor="#e2263a" />
+        </linearGradient>
+        <linearGradient id={`${u}fi`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffe066" />
+          <stop offset="1" stopColor="#ff9a1f" />
+        </linearGradient>
+        <linearGradient id={`${u}trail`} x1="0" y1="1" x2=".4" y2="0">
+          <stop offset="0" stopColor="#ff4d2e" stopOpacity="0" />
+          <stop offset=".6" stopColor="#ff9a3c" stopOpacity=".55" />
+          <stop offset="1" stopColor="#ffe08a" stopOpacity=".9" />
+        </linearGradient>
+        <radialGradient id={`${u}glow`}>
+          <stop offset="0" stopColor="#ffd27a" stopOpacity=".7" />
+          <stop offset="1" stopColor="#ff7a3c" stopOpacity="0" />
+        </radialGradient>
+        <path id={`${u}arc`} d="M-38 -12 A40 30 0 0 1 38 -12" />
+      </defs>
+
+      {/* the shaft of light from the lamp above, and the dust in it */}
+      <path d="M80 -10 L122 -10 L178 200 L22 200 Z" fill={`url(#${u}shaft)`} />
+      <circle cx="101" cy="-6" r="38" fill={`url(#${u}lamp)`} />
+      {[
+        [64, 40, 1.1],
+        [140, 58, 0.9],
+        [52, 128, 0.8],
+        [150, 140, 1.2],
+        [120, 22, 0.8],
+        [36, 92, 0.7],
+        [166, 104, 0.8],
+      ].map(([x, y, r], i) => (
+        <circle key={i} cx={x} cy={y} r={r} fill="#ffe9c4" opacity=".8" />
+      ))}
+
+      {/* the velvet and its pool of light */}
+      <path d="M-10 182 Q100 170 210 182 V260 H-10 Z" fill={`url(#${u}velvet)`} />
+      <ellipse cx="100" cy="196" rx="96" ry="22" fill={`url(#${u}pool)`} />
+      {/* the flying coin's shadow, far below it */}
+      <ellipse cx="108" cy="196" rx="34" ry="6.5" fill="#0c0210" opacity=".5" />
+
+      {/* a coin resting crown up in the pool */}
+      <g transform="translate(40 196)">
+        <ellipse cx="2" cy="5" rx="27" ry="7" fill="#0c0210" opacity=".55" />
+        <path d={`M-25 0 A25 9 0 0 0 25 0 V4 A25 9 0 0 1 -25 4 Z`} fill={`url(#${u}edge)`} stroke={INK} strokeWidth="1.6" />
+        <ellipse rx="25" ry="9" fill={`url(#${u}rim)`} stroke={INK} strokeWidth="1.6" />
+        <ellipse rx="20" ry="7" fill={`url(#${u}field)`} />
+        <g transform="scale(1 0.36)">
+          <FaceDesign side="tails" cx={0} cy={0} r={18} />
+        </g>
+      </g>
+
+      {/* the toss: a fiery trail up from the table */}
+      <path d="M74 204 Q62 160 90 130" fill="none" stroke={`url(#${u}trail)`} strokeWidth="26" strokeLinecap="round" opacity=".35" />
+      <path d="M74 204 Q62 160 90 130" fill="none" stroke={`url(#${u}trail)`} strokeWidth="9" strokeLinecap="round" opacity=".8" />
+      <ellipse cx="96" cy="112" rx="64" ry="54" fill={`url(#${u}glow)`} />
+
+      {/* spin lines */}
+      <g fill="none" stroke="#fff" strokeLinecap="round" opacity=".7">
+        <path d="M30 70 Q22 96 34 124" strokeWidth="2.6" />
+        <path d="M22 84 Q18 98 24 112" strokeWidth="1.8" opacity=".7" />
+        <path d="M174 64 Q186 92 172 122" strokeWidth="2.6" />
+        <path d="M182 78 Q188 94 182 110" strokeWidth="1.8" opacity=".7" />
+      </g>
+
+      <g transform="translate(102 92) rotate(-15)">
+        {/* the fire streaming off behind it, the streak burning */}
+        <path d={FIRE} fill={`url(#${u}fo)`} stroke={INK} strokeWidth="2.6" strokeLinejoin="round" />
+        <path d={FIRE} fill={`url(#${u}fi)`} transform="translate(0 20) scale(0.74 0.72)" />
+        <path d={FIRE} fill="#fff6cf" transform="translate(0 31) scale(0.46 0.44)" opacity=".95" />
+        {/* the edge, reeded */}
+        <path d={`M${-RX} 0 A${RX} ${RY} 0 0 0 ${RX} 0 V${EDGE} A${RX} ${RY} 0 0 1 ${-RX} ${EDGE} Z`} fill={`url(#${u}edge)`} stroke={INK} strokeWidth="2.6" strokeLinejoin="round" />
+        {ticks.map((t, i) => (
+          <line key={i} x1={t.x} y1={t.y + 1.5} x2={t.x} y2={t.y + EDGE - 1} stroke="#6b3408" strokeOpacity={t.o} strokeWidth="1.1" />
+        ))}
+        {/* the face: rim, sunk field, beads, lettering, the gem */}
+        <ellipse rx={RX} ry={RY} fill={`url(#${u}rim)`} stroke={INK} strokeWidth="2.6" />
+        <ellipse rx={RX - 9} ry={RY - 7} fill={`url(#${u}field)`} stroke="#8f4a0c" strokeOpacity=".75" strokeWidth="1.4" />
+        {beads.map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r="1.15" fill="#fff1b8" opacity=".9" />
+        ))}
+        <text fontSize="6.4" fontWeight="900" fill="#9a5510" letterSpacing="1.1" fontFamily="Manrope, system-ui, sans-serif">
+          <textPath href={`#${u}arc`} startOffset="50%" textAnchor="middle">
+            BOJE CASINO
+          </textPath>
+        </text>
+        <g transform={`scale(1 ${(RY / RX).toFixed(3)})`}>
+          <FaceDesign side="heads" cx={0} cy={3} r={46} />
+        </g>
+        {/* the light across the rim */}
+        <path d={`M${-RX + 8} -16 A${RX - 4} ${RY - 4} 0 0 1 -18 ${-RY + 3}`} fill="none" stroke="#fff" strokeOpacity=".7" strokeWidth="2.6" strokeLinecap="round" />
+      </g>
+      {/* embers */}
+      {[
+        [62, 170, 1.6],
+        [80, 186, 1.2],
+        [128, 168, 1.4],
+        [146, 150, 1],
+        [56, 150, 1.1],
+      ].map(([x, y, r], i) => (
+        <circle key={i} cx={x} cy={y} r={r} fill="#ffcf6b" />
+      ))}
+
+      {/* what a win does */}
+      <g transform="rotate(8 166 30)" style={{ filter: 'drop-shadow(0 5px 6px rgba(30,0,20,.5))' }}>
+        <rect x="142" y="17" width="48" height="27" rx="13.5" fill="#f7c548" />
+        <rect x="148" y="19.5" width="36" height="8.5" rx="4.25" fill="#fff" opacity=".28" />
+        <text x="166" y="36.6" textAnchor="middle" fontSize="17" fontWeight="900" fill="#2a1c00" fontFamily="Manrope, system-ui, sans-serif">
+          2×
+        </text>
+      </g>
+      <Sparkle x={52} y={52} r={5} />
+      <Sparkle x={160} y={74} r={3.6} />
+      <Sparkle x={30} y={150} r={3} />
+      <path d="M58 64 l2.2 -6.4 l2.2 6.4 l6.4 2.2 l-6.4 2.2 l-2.2 6.4 l-2.2 -6.4 l-6.4 -2.2 Z" fill="#fff6c8" />
+    </Scene>
+  )
+}
+
+const SEA_INK = '#1f1029'
+/** the coins heaped in the chest: [x, y, upright] */
+const PLUNDER_HEAP: [number, number, boolean][] = [
+  [72, 177, false], [84, 175, false], [97, 174, false], [123, 174, false], [136, 175, false], [148, 177, false],
+  [78, 170, false], [91, 168, false], [130, 168, false], [143, 170, false], [86, 163, true], [137, 163, true],
+]
+
+/** Plunder Bay: Captain Polly on a treasure chest spilling gold, on the deck at sunset, a doubloon held high and the
+ *  ways sign swinging from the yard. */
+function PlunderCover() {
+  const u = useUid()
+  const coin = (x: number, y: number, r: number, k: number) => (
+    <g key={k}>
+      <circle cx={x} cy={y} r={r} fill={`url(#${u}c)`} stroke={SEA_INK} strokeWidth="2" />
+      <circle cx={x} cy={y} r={r * 0.62} fill="none" stroke="#c07a12" strokeWidth="1.2" />
+      <ellipse cx={x - r * 0.35} cy={y - r * 0.4} rx={r * 0.28} ry={r * 0.16} fill="#fff" opacity=".75" transform={`rotate(-35 ${x - r * 0.35} ${y - r * 0.4})`} />
+    </g>
+  )
+  return (
+    <Scene from="#3a2a7e" to="#ff9d5c">
+      <defs>
+        <linearGradient id={`${u}sky`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#30287a" />
+          <stop offset=".5" stopColor="#a8488f" />
+          <stop offset="1" stopColor="#ffa05a" />
+        </linearGradient>
+        <radialGradient id={`${u}sun`} cx=".5" cy=".45" r=".55">
+          <stop offset="0" stopColor="#fff7cf" />
+          <stop offset=".7" stopColor="#ffd56a" />
+          <stop offset="1" stopColor="#ffb347" />
+        </radialGradient>
+        <radialGradient id={`${u}halo`}>
+          <stop offset="0" stopColor="#ffd27a" stopOpacity=".75" />
+          <stop offset="1" stopColor="#ffd27a" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${u}sea`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#4a7fd0" />
+          <stop offset="1" stopColor="#1d3c7c" />
+        </linearGradient>
+        <radialGradient id={`${u}c`} cx=".36" cy=".32" r=".8">
+          <stop offset="0" stopColor="#fff2b0" />
+          <stop offset=".55" stopColor="#ffc93d" />
+          <stop offset="1" stopColor="#dc8c12" />
+        </radialGradient>
+        <radialGradient id={`${u}red`} cx=".35" cy=".3" r=".85">
+          <stop offset="0" stopColor="#ff7a5c" />
+          <stop offset=".6" stopColor="#ef4532" />
+          <stop offset="1" stopColor="#c92a22" />
+        </radialGradient>
+        <linearGradient id={`${u}wood`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#b8703c" />
+          <stop offset="1" stopColor="#7a4220" />
+        </linearGradient>
+        {/* the wing feathers: red at the shoulder, a yellow band, blue to the tips */}
+        <linearGradient id={`${u}wl`} gradientUnits="userSpaceOnUse" x1="92" y1="130" x2="58" y2="62">
+          <stop offset=".36" stopColor="#ef4532" />
+          <stop offset=".36" stopColor="#ffcf33" />
+          <stop offset=".5" stopColor="#ffcf33" />
+          <stop offset=".5" stopColor="#2f7bff" />
+        </linearGradient>
+        <linearGradient id={`${u}wr`} gradientUnits="userSpaceOnUse" x1="128" y1="128" x2="170" y2="130">
+          <stop offset=".38" stopColor="#ef4532" />
+          <stop offset=".38" stopColor="#ffcf33" />
+          <stop offset=".53" stopColor="#ffcf33" />
+          <stop offset=".53" stopColor="#2f7bff" />
+        </linearGradient>
+        <clipPath id={`${u}f`}>
+          <path d="M97 50 C86 49 72 45 62 34 C58 30 60 24 66 25 C76 33 88 38 100 43 Z" />
+        </clipPath>
+      </defs>
+
+      {/* the sunset: sky, the sun going down behind the sea, gulls across it, clouds */}
+      <rect width="200" height="134" fill={`url(#${u}sky)`} />
+      <circle cx="30" cy="132" r="60" fill={`url(#${u}halo)`} />
+      <circle cx="30" cy="132" r="26" fill={`url(#${u}sun)`} />
+      <g fill="#ffc6dc" opacity=".9">
+        <path d="M-6 92 Q2 80 14 84 Q20 74 32 80 Q42 78 44 88 Q46 94 38 95 H-6 Z" />
+        <path d="M150 84 Q156 72 168 76 Q176 66 188 72 Q200 70 206 80 V88 H152 Q146 88 150 84 Z" />
+      </g>
+      <path d="M-6 92 Q2 80 14 84 Q20 74 32 80" fill="none" stroke="#fff" strokeOpacity=".55" strokeWidth="2" strokeLinecap="round" />
+      <path d="M150 84 Q156 72 168 76 Q176 66 188 72" fill="none" stroke="#fff" strokeOpacity=".55" strokeWidth="2" strokeLinecap="round" />
+      <g fill="none" stroke="#4a1f4f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 120 q5 -5 9 0 q4 -5 9 0" />
+        <path d="M34 110 q4 -4 7 0 q3 -4 7 0" />
+      </g>
+
+      {/* the sea, the sun's glitter on it and an island on the horizon */}
+      <rect y="132" width="200" height="60" fill={`url(#${u}sea)`} />
+      <path d="M168 133 Q176 124 186 126 Q196 122 206 130 V133 Z" fill="#6b3f8f" />
+      <path d="M184 126 Q185 116 182 108 M182 108 q-6 0 -9 4 M182 108 q6 -1 9 3 M182 108 q-2 -5 -7 -6 M182 108 q3 -5 8 -5" fill="none" stroke="#6b3f8f" strokeWidth="2" strokeLinecap="round" />
+      <g stroke="#ffd98a" strokeLinecap="round">
+        <path d="M12 138 H50 M20 144 H40 M46 144 H54 M8 150 H30 M36 150 H46 M18 157 H42 M10 163 H24" strokeWidth="1.8" opacity=".9" />
+      </g>
+      <g stroke="#9cc4ff" strokeWidth="1.6" strokeLinecap="round" fill="none" opacity=".55">
+        <path d="M150 150 q5 -3 10 0 t10 0 M120 172 q5 -3 10 0 t10 0 M166 166 q5 -3 10 0" />
+      </g>
+
+      {/* the yard overhead and the ways sign swinging from it */}
+      <rect x="114" y="0" width="92" height="7" fill="#7a4220" stroke={SEA_INK} strokeWidth="2.5" />
+      <path d="M144 7 L147 25 M186 7 L183 25" stroke="#e8cf9a" strokeWidth="2" strokeLinecap="round" />
+      <g transform="rotate(4 164 40)">
+        <rect x="131" y="22" width="66" height="36" rx="5" fill={`url(#${u}wood)`} stroke={SEA_INK} strokeWidth="2.5" />
+        <rect x="136" y="27" width="56" height="26" rx="3.5" fill="#16244a" stroke="#e8b04a" strokeWidth="1.4" />
+        {[[134.5, 25.5], [193.5, 25.5], [134.5, 54.5], [193.5, 54.5]].map(([x, y]) => (
+          <circle key={`${x}${y}`} cx={x} cy={y} r="1.6" fill="#f2c14e" />
+        ))}
+        <text x="164" y="42" textAnchor="middle" fontSize="13.5" fontWeight="900" fill="#ffd23f" stroke={SEA_INK} strokeWidth="2.6" paintOrder="stroke" fontFamily="Manrope, system-ui, sans-serif">
+          117,649
+        </text>
+        <text x="164" y="50.5" textAnchor="middle" fontSize="6.6" fontWeight="900" letterSpacing="1.6" fill="#ffe9a8" fontFamily="Manrope, system-ui, sans-serif">
+          WAYS
+        </text>
+      </g>
+
+      {/* the ship's rail and deck */}
+      <rect y="186" width="200" height="64" fill="#9a5a2c" />
+      {[198, 214, 232].map((y) => (
+        <path key={y} d={`M0 ${y} H200`} stroke={SEA_INK} strokeOpacity=".35" strokeWidth="1.5" />
+      ))}
+      {Array.from({ length: 18 }, (_, i) => (
+        <rect key={i} x={i * 12 - 2} y="170" width="6" height="16" rx="2" fill="#a8642f" stroke={SEA_INK} strokeWidth="1.6" />
+      ))}
+      <rect x="-4" y="164" width="208" height="7" rx="2" fill="#b8703c" stroke={SEA_INK} strokeWidth="2" />
+      <rect x="-4" y="184" width="208" height="5" fill="#6d3a1d" stroke={SEA_INK} strokeWidth="1.6" />
+
+      {/* a treasure map leaning on the chest */}
+      <g transform="rotate(-14 38 206)">
+        <rect x="21" y="194" width="34" height="23" fill="#f6e1ad" stroke={SEA_INK} strokeWidth="2" />
+        <path d="M26 211 q6 -9 13 -4" fill="none" stroke="#a86f2c" strokeWidth="1.5" strokeDasharray="2 1.8" strokeLinecap="round" />
+        <path d="m40 199 5 5 m0 -5 -5 5" stroke="#e8344a" strokeWidth="2.4" strokeLinecap="round" />
+        <rect x="17" y="192" width="6" height="27" rx="3" fill="#e4b768" stroke={SEA_INK} strokeWidth="2" />
+        <rect x="53" y="192" width="6" height="27" rx="3" fill="#e4b768" stroke={SEA_INK} strokeWidth="2" />
+      </g>
+
+      {/* gold light spilling out of the open chest, then its lid, behind Polly */}
+      <ellipse cx="110" cy="166" rx="78" ry="34" fill={`url(#${u}halo)`} />
+      <path d="M66 180 L72 148 L148 148 L154 180 Z" fill="#5a2e18" stroke={SEA_INK} strokeWidth="2.5" strokeLinejoin="round" />
+      <path d="M71 156 H149 M69 166 H151" stroke={SEA_INK} strokeOpacity=".4" strokeWidth="1.5" />
+      <path d="M72 148 L148 148 L147 154 L73 154 Z" fill="#f2c14e" stroke={SEA_INK} strokeWidth="2" strokeLinejoin="round" />
+
+      {/* the doubloon gripped in her wing tip, with its shine */}
+      <circle cx="172" cy="116" r="22" fill={`url(#${u}halo)`} />
+      {coin(172, 116, 12, 1)}
+      <path d="M167 120 L177 112 M167 112 L177 120" stroke={SEA_INK} strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="172" cy="115" r="3.2" fill="#fff6e2" stroke={SEA_INK} strokeWidth="1.2" />
+
+      {/* Captain Polly: the raised wing behind her, then body, belly, doubloon, head, face, hat and feather */}
+      <g style={{ filter: 'drop-shadow(0 10px 12px rgba(0,0,0,.3))' }}>
+        <path d="M95 117 Q78 96 67 60 Q61 61 59 67 Q53 68 52 75 Q46 78 47 85 Q55 110 91 141 Z" fill={`url(#${u}wl)`} stroke={SEA_INK} strokeWidth="2.6" strokeLinejoin="round" />
+        <path d="M56 72 Q62 80 68 82 M50 82 Q58 90 65 92" fill="none" stroke={SEA_INK} strokeWidth="1.6" strokeLinecap="round" opacity=".7" />
+        <path d="M128 117 Q150 112 166 118 Q172 122 170 128 Q174 134 168 138 Q160 144 148 142 Q138 142 128 140 Z" fill={`url(#${u}wr)`} stroke={SEA_INK} strokeWidth="2.6" strokeLinejoin="round" />
+        <path d="M160 125 Q164 130 168 131 M156 133 Q160 137 164 138" fill="none" stroke={SEA_INK} strokeWidth="1.6" strokeLinecap="round" opacity=".7" />
+        <ellipse cx="110" cy="136" rx="28" ry="34" fill={`url(#${u}red)`} stroke={SEA_INK} strokeWidth="3" />
+        <ellipse cx="110" cy="147" rx="17" ry="21" fill="#ff8f6c" />
+        <g fill="none" stroke="#e25a42" strokeWidth="1.4" strokeLinecap="round">
+          <path d="M100 140 q3 3 6 0 q3 3 6 0 q3 3 6 0 M97 149 q3 3 6 0 q3 3 6 0 q3 3 6 0 q3 3 6 0 M101 158 q3 3 6 0 q3 3 6 0 q3 3 6 0" />
+        </g>
+        {coin(110, 122, 6.5, 0)}
+        <circle cx="110" cy="86" r="25" fill={`url(#${u}red)`} stroke={SEA_INK} strokeWidth="3" />
+        <ellipse cx="99" cy="89" rx="11.5" ry="12.5" fill="#fff1e8" />
+        <ellipse cx="100" cy="88" rx="8" ry="9.5" fill="#fff" stroke={SEA_INK} strokeWidth="2" />
+        <circle cx="102.2" cy="89" r="4.4" fill={SEA_INK} />
+        <circle cx="100.6" cy="87" r="1.6" fill="#fff" />
+        <path d="M92 76 Q99 72 106 75" fill="none" stroke={SEA_INK} strokeWidth="2.2" strokeLinecap="round" />
+        <path d="M115 79 Q104 70 92 67 M127 89 Q131 92 134 97" fill="none" stroke={SEA_INK} strokeWidth="2.2" strokeLinecap="round" />
+        <ellipse cx="121" cy="84" rx="7.5" ry="7" fill={SEA_INK} />
+        <ellipse cx="93" cy="100" rx="4" ry="2.4" fill="#ff9fb0" opacity=".85" />
+        <path d="M104 93 Q110 84 121 89 Q131 94 128 109 Q125 103 118 102 Q108 101 104 93 Z" fill="#f5c430" stroke={SEA_INK} strokeWidth="2.4" strokeLinejoin="round" />
+        <path d="M108 99 Q114 104 120 103 Q117 109 111 107 Q107 104 108 99 Z" fill="#c9921b" stroke={SEA_INK} strokeWidth="1.8" strokeLinejoin="round" />
+        <ellipse cx="112.5" cy="90" rx="3" ry="1.5" fill="#fff" opacity=".7" transform="rotate(-12 112.5 90)" />
+        {/* the feather, cream with a red tip */}
+        <path d="M97 50 C86 49 72 45 62 34 C58 30 60 24 66 25 C76 33 88 38 100 43 Z" fill="#f6ecd6" />
+        <rect x="52" y="18" width="20" height="22" fill="#ff5a4e" clipPath={`url(#${u}f)`} transform="rotate(-30 62 29)" />
+        <path d="M98 46 C87 43 74 37 64 28" fill="none" stroke="#d9c7a0" strokeWidth="1.2" strokeLinecap="round" />
+        <path d="M80 41 l-3 4 M73 37 l-3 4 M87 44 l-2 4" stroke="#d9c7a0" strokeWidth="1" strokeLinecap="round" />
+        <path d="M97 50 C86 49 72 45 62 34 C58 30 60 24 66 25 C76 33 88 38 100 43 Z" fill="none" stroke={SEA_INK} strokeWidth="2" strokeLinejoin="round" />
+        {/* the tricorn */}
+        <path d="M88 66 Q90 43 110 42 Q130 43 132 66 Z" fill="#26213e" stroke={SEA_INK} strokeWidth="2.6" strokeLinejoin="round" />
+        <path d="M69 71 Q77 58 90 62 Q110 54 130 62 Q143 58 151 71 Q130 64 110 66 Q90 64 69 71 Z" fill="#2f2950" stroke={SEA_INK} strokeWidth="2.6" strokeLinejoin="round" />
+        <path d="M74 67 Q90 60.5 110 61 Q130 60.5 146 67" fill="none" stroke="#f2c14e" strokeWidth="1.8" strokeLinecap="round" />
+        <g stroke="#fff6e2" strokeWidth="2" strokeLinecap="round">
+          <path d="M104 47 L116 58 M116 47 L104 58" />
+        </g>
+        <circle cx="110" cy="51" r="4.4" fill="#fff6e2" />
+        <rect x="107.4" y="53.5" width="5.2" height="3.4" rx="1" fill="#fff6e2" />
+        <circle cx="108.4" cy="51" r="1.1" fill={SEA_INK} />
+        <circle cx="111.6" cy="51" r="1.1" fill={SEA_INK} />
+      </g>
+
+
+      {/* gold heaped in the chest at her feet, then the chest's front */}
+      <ellipse cx="102" cy="171" rx="5" ry="3" fill="#8f86a8" stroke={SEA_INK} strokeWidth="1.8" />
+      <ellipse cx="118" cy="171" rx="5" ry="3" fill="#8f86a8" stroke={SEA_INK} strokeWidth="1.8" />
+      {PLUNDER_HEAP.map(([x, y, up], i) =>
+        up ? (
+          coin(x, y, 6.2, 10 + i)
+        ) : (
+          <g key={10 + i}>
+            <ellipse cx={x} cy={y} rx="7" ry="4" fill={`url(#${u}c)`} stroke={SEA_INK} strokeWidth="1.8" />
+            <ellipse cx={x - 1.5} cy={y - 1.2} rx="3" ry="1.1" fill="#fff" opacity=".6" />
+          </g>
+        ),
+      )}
+      <path d="M152 170 l5 -5 l5 5 l-5 6 Z" fill="#ff3b55" stroke={SEA_INK} strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M64 172 l4 -4 l4 4 l-4 5 Z" fill="#3fd6a0" stroke={SEA_INK} strokeWidth="1.6" strokeLinejoin="round" />
+      <rect x="60" y="178" width="100" height="8" rx="3" fill="#f2c14e" stroke={SEA_INK} strokeWidth="2.2" />
+      <rect x="62" y="185" width="96" height="40" rx="3" fill={`url(#${u}wood)`} stroke={SEA_INK} strokeWidth="2.6" />
+      <path d="M64 199 H156 M64 212 H156" stroke={SEA_INK} strokeOpacity=".35" strokeWidth="1.4" />
+      <rect x="70" y="185" width="8" height="40" fill="#f2c14e" stroke={SEA_INK} strokeWidth="1.8" />
+      <rect x="142" y="185" width="8" height="40" fill="#f2c14e" stroke={SEA_INK} strokeWidth="1.8" />
+      <path d="M78 186 Q96 196 110 192 Q126 196 142 186" fill="none" stroke="#fff6e8" strokeWidth="2.6" strokeDasharray="0.1 4.2" strokeLinecap="round" />
+      <rect x="104" y="192" width="12" height="14" rx="2" fill="#f2c14e" stroke={SEA_INK} strokeWidth="1.8" />
+      <circle cx="110" cy="198" r="1.8" fill={SEA_INK} />
+      <path d="M110 199 v3.5" stroke={SEA_INK} strokeWidth="1.6" strokeLinecap="round" />
+      {coin(52, 228, 6, 2)}
+      {coin(170, 230, 6.5, 3)}
+      {coin(182, 219, 5.5, 4)}
+
+      <Sparkle x={160} y={102} r={4.5} />
+      <Sparkle x={190} y={140} r={3.5} />
+      <Sparkle x={60} y={152} r={3} />
+      <Sparkle x={126} y={30} r={2.6} />
     </Scene>
   )
 }

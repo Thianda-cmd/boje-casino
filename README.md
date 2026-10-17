@@ -1,8 +1,8 @@
 # Boje Casino (play money)
 
-A Stake-style casino with twenty-four games. Originals: Chicken Road, Crash, Double, Mines, Plinko, Dice, Limbo, Keno,
-Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Table and machine
-games: Blackjack, Live Blackjack, Baccarat, Roulette, Video Poker, Chompers, Pop Party and Robo Riot.
+A Stake-style casino with twenty-six games. Originals: Chicken Road, Crash, Double, Coin Flip, Mines, Plinko, Dice,
+Limbo, Keno, Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Table and
+machine games: Blackjack, Live Blackjack, Baccarat, Roulette, Video Poker, Chompers, Pop Party, Robo Riot and Plunder Bay.
 Vault Heist is a free skill game that pays coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
 
@@ -14,7 +14,7 @@ browser (localStorage); signed-in players have it saved to their account.
 
 ## Stack
 Vite + React 19 + TypeScript, Tailwind CSS v4, Framer Motion, Zustand, supabase-js. Plinko and Crash draw on
-canvas; the slots (Chompers, Pop Party and Robo Riot) are three.js scenes, loaded only when the game opens. Hash
+canvas; the slots (Chompers, Pop Party, Robo Riot and Plunder Bay) are three.js scenes, loaded only when the game opens. Hash
 routing and relative asset paths mean `dist/` works as-is inside Capacitor:
 
     npm i @capacitor/core @capacitor/cli && npx cap init "Boje Casino" com.example.boje --web-dir dist
@@ -31,7 +31,7 @@ Every other game and the site UI use a modern casino style. Its art is vector SV
 covers in `src/components/covers.tsx`; the Cases crates and loot are in `src/games/cases/art.tsx` (Case Battles
 reuses them, with its own badges in `src/games/battles/art.tsx`). The slot symbols
 are 3D models built in code (`models.ts` in
-`src/games/chompers/`, `src/games/popparty/` and `src/games/roboriot/`). No image files ship.
+`src/games/chompers/`, `src/games/popparty/`, `src/games/roboriot/` and `src/games/plunder/`). No image files ship.
 
 Brand: the Boje mark (a cut gem with a B) and its loaders are in `src/components/Loader.tsx`. The loaders are one
 quiet motion: the gem is cut into six facets and a soft light travels round them. The big loader (pages and games,
@@ -138,7 +138,7 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
 - Vault Heist: crack up to eight dials by timing each pick; the bag holds 10, 25, 50, 90, 150, 250, 400 and 650
   coins after each vault, plus a bonus for each gold notch hit, banked whenever you like and lost on a miss. Three
   lockpicks, one back every 45 min; practice runs cost none and pay nothing.
-- Challenges: 25 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
+- Challenges: 27 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
   Crash, a 2% Dice win); Live Blackjack rounds count towards Explorer and High Roller. Only bets of 25+ count,
   except towards High Roller, which counts every bet.
 
@@ -235,6 +235,32 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   (`node --experimental-strip-types --import ./tools/ts-resolve.mjs tools/scratch-test.ts` checks the sums in integers,
   reads thousands of boards back, tests their independence from everything but the prize and samples the draw;
   `tools/scratch-qa-rtp.ts` re-derives the returns and the pair spread on its own and pays boards read back blind).
+- Coin Flip: call Heads (the Boje gem, green) or Tails (the crown, on blue), pay the bet and flip; a flip wins with
+  chance exactly 1/2 whatever is called. After a win cash out or flip again, calling either side; a loss ends the streak
+  with nothing. Cashing out after n wins pays 0.97 × 2ⁿ (97 × 2ⁿ hundredths, so always whole cents: 1.94×, 3.88×, 7.76×
+  up to 63,569.92× after 16), and the sixteenth win cashes out by itself. The game has no memory, so every way of
+  playing, any stopping rule and any calls, returns exactly 97% on whole-coin bets (odd-cent payouts are floored to the
+  cent, worked in whole numbers, which costs less than a cent a streak). Each flip is drawn when it is thrown, from one
+  number and before the call is looked at (src/games/coinflip/rules.ts); the face follows from the outcome and the
+  call. The coin's flight is real rigid-body physics worked out ahead (src/games/coinflip/physics.ts: a disc on a
+  sprung, damped velvet with friction and rolling drag, the rim's lowest point found exactly, so it bounces, rolls on
+  its rim and spins down like Euler's disk), and a flight is shown landing on the drawn face only by turning the disc
+  within itself (it is the same disc either way up and at any turn about its axis) and turning the whole flight about
+  the vertical so it is flicked from the camera's side (the table and gravity are the same from every side), so it
+  starts exactly as the coin lay and its height, tilt and bounces are the flight's own. The result is called once the
+  face is decided (the coin never passes upright again) and the coin stays within 30° of flat, while it still rolls and
+  wobbles; then the camera circles the resting coin until its emblem stands upright (the coin is never moved). Flips
+  early in a streak and turbo are quick (about 1.4 s and 0.75 s to the result); from three wins the landing is shown low
+  and in slow motion (about 2.3 s). One stake per streak, taken with the first flip; from each flip's draw the streak's
+  value is kept as a pending payout (meta: flips, cashed, sides), so it settles once: on a cash-out, when a losing face
+  shows, or, cashed out and said so, as soon as the page is left mid-streak (a streak paid as the page began to leave
+  is over even if the page stays, as after a cancelled navigation: it is never flipped on or paid again; a streak lost
+  while away is announced too) (`node --experimental-strip-types --import ./tools/ts-resolve.mjs
+  tools/coinflip-test.ts` checks every multiplier and the floor, the return of every stopping point and thousands of
+  mixed strategies with exact fractions, samples random strategies on the real draw, and checks that the same random
+  stream wins on the same flips whatever is called; `tools/coinflip-physics.ts` checks that every accepted flight, from
+  any rest pose and turned to any side, starts as the coin lay and ends flat on the drawn face, and that the result is
+  only called once the face can no longer change).
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
 - Pop Party: 7 × 7 floor; 5+ touching balloons pay, winners pop and the rest float up until nothing wins. Every
   pop lights the tile underneath, and each further pop doubles it up to ×128; a win is multiplied by the sum of
@@ -260,5 +286,16 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   Overclock costs 1.25× and starts the Power Grid 1.63× as often (1 in 143). Max win 20,000×. Simulated return
   96.0% for paid spins, 96.1% for Overclock, the 100× buy and Super, each within ±0.07 at 95% confidence
   (`node --experimental-strip-types tools/roboriot-sim.ts`; tests in `tools/roboriot-test.ts`).
+- Plunder Bay: Megaways, six reels that land 2 to 7 symbols each on every spin, so 64 to 117,649 ways (about 1,270
+  on an average paid spin), paid from the left; the Jolly Roger is wild on reels 2 to 6. Winners blast away and the
+  rest cascade down until nothing wins (hit rate 34%, the cascades add 58% to the first board's wins). 4, 5 or 6+
+  treasure maps pay 2×, 5× or 20× and start 12, 17 or 22 free spins (Treasure Hunt, 1 in 251 paid spins), on reels
+  where the crew is commoner than the low symbols; 3, 4 or 5+ maps there add 5, 8 or 12 spins (up to 100). The win
+  multiplier starts at ×1 and rises by one after every winning cascade step, never resetting in the hunt: a 12-spin
+  hunt ends on ×7.7 on average and reaches ×10 in 26% of them (30% of natural hunts). Buy 12 free spins for 100×:
+  median 41×, under 10× 18% of the time, 100× or more 26%. Max win 20,000× (about 1 in 1.7 million buys, an
+  estimated 1 in 365 million paid spins; it takes under 0.01% of the return). Simulated return 96.05% for paid
+  spins and 96.10% for the buy, each within ±0.06 at 95% confidence (`node --experimental-strip-types
+  tools/plunder-sim.ts`; tests in `tools/plunder-test.ts`).
 - Video Poker: Jacks or Better, 9/6 full pay (about 99.5% with perfect play); "Best hold" picks the hold with
   the highest expected return.

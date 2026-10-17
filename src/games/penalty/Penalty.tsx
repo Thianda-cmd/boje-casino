@@ -286,21 +286,33 @@ export default function Penalty() {
   }, [endedAt])
 
   // Reloading, closing the tab or going to another site mid-run pays the run on the way out (not on a mere tab
-  // switch: the header balance would give the result away). The next visit says it was cashed out. A page brought
-  // back from the back-forward cache after that shows the run as over.
+  // switch: the header balance would give the result away). The next visit says it was cashed out. A run paid that
+  // way is over even if the page stays after all (a cancelled navigation, a download) or comes back from the
+  // back-forward cache: it can never be shot on or paid again.
   useEffect(() => {
-    const onHide = () => {
-      const p = settlePending()
-      if (p && p.payout > 0) safeStorage.setItem(NOTICE_KEY, JSON.stringify({ amount: p.payout }))
-    }
-    const onShow = (e: PageTransitionEvent) => {
-      if (!e.persisted || !runRef.current || pending.current) return
+    const endPaidRun = () => {
+      if (!runRef.current) return
       // the run object itself, so a shot still playing out finishes it as over too
       runRef.current.over = true
       runRef.current = null
       queuedRef.current = null
       setQueued(null)
       setRun((r) => (r ? { ...r, over: true } : r))
+    }
+    const onHide = () => {
+      const p = settlePending()
+      if (!p) return
+      if (p.payout > 0) safeStorage.setItem(NOTICE_KEY, JSON.stringify({ amount: p.payout }))
+      endPaidRun()
+      // timers don't run once the page is gone: this only fires if it stayed, so say so now instead of next visit
+      window.setTimeout(() => {
+        safeStorage.removeItem(NOTICE_KEY)
+        if (p.payout > 0) useWallet.getState().pushToast({ kind: 'win', title: 'Your shootout was cashed out as the page began to close', amount: p.payout })
+      }, 300)
+    }
+    const onShow = (e: PageTransitionEvent) => {
+      if (!e.persisted || pending.current) return
+      endPaidRun()
     }
     window.addEventListener('beforeunload', onHide)
     window.addEventListener('pagehide', onHide)

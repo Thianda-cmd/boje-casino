@@ -157,6 +157,26 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
           <circle cx="16.4" cy="14.2" r="2.1" fill="currentColor" stroke="none" />
         </svg>
       )
+    case 'coinflip':
+      return (
+        <svg {...p}>
+          {/* the coin mid-flip: its face tipped towards you, the edge's thickness under it, the gem on its face */}
+          <ellipse cx="12" cy="10.6" rx="7.6" ry="5.3" />
+          <path d="M4.4 10.6v2.3c0 2.9 3.4 5.3 7.6 5.3s7.6-2.4 7.6-5.3v-2.3" />
+          <path d="M12 8.1l2.3 1.2v2.6L12 13.1l-2.3-1.2V9.3Z" fill="currentColor" fillOpacity=".35" strokeWidth="1.4" />
+          <path d="M2.6 6.4A10 10 0 0 1 6.6 2.9M21.4 17.6a10 10 0 0 1-4 3.5" opacity=".55" />
+        </svg>
+      )
+    case 'plunder':
+      return (
+        <svg {...p}>
+          {/* Captain Polly's tricorn: the skull on its crown, the gold band round the brim, the sea under it */}
+          <path d="M1.8 8.6c2.6 1.4 4.3 1.4 5.8.3C8.7 6 10.2 4.2 12 4.2s3.3 1.8 4.4 4.7c1.5 1.1 3.2 1.1 5.8-.3-.5 4.8-4.5 8.1-10.2 8.1S2.3 13.4 1.8 8.6Z" />
+          <path d="M5.2 13.4c1.9 1.1 4.2 1.7 6.8 1.7s4.9-.6 6.8-1.7" opacity=".55" />
+          <path d="M10.3 9.6a1.7 1.7 0 1 1 3.4 0c0 .6-.3 1.1-.75 1.4v.8h-1.9V11c-.45-.3-.75-.8-.75-1.4Z" fill="currentColor" strokeWidth="1" />
+          <path d="M2.5 20.8c2.2 0 2.2-1.2 4.4-1.2s2.2 1.2 4.4 1.2 2.2-1.2 4.4-1.2 2.2 1.2 4.4 1.2" opacity=".55" />
+        </svg>
+      )
     case 'cases':
       return (
         <svg {...p}>
