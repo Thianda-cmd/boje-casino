@@ -996,14 +996,17 @@ export default function Plunder() {
 
       <AnimatePresence>{banner && <BannerCard key={banner.id} banner={banner} onTap={() => bannerDone.current?.tap()} onTier={tierUp} />}</AnimatePresence>
 
-      {/* while it loads: the banners drawn once, all but invisible, so the browser has every effect they use (the
-          rays, the inked titles) ready before the first real one, which would otherwise stutter */}
-      <div className="pointer-events-none absolute inset-0 z-50 opacity-[0.012]" aria-hidden>
-        {/* (they leave the way a real banner does, so its way out is ready too) */}
-        <AnimatePresence>{!ready && !failed && <BannerCard key="warm-intro" banner={WARM_INTRO} onTap={noop} onTier={noop} />}</AnimatePresence>
-        <AnimatePresence>{!ready && !failed && <BannerCard key="warm-end" banner={WARM_END} onTap={noop} onTier={noop} />}</AnimatePresence>
-        {!ready && !failed && <StampFx n={10} legs onDone={noop} />}
-      </div>
+      {/* while it loads: the banners drawn once under the loader's opaque backdrop, so the browser has every effect they
+          use (the rays, the inked titles) ready before the first real one, which would otherwise stutter. They go the
+          moment the scene is ready, before the loader fades: drawn over the loader, even at 1% opacity, Chromium let
+          the inked titles show through */}
+      {!ready && !failed && (
+        <div className="pointer-events-none absolute inset-0 z-30 opacity-[0.012]" aria-hidden>
+          <BannerCard banner={WARM_INTRO} onTap={noop} onTier={noop} />
+          <BannerCard banner={WARM_END} onTap={noop} onTier={noop} />
+          <StampFx n={10} legs onDone={noop} />
+        </div>
+      )}
 
       <AnimatePresence>
         {!ready && (
