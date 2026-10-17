@@ -137,6 +137,26 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
           <path d="M4 22h16" opacity=".55" />
         </svg>
       )
+    case 'penalty':
+      return (
+        <svg {...p}>
+          {/* the goal mouth split into its six zones, the ball flying into the top corner */}
+          <path d="M2 20V4.5h20V20" />
+          <path d="M2 12.5h11.5M8.7 4.5V20M15.3 13V20" strokeWidth="1.1" opacity=".35" />
+          <circle cx="17.3" cy="8.7" r="3.6" />
+          <path d="M17.3 7.2l1.4 1-.55 1.65h-1.7l-.55-1.65z" fill="currentColor" stroke="none" />
+        </svg>
+      )
+    case 'scratch':
+      return (
+        <svg {...p}>
+          {/* a ticket with notched sides, a stroke scratched across it and the coin that did it */}
+          <path d="M4 5h16a1.5 1.5 0 0 1 1.5 1.5V10a2 2 0 0 0 0 4v3.5A1.5 1.5 0 0 1 20 19H4a1.5 1.5 0 0 1-1.5-1.5V14a2 2 0 0 0 0-4V6.5A1.5 1.5 0 0 1 4 5Z" />
+          <path d="M6.8 10.4c1.1-1.3 2.1 1.3 3.2 0s2.1 1.3 3.2 0" />
+          <path d="M6.8 14.2h3.8" opacity=".55" />
+          <circle cx="16.4" cy="14.2" r="2.1" fill="currentColor" stroke="none" />
+        </svg>
+      )
     case 'cases':
       return (
         <svg {...p}>

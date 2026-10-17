@@ -1,8 +1,8 @@
 # Boje Casino (play money)
 
-A Stake-style casino with twenty-two games. Originals: Chicken Road, Crash, Double, Mines, Plinko, Dice, Limbo, Keno,
-Hi-Lo, Wheel, Cases, Case Battles, Duck Derby and Lucky Claw. Table and machine games: Blackjack, Live Blackjack,
-Baccarat, Roulette, Video Poker, Chompers, Pop Party and Robo Riot.
+A Stake-style casino with twenty-four games. Originals: Chicken Road, Crash, Double, Mines, Plinko, Dice, Limbo, Keno,
+Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Table and machine
+games: Blackjack, Live Blackjack, Baccarat, Roulette, Video Poker, Chompers, Pop Party and Robo Riot.
 Vault Heist is a free skill game that pays coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
 
@@ -138,7 +138,7 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
 - Vault Heist: crack up to eight dials by timing each pick; the bag holds 10, 25, 50, 90, 150, 250, 400 and 650
   coins after each vault, plus a bonus for each gold notch hit, banked whenever you like and lost on a miss. Three
   lockpicks, one back every 45 min; practice runs cost none and pay nothing.
-- Challenges: 23 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
+- Challenges: 25 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
   Crash, a 2% Dice win); Live Blackjack rounds count towards Explorer and High Roller. Only bets of 25+ count,
   except towards High Roller, which counts every bet.
 
@@ -196,6 +196,45 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   gives a scare on the way are drawn from the outcome alone, the same for every prize. One stake per grab, one settle
   when the outcome shows (`node --experimental-strip-types --import ./tools/ts-resolve.mjs tools/claw-test.ts`
   checks the sums exactly, samples the win rates and checks that the show only follows the outcome).
+- Penalty Shootout: the goal mouth is six zones and the keeper covers 1 to 4 of them on his dive (Easy, Medium, Hard,
+  Expert), so a shot scores with chance p = 5/6, 4/6, 3/6 or 2/6 wherever it is aimed. Pay the bet, take up to 10
+  penalties and cash out after any goal; a save ends the run with nothing. Cashing out after n goals pays 0.97 / pⁿ
+  floored to the cent (worked in whole numbers): Easy 1.16× to 6.00×, Medium 1.45× to 55.93×, Hard 1.94× to 993.28×,
+  Expert 2.91× to 57,277.53×, and ten goals in a row (a Perfect 10) cash out by themselves. The game has no memory, so
+  every way of playing returns 97% before the floor: exactly 97% on Hard and Expert, 96.53% to 97% on Easy and Medium.
+  Each shot is drawn when it is struck, from one number and before its zone is looked at (src/games/penalty/rules.ts);
+  the keeper's read (a random set of his zones that holds the shot on a save and misses it on a goal), his dive (at
+  the ball on a save, to the read zone nearest it on a goal, which makes the fingertip near misses) and how the ball
+  goes in or is kept out are drawn after it, from the outcome. On a goal the scene plans his dive so that no part of
+  him touches the ball as drawn, seen from the camera, all the way in (`node tools/penalty-qa-honest.mjs` drives the
+  scene through every keeper, zone and outcome on the dev server and measures it against his meshes). One tap on a
+  zone shoots there; money only moves on a deliberate press (taps in quick succession only hurry the show, never line
+  up a shot or start a run, and for 1.2 s after a run ends, however it ended, a press only hurries). One stake
+  per run, taken with the first shot; from each shot's draw the run's value is kept as a pending payout, so it settles
+  once: on a cash-out, when a save shows, after a Perfect 10's celebration (so nothing covers it), or, cashed out and
+  said so, as soon as the page is left mid-run (`node --experimental-strip-types --import ./tools/ts-resolve.mjs
+  tools/penalty-test.ts` checks every multiplier and return with exact fractions, replays random streams through all
+  six zones, samples the scoring rate per zone and checks the keeper's reads and dives).
+- Scratch & Win: four cards, nine symbols under the foil out of twelve per card (eight prizes and four blanks that never
+  pay); three of a kind win that symbol's prize, at most one prize a card. Each prize table is whole weights out of
+  1,000,000 and returns exactly 96%: Lucky Clover (low) 1× to 100×, wins 39.27% of the time; Gold Rush (medium) 1× to
+  500×, 27.22%; Fruit Frenzy (medium-high) 1× to 250×, 17.07%, its grid returning 60% times a Frenzy spot drawn on its own
+  (×1 65%, ×2 23%, ×3 8%, ×5 3%, ×10 1%, ×1.6 on average), so up to 2,500× (the seven with the ×10 spot, 1 in 333,333);
+  Diamond Deluxe (high) 1× to 5,000×, 12.49%, the diamond 1 in 22,727. Standard deviations 3.5, 8.9, 11.0 and 34.9. The
+  prize is drawn when the card is bought and the board built to show it (src/games/scratch/rules.ts): the winning symbol
+  on three cells picked uniformly, every other cell filled uniformly from the card's other symbols, blanks included, with
+  no symbol more than twice, so a card never shows a second win and the top symbol shows as a near-miss pair exactly as
+  often as a blank (a losing card shows 0/1/2/3/4 pairs 2.5/22/47/26/3% of the time). A card's "top prize" (the
+  `scratch-top` challenge, the Jackpot stamp) is its top symbol, whatever the Frenzy spot says; the celebration's title
+  goes by the multiple (Big win 50×, Mega 250×, Epic 1,000×, Legendary 2,500×). Reveal all and autoplay only choose the
+  order the coin works in (src/games/scratch/reveal.ts: with two of a top-three prize out, the deciding cell goes last),
+  and a Gold Rush dynamite only blasts foil off its row. One stake per card (a stack of 5 or 10 is staked at once, every
+  card's prize drawn then; autoplay buys one card a round), one settle per card: when its last foil comes off, or for a
+  celebrated win when the coins reach the balance (or the celebration is skipped; until it starts the card can't be put
+  away); leaving with cards still owed pays each of them once, and they are shown again "Paid while away"
+  (`node --experimental-strip-types --import ./tools/ts-resolve.mjs tools/scratch-test.ts` checks the sums in integers,
+  reads thousands of boards back, tests their independence from everything but the prize and samples the draw;
+  `tools/scratch-qa-rtp.ts` re-derives the returns and the pair spread on its own and pays boards read back blind).
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
 - Pop Party: 7 × 7 floor; 5+ touching balloons pay, winners pop and the rest float up until nothing wins. Every
   pop lights the tile underneath, and each further pop doubles it up to ×128; a win is multiplied by the sum of

@@ -1,4 +1,4 @@
-export type GameId = 'chicken' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
+export type GameId = 'chicken' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
 
 export type Category = 'originals' | 'table'
 
@@ -27,6 +27,8 @@ export const GAMES: GameInfo[] = [
   { id: 'battles', name: 'Case Battles', category: 'originals', tagline: 'Open crates head to head. The biggest haul takes the whole pot.', accent: '#ff7a3d', tag: 'live' },
   { id: 'derby', name: 'Duck Derby', category: 'originals', tagline: 'Six rubber ducks, one wild river. Back a duck and cheer it home.', accent: '#ffd23f', tag: 'new' },
   { id: 'claw', name: 'Lucky Claw', category: 'originals', tagline: 'Pick a plushie, drop the claw, and hope it holds on.', accent: '#ff6f91', tag: 'new' },
+  { id: 'penalty', name: 'Penalty Shootout', category: 'originals', tagline: 'Pick your corner, beat the keeper, and cash out before he guesses right.', accent: '#3ddc84', tag: 'new' },
+  { id: 'scratch', name: 'Scratch & Win', category: 'originals', tagline: 'Four lucky cards. Scratch the foil and match three to win.', accent: '#f5c542', tag: 'new' },
   { id: 'chompers', name: 'Chompers', category: 'originals', tagline: 'Cartoon monsters chomp every donut on the reels.', accent: '#2ee87f', tag: 'new' },
   { id: 'popparty', name: 'Pop Party', category: 'originals', tagline: 'Balloon animals pop on a light-up floor; every pop lights a multiplier.', accent: '#ff4fb8', tag: 'new' },
   { id: 'roboriot', name: 'Robo Riot', category: 'originals', tagline: 'Toy robots charge the Power Grid: magnets, zappers and boosters stack the cells.', accent: '#5cf2ff', tag: 'new' },

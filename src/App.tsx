@@ -21,9 +21,6 @@ import { Toasts } from './components/Toasts'
 import { isMuted, setMuted } from './lib/sound'
 import { BootDone } from './lib/boot'
 import Lobby from './pages/Lobby'
-import Rewards from './pages/Rewards'
-import History from './pages/History'
-import Account from './pages/Account'
 
 const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   chicken: lazy(() => import('./games/chicken/ChickenRoad')),
@@ -41,6 +38,8 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   cases: lazy(() => import('./games/cases/Cases')),
   double: lazy(() => import('./games/double/Double')),
   claw: lazy(() => import('./games/claw/LuckyClaw')),
+  penalty: lazy(() => import('./games/penalty/Penalty')),
+  scratch: lazy(() => import('./games/scratch/Scratch')),
   battles: lazy(() => import('./games/battles/CaseBattles')),
   derby: lazy(() => import('./games/derby/DuckDerby')),
   baccarat: lazy(() => import('./games/baccarat/Baccarat')),
@@ -50,6 +49,10 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   videopoker: lazy(() => import('./games/videopoker/VideoPoker')),
 }
 const Heist = lazy(() => import('./games/heist/Heist'))
+// the lobby is the landing page and ships with the app; the other pages load when first opened
+const Rewards = lazy(() => import('./pages/Rewards'))
+const History = lazy(() => import('./pages/History'))
+const Account = lazy(() => import('./pages/Account'))
 const pageFallback = (
   <div className="flex h-[calc(100dvh-108px)] min-h-[420px] items-center justify-center rounded-2xl bg-panel2/50">
     <BojeLoader />
@@ -99,10 +102,10 @@ export default function App() {
   else {
     const Page = route.startsWith('/rewards') ? Rewards : route.startsWith('/history') ? History : route.startsWith('/account') ? Account : Lobby
     page = (
-      <>
+      <Suspense fallback={pageFallback}>
         <Page />
         <BootDone />
-      </>
+      </Suspense>
     )
   }
 

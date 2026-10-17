@@ -15,6 +15,7 @@ import { PrizeWheel } from '../art/PrizeWheel'
 import { wheelSegments } from '../games/wheel/rules'
 import { CrateArt, ItemArt } from '../games/cases/art'
 import { duckMarkup, type Expr } from '../games/derby/art'
+import { CoverSymbol } from '../games/scratch/coversymbols'
 import { bojeFacets } from '../art/brand'
 
 /* Lobby art. Chicken Road keeps its pixel look; everything else is clean vector art on a bold gradient. */
@@ -60,6 +61,10 @@ export function GameCover({ id }: { id: GameId }) {
       return <DoubleCover />
     case 'claw':
       return <ClawCover />
+    case 'penalty':
+      return <PenaltyCover />
+    case 'scratch':
+      return <ScratchCover />
     case 'cases':
       return <CasesCover />
     case 'baccarat':
@@ -1765,6 +1770,371 @@ function ClawCover() {
       <Sparkle x={162} y={150} r={4} />
       <Sparkle x={32} y={160} r={3.5} />
       <Sparkle x={128} y={34} r={3} />
+    </Scene>
+  )
+}
+
+/** Penalty Shootout: Steady Sven at full stretch under the floodlights, the ball whistling into the top corner a
+ *  fingertip past his glove and bulging the net, the crowd on its feet behind. */
+function PenaltyCover() {
+  const u = useUid()
+  const crowd = ['#ec3a4c', '#e9ecf4', '#ec3a4c', '#f2c94c', '#4fb2e6', '#ec3a4c', '#b8bfd0', '#25336b']
+  const skins = ['#f2c7a2', '#c98d62', '#e9b48a', '#8a5a3c', '#f7d6bd']
+  return (
+    <Scene from="#3361e6" to="#0b1440">
+      <defs>
+        <radialGradient id={`${u}fl`}>
+          <stop offset="0" stopColor="#fffbe8" stopOpacity="1" />
+          <stop offset=".22" stopColor="#fff2c4" stopOpacity=".55" />
+          <stop offset="1" stopColor="#fff2c4" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${u}ray`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fff8dc" stopOpacity=".34" />
+          <stop offset="1" stopColor="#fff8dc" stopOpacity="0" />
+        </linearGradient>
+        <pattern id={`${u}net`} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <path d="M0 0H9M0 0V9" stroke="#fff" strokeOpacity=".55" strokeWidth="1" />
+        </pattern>
+        <linearGradient id={`${u}trail`} x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stopColor="#ffd23f" stopOpacity="0" />
+          <stop offset=".7" stopColor="#ffe68a" stopOpacity=".7" />
+          <stop offset="1" stopColor="#fffbe8" stopOpacity="1" />
+        </linearGradient>
+        <linearGradient id={`${u}shirt`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffbb4a" />
+          <stop offset="1" stopColor="#f2870c" />
+        </linearGradient>
+        <linearGradient id={`${u}foot`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#0b1440" stopOpacity="0" />
+          <stop offset="1" stopColor="#0b1440" stopOpacity=".7" />
+        </linearGradient>
+        <radialGradient id={`${u}pop`}>
+          <stop offset="0" stopColor="#fff6c8" stopOpacity=".9" />
+          <stop offset="1" stopColor="#fff6c8" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* the crowd on its feet behind the goal, arms up, darker towards the back */}
+      {Array.from({ length: 5 }, (_, r) => (
+        <g key={r} opacity={0.55 + r * 0.1}>
+          {Array.from({ length: 17 }, (_, i) => {
+            const x = -4 + i * 13 + (r % 2) * 6.5
+            const y = 8 + r * 15
+            const c = crowd[(i * 5 + r * 3) % crowd.length]
+            const up = (i + r * 2) % 3 === 0
+            return (
+              <g key={i}>
+                {up && <path d={`M${x - 5} ${y + 4} L${x - 8} ${y - 7} M${x + 5} ${y + 4} L${x + 8} ${y - 7}`} stroke={c} strokeWidth="3.4" strokeLinecap="round" />}
+                <path d={`M${x - 7} ${y + 13} Q${x - 7} ${y + 2.5} ${x} ${y + 2.5} Q${x + 7} ${y + 2.5} ${x + 7} ${y + 13} Z`} fill={c} />
+                <circle cx={x} cy={y - 2} r="4.4" fill={skins[(i * 3 + r) % skins.length]} />
+              </g>
+            )
+          })}
+        </g>
+      ))}
+      {/* a flag and the camera flashes */}
+      <path d="M150 58 L153 24" stroke="#c7cbe0" strokeWidth="1.6" />
+      <path d="M153 24 Q163 20 172 25 Q164 30 172 36 Q162 32 153 36 Z" fill="#ec3a4c" stroke={INK} strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M153 28 Q162 25 169.5 28.5 M153 32 Q161 29.5 169 33" stroke="#fff" strokeWidth="1.7" fill="none" />
+      {[
+        [38, 30],
+        [92, 18],
+        [128, 46],
+      ].map(([x, y]) => (
+        <g key={x} transform={`translate(${x} ${y})`}>
+          <circle r="7" fill={`url(#${u}pop)`} />
+          <path d="M0 -4 L1 -1 L4 0 L1 1 L0 4 L-1 1 L-4 0 L-1 -1 Z" fill="#fff" />
+        </g>
+      ))}
+
+      {/* the floodlight's glare and its rays */}
+      <path d="M8 4 L120 250 L190 250 Z" fill={`url(#${u}ray)`} />
+      <path d="M8 4 L200 150 L200 210 Z" fill={`url(#${u}ray)`} opacity=".6" />
+      <circle cx="10" cy="4" r="46" fill={`url(#${u}fl)`} />
+
+      {/* the goal, close up: the net, the bar across the top, the post on the right */}
+      <rect x="-5" y="64" width="196" height="122" fill="#0d1a3e" opacity=".45" />
+      <rect x="-5" y="64" width="196" height="122" fill={`url(#${u}net)`} />
+      {/* the net pulled out round the ball */}
+      <path d="M150 66 Q166 44 186 64 M144 78 Q164 60 186 80 M140 92 Q160 80 186 98" stroke="#fff" strokeWidth="1.5" fill="none" opacity=".85" />
+      <path d="M-5 62 H192 V188" fill="none" stroke={INK} strokeWidth="10" strokeLinejoin="round" />
+      <path d="M-5 62 H192 V188" fill="none" stroke="#f6f7fb" strokeWidth="6" strokeLinejoin="round" />
+      <path d="M-5 60.5 H190.5 V188" fill="none" stroke="#fff" strokeWidth="1.2" opacity=".9" />
+
+      {/* the grass, striped, darkening for the title */}
+      {Array.from({ length: 4 }, (_, i) => (
+        <rect key={i} x="-5" y={184 + i * 18} width="210" height="18" fill={i % 2 ? '#2f9a45' : '#38b04f'} />
+      ))}
+      <path d="M-5 186 H205" stroke="#f2f6ee" strokeWidth="2.2" />
+      <rect y="170" width="200" height="80" fill={`url(#${u}foot)`} />
+
+      {/* the ball's curling path in from the spot */}
+      <path d="M58 260 Q64 150 176 72" fill="none" stroke={`url(#${u}trail)`} strokeWidth="14" strokeLinecap="round" opacity=".35" />
+      <path d="M58 260 Q64 150 176 72" fill="none" stroke={`url(#${u}trail)`} strokeWidth="5" strokeLinecap="round" />
+
+      {/* speed lines behind the keeper's dive */}
+      <g stroke="#fff" strokeWidth="2.6" strokeLinecap="round" opacity=".75">
+        <path d="M14 150 Q30 132 48 124" fill="none" />
+        <path d="M6 172 Q24 158 42 152" fill="none" />
+        <path d="M30 194 Q44 184 58 180" fill="none" />
+      </g>
+
+      {/* the keeper at full stretch, a fingertip short */}
+      <g transform="translate(86 150) rotate(-36)">
+        {/* legs trailing, boots and socks */}
+        <path d="M-26 8 L-58 16 L-84 8 M-24 -8 L-54 -20 L-78 -34" stroke={INK} strokeWidth="15" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        <path d="M-26 8 L-58 16 M-24 -8 L-54 -20" stroke="#f0c09a" strokeWidth="9.5" strokeLinecap="round" fill="none" />
+        <path d="M-58 16 L-80 9 M-54 -20 L-74 -32" stroke="#ff9f1c" strokeWidth="9.5" strokeLinecap="round" fill="none" />
+        <path d="M-63 15 L-61 9 M-58 -15 L-56 -22" stroke="#1d2a5a" strokeWidth="3" strokeLinecap="round" />
+        <ellipse cx="-88" cy="8" rx="9" ry="6.5" fill="#1d2a5a" stroke={INK} strokeWidth="2.6" transform="rotate(-8 -88 8)" />
+        <ellipse cx="-82" cy="-37" rx="9" ry="6.5" fill="#1d2a5a" stroke={INK} strokeWidth="2.6" transform="rotate(-30 -82 -37)" />
+        {/* shorts */}
+        <ellipse cx="-22" cy="0" rx="18" ry="18" fill="#1d2a5a" stroke={INK} strokeWidth="3" />
+        <path d="M-34 -10 Q-40 0 -34 10" stroke="#2c3d7a" strokeWidth="3" fill="none" />
+        {/* the shirt, its padded chest and diamond badge */}
+        <ellipse cx="6" cy="0" rx="33" ry="24" fill={`url(#${u}shirt)`} stroke={INK} strokeWidth="3.2" />
+        <path d="M-14 -18 Q6 -26 26 -16" stroke="#ffd27a" strokeWidth="3" fill="none" strokeLinecap="round" opacity=".8" />
+        <path d="M2 -10 L12 0 L2 10 L-8 0 Z" fill="#1d2a5a" stroke={INK} strokeWidth="1.6" />
+        <path d="M2 -5 L7 0 L2 5 L-3 0 Z" fill="#ff9f1c" />
+        {/* the far arm, reaching */}
+        <path d="M26 14 L82 6" stroke={INK} strokeWidth="15" strokeLinecap="round" />
+        <path d="M26 14 L80 6" stroke="#ff9f1c" strokeWidth="9.5" strokeLinecap="round" />
+        {/* the head: straining, eyes on the ball */}
+        <g transform="translate(44 3) rotate(36)">
+          <circle r="19" fill="#f0c09a" stroke={INK} strokeWidth="3.2" />
+          {/* the blond quiff, blown back */}
+          <path d="M-17 -6 Q-22 -20 -10 -24 Q-6 -34 6 -28 Q16 -33 21 -20 Q12 -22 6 -18 Q0 -21 -6 -15 Q-12 -14 -17 -6 Z" fill="#f4e3a1" stroke={INK} strokeWidth="2.4" strokeLinejoin="round" />
+          <path d="M-24 -16 L-31 -19 M-22 -9 L-30 -9" stroke="#f4e3a1" strokeWidth="2.6" strokeLinecap="round" />
+          {/* cheeks, brows up and together, eyes wide on the ball */}
+          <ellipse cx="-11" cy="7" rx="4" ry="2.4" fill="#ff8a8a" opacity=".5" />
+          <ellipse cx="12" cy="7" rx="4" ry="2.4" fill="#ff8a8a" opacity=".5" />
+          <path d="M-12 -12 Q-7 -15 -2 -11 M4 -11 Q9 -15 14 -12" stroke="#8a6a2a" strokeWidth="2.6" strokeLinecap="round" fill="none" />
+          <ellipse cx="-7" cy="-4" rx="5" ry="6" fill="#fff" stroke={INK} strokeWidth="1.8" />
+          <ellipse cx="8" cy="-4" rx="5" ry="6" fill="#fff" stroke={INK} strokeWidth="1.8" />
+          <circle cx="-4.6" cy="-6.6" r="2.6" fill={INK} />
+          <circle cx="10.4" cy="-6.6" r="2.6" fill={INK} />
+          <circle cx="-3.9" cy="-7.6" r=".9" fill="#fff" />
+          <circle cx="11.1" cy="-7.6" r=".9" fill="#fff" />
+          {/* gritted teeth */}
+          <path d="M-7 9 Q1 13 9 9 L8 14 Q1 17 -6 14 Z" fill="#fff" stroke={INK} strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M-6.5 11.5 H8.5 M-2 9.8 V15.4 M3.5 9.8 V15.4" stroke={INK} strokeWidth="1" />
+          {/* a bead of sweat flying off */}
+          <path d="M-22 4 Q-26 9 -22 11 Q-18 9 -22 4 Z" fill="#bfe6ff" stroke={INK} strokeWidth="1.2" />
+        </g>
+        {/* the near arm, at full stretch */}
+        <path d="M22 -14 L74 -20" stroke={INK} strokeWidth="15" strokeLinecap="round" />
+        <path d="M22 -14 L72 -20" stroke="#ff9f1c" strokeWidth="9.5" strokeLinecap="round" />
+        <path d="M61 -23 L61 -15 M68 2 L68 10" stroke="#1d2a5a" strokeWidth="3" strokeLinecap="round" />
+        {/* the gloves: fat white mitts with an orange cuff */}
+        {[
+          [80, -21, -4],
+          [88, 5, 6],
+        ].map(([x, y, a]) => (
+          <g key={x} transform={`translate(${x} ${y}) rotate(${a})`}>
+            <rect x="-6" y="-8" width="9" height="16" rx="3" fill="#ff9f1c" stroke={INK} strokeWidth="2.2" />
+            <path d="M2 -9 Q2 -12 6 -12 L16 -12 Q21 -12 21 -6 L21 6 Q21 12 16 12 L6 12 Q2 12 2 9 Z" fill="#fff" stroke={INK} strokeWidth="2.4" />
+            <path d="M6 -14 Q6 -18 10 -18 Q13 -18 13 -14" fill="#fff" stroke={INK} strokeWidth="2.2" />
+            <path d="M9 -5 H19 M9 0 H19 M9 5 H19" stroke="#c9d2e6" strokeWidth="1.4" strokeLinecap="round" />
+          </g>
+        ))}
+      </g>
+
+      {/* the ball, just past his fingertips, into the top corner */}
+      <g stroke="#fff" strokeWidth="2.6" strokeLinecap="round" opacity=".95">
+        <path d="M160 92 l-10 7 M166 98 l-8 6 M157 84 l-9 5" />
+      </g>
+      <circle cx="178" cy="77" r="22" fill={`url(#${u}pop)`} opacity=".8" />
+      <g transform="translate(178 77) rotate(-18)">
+        <circle r="13" fill="#fff" stroke={INK} strokeWidth="3" />
+        <path d="M0 -5.2 L5 -1.6 L3.1 4.3 H-3.1 L-5 -1.6 Z" fill={INK} />
+        <path d="M0 -5.2 V-11.8 M5 -1.6 L11.4 -3.6 M3.1 4.3 L7 10 M-3.1 4.3 L-7 10 M-5 -1.6 L-11.4 -3.6" stroke={INK} strokeWidth="1.8" />
+        <path d="M-7 -8 Q-3 -11 2 -10.5" stroke="#fff" strokeWidth="2" fill="none" opacity=".9" strokeLinecap="round" />
+      </g>
+      {/* a star of the strike */}
+      <path d="M186 44 l2.4 -7 l2.4 7 l7 2.4 l-7 2.4 l-2.4 7 l-2.4 -7 l-7 -2.4 Z" fill="#fff6c8" />
+    </Scene>
+  )
+}
+
+
+/** a ragged outline round a w × h box at (x, y): a scratched hole's torn edge (deterministic, so the cover never shifts) */
+function scratchHole(x: number, y: number, w: number, h: number, seed: number, rough = 2.2) {
+  let s = seed
+  const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280)
+  const pts: string[] = []
+  const edge = (x0: number, y0: number, x1: number, y1: number, nx: number, ny: number) => {
+    const n = Math.max(3, Math.round(Math.hypot(x1 - x0, y1 - y0) / 3))
+    for (let i = 0; i < n; i++) {
+      const t = i / n
+      const j = (rnd() - 0.3) * rough
+      pts.push(`${(x0 + (x1 - x0) * t + nx * j).toFixed(1)} ${(y0 + (y1 - y0) * t + ny * j).toFixed(1)}`)
+    }
+  }
+  edge(x, y, x + w, y, 0, -1)
+  edge(x + w, y, x + w, y + h, 1, 0)
+  edge(x + w, y + h, x, y + h, 0, 1)
+  edge(x, y + h, x, y, -1, 0)
+  return `M${pts.join('L')}Z`
+}
+
+/** Scratch & Win: a Fruit Frenzy card half scratched, three lucky sevens circled, the coin still at work. */
+function ScratchCover() {
+  const u = useUid()
+  // the grid, card-local: 3 × 3 cells of 29 with gaps of 4, from (14, 52)
+  const cell = (i: number) => ({ x: 14 + (i % 3) * 33, y: 52 + Math.floor(i / 3) * 33 })
+  const sevens = [2, 4, 6]
+  const shown: [number, 'seven' | 'cherry' | 'lemon'][] = [
+    [2, 'seven'],
+    [4, 'seven'],
+    [6, 'seven'],
+    [0, 'cherry'],
+    [7, 'lemon'],
+  ]
+  return (
+    <Scene from="#f5c542" to="#5a1d6e">
+      <defs>
+        <linearGradient id={`${u}foil`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#f4f7fb" />
+          <stop offset=".22" stopColor="#b9c3d0" />
+          <stop offset=".45" stopColor="#f1f4f9" />
+          <stop offset=".7" stopColor="#a9b4c3" />
+          <stop offset="1" stopColor="#e6ebf2" />
+        </linearGradient>
+        <linearGradient id={`${u}card`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ff4f9a" />
+          <stop offset="1" stopColor="#d81e66" />
+        </linearGradient>
+        <linearGradient id={`${u}gold`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fff4c2" />
+          <stop offset=".45" stopColor="#ffd451" />
+          <stop offset="1" stopColor="#d18a10" />
+        </linearGradient>
+        <radialGradient id={`${u}coin`} cx=".38" cy=".32" r=".8">
+          <stop offset="0" stopColor="#fff6c4" />
+          <stop offset=".5" stopColor="#ffd34a" />
+          <stop offset="1" stopColor="#b8780a" />
+        </radialGradient>
+        <radialGradient id={`${u}glow`} cx=".5" cy=".5" r=".5">
+          <stop offset="0" stopColor="#fff3c4" stopOpacity=".85" />
+          <stop offset="1" stopColor="#ffd86b" stopOpacity="0" />
+        </radialGradient>
+        <mask id={`${u}m`} maskUnits="userSpaceOnUse" x="0" y="0" width="140" height="190">
+          <rect width="140" height="190" fill="#fff" />
+          {shown.map(([i], k) => {
+            const c = cell(i)
+            return <path key={i} d={scratchHole(c.x - 2, c.y - 2, 33, 33, 17 + k * 31)} fill="#000" />
+          })}
+          {/* a stroke in progress across the middle right cell */}
+          <path d={scratchHole(80, 92, 26, 12, 211, 2.6)} fill="#000" />
+        </mask>
+      </defs>
+
+      {/* light behind the card */}
+      <g opacity=".2" fill="#fff">
+        {Array.from({ length: 12 }, (_, i) => (
+          <path key={i} d="M100 118 L93 -60 L107 -60 Z" transform={`rotate(${i * 30} 100 118)`} />
+        ))}
+      </g>
+      <circle cx="100" cy="118" r="82" fill={`url(#${u}glow)`} />
+
+      {/* the card, tilted, with its shadow */}
+      <g transform="translate(30 32) rotate(-8 70 95)">
+        <rect x="4" y="8" width="140" height="190" rx="14" fill="#2a0636" opacity=".35" />
+        <rect width="140" height="190" rx="14" fill={`url(#${u}card)`} stroke="#4a0d2c" strokeWidth="3" />
+        <rect x="5" y="5" width="130" height="180" rx="10" fill="none" stroke="#ffe14a" strokeWidth="1.4" strokeDasharray="1 4" strokeLinecap="round" />
+        {/* the title */}
+        <g fontFamily="Manrope, system-ui, sans-serif" fontWeight="800" textAnchor="middle" strokeLinejoin="round" paintOrder="stroke">
+          <text x="70" y="27" fontSize="19" fill="#ffe14a" stroke="#4a0d2c" strokeWidth="5" letterSpacing=".5">
+            SCRATCH
+          </text>
+          <text x="70" y="45" fontSize="14" fill="#c8ff6a" stroke="#4a0d2c" strokeWidth="4.5" letterSpacing="1.5">
+            &amp; WIN
+          </text>
+        </g>
+        {/* cells under the foil */}
+        <rect x="9" y="47" width="122" height="122" rx="8" fill="#9c0f4a" />
+        {Array.from({ length: 9 }, (_, i) => {
+          const c = cell(i)
+          return <rect key={i} x={c.x} y={c.y} width="29" height="29" rx="5" fill="#fff6fa" />
+        })}
+        {[...shown, [5, 'grapes'] as const].map(([i, sym]) => {
+          const c = cell(i)
+          return <CoverSymbol key={i} sym={sym} x={c.x + 2.5} y={c.y + 1.5} size={24} />
+        })}
+        {/* the foil, with the scratched holes cut out of it (the grapes are only half out) */}
+        <g mask={`url(#${u}m)`}>
+          <rect x="11" y="49" width="118" height="118" rx="7" fill={`url(#${u}foil)`} />
+          {Array.from({ length: 9 }, (_, i) => {
+            const c = cell(i)
+            return (
+              <g key={i}>
+                <circle cx={c.x + 14.5} cy={c.y + 14.5} r="8.5" fill="none" stroke="#fff" strokeWidth="1.6" opacity=".8" />
+                <circle cx={c.x + 14} cy={c.y + 14} r="8.5" fill="none" stroke="#8592a3" strokeWidth="1.4" />
+                <text x={c.x + 14} y={c.y + 18.4} textAnchor="middle" fontSize="12" fontWeight="800" fill="#8592a3" fontFamily="Manrope, system-ui, sans-serif">
+                  ?
+                </text>
+              </g>
+            )
+          })}
+        </g>
+        {/* the sevens, each circled with a marker the way the game marks a win */}
+        {sevens.map((i, k) => {
+          const c = cell(i)
+          const pts: string[] = []
+          for (let s = 0; s <= 28; s++) {
+            const t = s / 28
+            const a = -1.9 + k * 0.8 + t * Math.PI * 2.2
+            const r = 1 + 0.04 * Math.sin(a * 3 + k * 2) + t * 0.06
+            pts.push(`${(c.x + 14.5 + Math.cos(a) * 16.5 * r).toFixed(1)} ${(c.y + 14.5 + Math.sin(a) * 16 * r).toFixed(1)}`)
+          }
+          const d = `M${pts.join('L')}`
+          return (
+            <g key={i} fill="none" strokeLinecap="round" strokeLinejoin="round">
+              <path d={d} stroke="#4a0d2c" strokeWidth="4.6" opacity=".55" />
+              <path d={d} stroke="#ffe14a" strokeWidth="2.4" />
+            </g>
+          )
+        })}
+        {/* the prize table, in miniature */}
+        <rect x="9" y="173" width="122" height="11" rx="5.5" fill="#b8124f" />
+        <text x="70" y="181.3" textAnchor="middle" fontSize="7.4" fontWeight="800" fill="#ffe14a" fontFamily="Manrope, system-ui, sans-serif" letterSpacing="1">
+          MATCH 3 TO WIN
+        </text>
+      </g>
+
+      {/* the coin at work, flakes of foil flying off it */}
+      <g fill="#dfe5ee">
+        <path d="M150 150 l5 -2 -1 5Z" />
+        <path d="M158 138 l4 1 -3 3Z" opacity=".9" />
+        <path d="M166 152 l3 -3 2 4Z" />
+        <path d="M144 132 l3 2 -4 1Z" opacity=".8" />
+        <path d="M171 141 l4 0 -2 3Z" fill="#aab4c4" />
+      </g>
+      <g stroke="#fff" strokeWidth="2.4" strokeLinecap="round" opacity=".85" fill="none">
+        <path d="M120 168 q14 -2 26 -12" />
+        <path d="M118 177 q16 -1 30 -12" opacity=".6" />
+      </g>
+      <g transform="translate(156 168) rotate(-28)">
+        <ellipse cx="0" cy="4" rx="21" ry="14" fill="#7a4a06" />
+        <ellipse cx="0" cy="0" rx="21" ry="14" fill={`url(#${u}coin)`} stroke="#5a3404" strokeWidth="2" />
+        <ellipse cx="0" cy="0" rx="14.5" ry="9.5" fill="none" stroke="#b8780a" strokeWidth="1.6" />
+        <path d="M-12 -6 A16 10 0 0 1 2 -11" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" opacity=".75" />
+      </g>
+
+      {/* the win badge */}
+      <g transform="translate(160 44) rotate(12)">
+        <polygon points={burst(14, 27, 21)} fill={`url(#${u}gold)`} stroke="#4a0d2c" strokeWidth="2.6" strokeLinejoin="round" />
+        <text y="2" textAnchor="middle" fontSize="13" fontWeight="800" fill="#4a0d2c" fontFamily="Manrope, system-ui, sans-serif">
+          WIN
+        </text>
+        <text y="13" textAnchor="middle" fontSize="8.5" fontWeight="800" fill="#4a0d2c" fontFamily="Manrope, system-ui, sans-serif">
+          250×
+        </text>
+      </g>
+      <Sparkle x={34} y={52} r={6} />
+      <Sparkle x={176} y={102} r={4.5} />
+      <Sparkle x={26} y={186} r={4} />
+      <Sparkle x={120} y={22} r={3.5} />
     </Scene>
   )
 }
