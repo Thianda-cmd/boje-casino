@@ -18,6 +18,8 @@ import { duckMarkup, type Expr } from '../games/derby/art'
 import { CoverSymbol } from '../games/scratch/coversymbols'
 import { bojeFacets } from '../art/brand'
 import { FaceDesign } from '../games/coinflip/art'
+import { ReefCover } from '../games/reef/cover'
+import { SicBoCover } from '../games/sicbo/cover'
 
 /* Lobby art. Chicken Road keeps its pixel look; everything else is clean vector art on a bold gradient. */
 
@@ -70,6 +72,10 @@ export function GameCover({ id }: { id: GameId }) {
       return <CoinFlipCover />
     case 'plunder':
       return <PlunderCover />
+    case 'reef':
+      return <ReefCover />
+    case 'sicbo':
+      return <SicBoCover />
     case 'cases':
       return <CasesCover />
     case 'baccarat':

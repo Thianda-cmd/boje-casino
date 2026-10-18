@@ -78,6 +78,11 @@ export interface BetEvent {
   payout: number
   /** game-specific details used by challenges */
   meta?: Record<string, number | string | boolean>
+  /**
+   * Part of the payout that was already paid into the balance as it was won (with `refund`), for games that pay as
+   * they go and record a batch later (Reef Raid). The whole payout is recorded; only the rest is credited.
+   */
+  prepaid?: number
 }
 
 export interface Challenge {
@@ -279,6 +284,24 @@ export const CHALLENGES: Challenge[] = [
     step: (e, p) => (e.game === 'coinflip' && e.payout > 0 && Number(e.meta?.flips) >= 7 ? 1 : p),
   },
   {
+    id: 'reef-whale',
+    game: 'reef',
+    title: 'Whale Tamer',
+    desc: 'Catch the 200× Golden Whale in Reef Raid with a shot of 25 coins or more.',
+    reward: 3500,
+    goal: 1,
+    step: (e, p) => (e.game === 'reef' && Number(e.meta?.whaleCost) >= 25 ? 1 : p),
+  },
+  {
+    id: 'sicbo-triple',
+    game: 'sicbo',
+    title: 'Triple Threat',
+    desc: 'Win a triple bet in Sic Bo: Any triple, or one of the six specific triples.',
+    reward: 3000,
+    goal: 1,
+    step: (e, p) => (e.game === 'sicbo' && e.meta?.tripleWin === true ? 1 : p),
+  },
+  {
     id: 'plunder-mult',
     game: 'plunder',
     title: 'Sea Legs',
@@ -434,7 +457,7 @@ export const useWallet = create<WalletState>()(
         set((s) => {
           const counts = ev.bet >= CHALLENGE_MIN_BET
           const next: Partial<WalletState> = {
-            balance: round2(s.balance + payout),
+            balance: round2(s.balance + payout - round2(Math.max(0, Math.min(payout, ev.prepaid ?? 0)))),
             xp: s.xp + ev.bet,
             rounds: (s.rounds ?? 0) + 1,
             totalWagered: round2(s.totalWagered + ev.bet),

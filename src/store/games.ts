@@ -1,4 +1,4 @@
-export type GameId = 'chicken' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'coinflip' | 'plunder' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
+export type GameId = 'chicken' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'coinflip' | 'reef' | 'sicbo' | 'plunder' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
 
 export type Category = 'originals' | 'table'
 
@@ -17,6 +17,7 @@ export const GAMES: GameInfo[] = [
   { id: 'crash', name: 'Crash', category: 'originals', tagline: 'Everyone rides the same rocket. Cash out before it blows.', accent: '#9b7bff', tag: 'live' },
   { id: 'double', name: 'Double', category: 'originals', tagline: 'Red, black or green. One strip, and everyone bets the same spin.', accent: '#ef3e5c', tag: 'live' },
   { id: 'coinflip', name: 'Coin Flip', category: 'originals', tagline: 'Heads or tails. Win, then double it or walk away.', accent: '#f7c548', tag: 'new' },
+  { id: 'reef', name: 'Reef Raid', category: 'originals', tagline: 'Fire bubble torpedoes at the reef. Every creature you net pays its multiplier, up to the 200× Golden Whale.', accent: '#22c7d8', tag: 'new' },
   { id: 'mines', name: 'Mines', category: 'originals', tagline: 'Find gems, dodge mines, push your luck tile by tile.', accent: '#22d36f' },
   { id: 'plinko', name: 'Plinko', category: 'originals', tagline: 'Drop the ball through the pegs. Edges pay up to 1,000×.', accent: '#ff5fa2' },
   { id: 'dice', name: 'Dice', category: 'originals', tagline: 'Pick your odds, roll over or under.', accent: '#4cb4ff' },
@@ -37,6 +38,7 @@ export const GAMES: GameInfo[] = [
   { id: 'blackjack', name: 'Blackjack', category: 'table', tagline: 'Six decks, dealer stands on soft 17, blackjack pays 3 to 2.', accent: '#4f8bff' },
   { id: 'livebj', name: 'Live Blackjack', category: 'table', tagline: 'Real players, one shoe. Pull up a seat at a shared table.', accent: '#f2a93b', tag: 'live' },
   { id: 'baccarat', name: 'Baccarat', category: 'table', tagline: 'Player, Banker or Tie. Squeeze the cards, follow the road.', accent: '#e8c46a', tag: 'new' },
+  { id: 'sicbo', name: 'Sic Bo', category: 'table', tagline: 'Three dice under the dome. Lucky multipliers strike the table every roll, up to 1,000 to 1.', accent: '#e0434f', tag: 'new' },
   { id: 'roulette', name: 'Roulette', category: 'table', tagline: 'European single zero. Red, black, or your lucky number.', accent: '#ff4d61' },
   { id: 'videopoker', name: 'Video Poker', category: 'table', tagline: 'Jacks or Better. Hold, draw, chase the royal flush.', accent: '#2fb8ff', tag: 'new' },
 ]

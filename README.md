@@ -1,8 +1,9 @@
 # Boje Casino (play money)
 
-A Stake-style casino with twenty-six games. Originals: Chicken Road, Crash, Double, Coin Flip, Mines, Plinko, Dice,
-Limbo, Keno, Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Table and
-machine games: Blackjack, Live Blackjack, Baccarat, Roulette, Video Poker, Chompers, Pop Party, Robo Riot and Plunder Bay.
+A Stake-style casino with twenty-eight games. Originals: Chicken Road, Crash, Double, Coin Flip, Reef Raid, Mines, Plinko,
+Dice, Limbo, Keno, Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Table
+and machine games: Blackjack, Live Blackjack, Baccarat, Sic Bo, Roulette, Video Poker, Chompers, Pop Party, Robo Riot and
+Plunder Bay.
 Vault Heist is a free skill game that pays coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
 
@@ -138,7 +139,7 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
 - Vault Heist: crack up to eight dials by timing each pick; the bag holds 10, 25, 50, 90, 150, 250, 400 and 650
   coins after each vault, plus a bonus for each gold notch hit, banked whenever you like and lost on a miss. Three
   lockpicks, one back every 45 min; practice runs cost none and pay nothing.
-- Challenges: 27 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
+- Challenges: 29 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
   Crash, a 2% Dice win); Live Blackjack rounds count towards Explorer and High Roller. Only bets of 25+ count,
   except towards High Roller, which counts every bet.
 
@@ -261,7 +262,36 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   stream wins on the same flips whatever is called; `tools/coinflip-physics.ts` checks that every accepted flight, from
   any rest pose and turned to any side, starts as the coin lay and ends flat on the drawn face, and that the result is
   only called once the face can no longer change).
+- Reef Raid: a fish-table arcade game. Creatures swim across the reef and every torpedo costs the cannon's level (1 to
+  100 coins); it bursts into a net on the first creature it touches, which is caught with chance 0.97 / its value and
+  then pays value × the shot's cost, so every shot returns exactly 97% whatever it hits (aiming only trades the size of
+  a win against its odds). Values: clownfish 2×, blue tang 3×, pufferfish 4×, angelfish 6×, seahorse 8×, sea turtle
+  12×, octopus 20×, manta ray 30×, hammerhead 60×, Golden Whale 200×. The bomb crab (10×) also catches every ordinary
+  creature in its blast and the zap jelly (5×) up to 6 linked ones, all as one catch whose value is the sum (taken at
+  the moment of the hit); the treasure chest spins a wheel of 20× to 150× and is caught with chance 0.97 / the wheel's
+  mean (56.875). Each hit is decided once, the moment the net touches (src/games/reef/rules.ts `resolveHit`); a torpedo
+  that touches nothing in 8 s fizzles and is refunded. Shots are charged as they are fired and catches paid as they
+  land (a chest's once its wheel stops); they are recorded in batches (every 100 shots, or once the reef has been quiet
+  for 3 s) through a ledger that is saved as it changes, so a closed or crashed page refunds the torpedoes still in the
+  water, pays any chest win still owed and records the shots that landed, once (`tools/reef-test.ts` checks every species' return exactly and by sampling, the wheel, and
+  thousands of random sessions against a mock wallet: no coin is ever lost or invented).
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
+- Sic Bo: three dice, 52 spots: Small / Big and Odd / Even (1 to 1, lose on any triple), the totals 4 to 17 (50, 25,
+  15, 10, 7, 6, 5 to 1 from the ends inwards), doubles (8 to 1), triples (160 to 1), any triple (24 to 1), the 15
+  two-dice combinations (5 to 1) and the singles (1, 2 or 14 to 1 as the number shows on one, two or three dice).
+  Lucky strikes: before the dice are shaken, each of the 42 lucky spots (totals, doubles, triples, any triple,
+  combinations) is struck on its own with a fixed chance, and if none is, one is picked by the same weights (about
+  3.2 strikes a roll); a struck spot's odds are multiplied by ×2 to ×25 (triples ×2 to ×6), up to 1,000 to 1. The
+  strike chances are solved so that every lucky spot returns exactly 97%; Small, Big, Odd, Even and the singles
+  return 97.22%. The strikes and the dice are drawn together when the dice are rolled, from separate numbers, so the
+  dice never depend on the strikes. The dice really tumble: src/games/sicbo/physics.ts simulates three rounded cubes
+  in the shaken dome (corner and edge contacts against the felt, a slippery cove, the glass and each other) from the
+  previous roll's resting poses, planned in a worker while the strikes play, and each die is shown landing on its
+  drawn face only by turning its pips within the body while it flies clear of everything (a cube is the same cube
+  after a quarter, third or half turn), so its path is physics' own (`tools/sicbo-physics-test.ts` plays all 216
+  outcomes, normal and turbo, and checks the faces, the rest poses, overlaps and that pips only turn in clear flight;
+  `tools/sicbo-test.ts` checks every spot's payouts on all 216 rolls against an
+  independent reading of the rules, every spot's exact return, and samples the strikes, multipliers, dice and returns).
 - Pop Party: 7 × 7 floor; 5+ touching balloons pay, winners pop and the rest float up until nothing wins. Every
   pop lights the tile underneath, and each further pop doubles it up to ×128; a win is multiplied by the sum of
   the tiles under it. 3+ disco balls pay 2× to 100× and start 10 to 30 free spins (Disco Night), where the floor

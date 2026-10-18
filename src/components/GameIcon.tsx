@@ -1,4 +1,6 @@
 import type { GameId } from '../store/games'
+import { ReefIcon } from '../games/reef/cover'
+import { SicBoIcon } from '../games/sicbo/cover'
 
 // Small 20px monochrome icons for navigation.
 export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
@@ -167,6 +169,10 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
           <path d="M2.6 6.4A10 10 0 0 1 6.6 2.9M21.4 17.6a10 10 0 0 1-4 3.5" opacity=".55" />
         </svg>
       )
+    case 'reef':
+      return <ReefIcon {...p} />
+    case 'sicbo':
+      return <SicBoIcon {...p} />
     case 'plunder':
       return (
         <svg {...p}>
