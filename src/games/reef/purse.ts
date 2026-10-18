@@ -17,7 +17,8 @@ import { BATCH_SHOTS, due, emptyLedger, fired, fizzled, flush, landed, paidOwed,
   - a bet record every BATCH_SHOTS shots, or once the player has stopped for BATCH_IDLE_MS (wallet.settle with
     `prepaid`: the catches were paid as they happened, so the record credits nothing twice).
 
-  The ledger is saved to localStorage on every change. When the page goes (closed, reloaded, left for another page)
+  The ledger is saved to localStorage on every change, batched with the wallet's own writes (safeStorage.setSoon):
+  the two always land together, so storage never holds a ledger and a wallet from different moments. When the page goes (closed, reloaded, left for another page)
   it is squared up there and then: the coins on torpedoes still in the water come back, a chest's win still owed is
   paid and the landed shots get their record (rules.recover). A ledger left behind by a page that died is squared up the same way on the next visit, once
   the player's wallet has loaded. The saved copy is written before the wallet is credited and removed before a
@@ -233,9 +234,9 @@ export class Purse {
 
   private save() {
     const l = this.ledger
-    if (l.bullets === 0 && l.shots === 0 && l.owed === 0) safeStorage.removeItem(this.key)
+    if (l.bullets === 0 && l.shots === 0 && l.owed === 0) safeStorage.removeSoon(this.key)
     // `at` tells a carried guest ledger from a later guest's (see start)
-    else safeStorage.setItem(this.key, JSON.stringify({ ...l, at: Date.now() }))
+    else safeStorage.setSoon(this.key, JSON.stringify({ ...l, at: Date.now() }))
   }
 }
 

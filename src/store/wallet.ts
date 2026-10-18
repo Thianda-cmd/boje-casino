@@ -558,7 +558,9 @@ export const useWallet = create<WalletState>()(
     }),
     {
       name: 'lumen.wallet.v1',
-      storage: createJSONStorage(() => safeStorage),
+      // the wallet can change many times a second (Reef Raid's trigger held down): its writes are batched, and any other
+      // write lands them first, so nothing saved after a bet ever gets ahead of it (see src/lib/storage.ts)
+      storage: createJSONStorage(() => ({ getItem: safeStorage.getItem, setItem: safeStorage.setSoon, removeItem: safeStorage.removeSoon })),
       partialize: ({ toasts: _t, ...rest }) => rest,
     },
   ),
