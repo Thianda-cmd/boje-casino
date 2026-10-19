@@ -1,18 +1,21 @@
+import { CUBE_TURNS, FACE_AXIS, HALF, REACH, ROUND, axisAngle, mulberry, normQ, qmul, restQuat, rotate, smooth, topFace, type Pose, type Q, type V3 } from '../../lib/dice/cube'
+import { AHEAD, DT, DiceWorld, EVERY, FLOOR, HIT_V, RATE, WALL, settleFlat } from '../../lib/dice/solver'
 import type { Die } from './rules'
+
+export { HALF, REACH, ROUND, mulberry, tiltOf, topFace, type Pose, type Q } from '../../lib/dice/cube'
+export { RATE } from '../../lib/dice/solver'
 
 /*
   The three dice under the glass dome, worked out as real rigid-body physics before they are shown (no three.js here,
   so Node can test it: tools/sicbo-physics-test.ts).
 
-  A die is a cube with rounded edges: a sharp inner cube grown by a small radius, so it touches the world through
-  balls at its eight corners and, against another die, also at the point of each nearby edge that comes closest (so
-  two dice meeting edge to edge are caught exactly). The dome is a felt floor that turns up in a steep cove at its
-  edge, under a glass sphere centred on the middle of the floor. The pedestal shakes the dome with short hard kicks,
-  up, sideways and rocking, for a second and a half or so, then lets the dice settle. Everything is worked out in the
-  dome's own frame, where a kick is felt as a brief pseudo-force (which is all a moving floor does to what lies on
-  it), by an impulse solver at 360 steps a second: contacts with friction and a little bounce, made a step ahead when
-  a gap is about to close (the kicks bring the floor up to meet falling dice fast), solved a few times a step. That is
-  cheap enough to try a few rolls in a few milliseconds each.
+  The dice and the solver are the house's shared ones (src/lib/dice: rounded cubes, an impulse solver at 360 steps a
+  second); this file is the dome. The dome is a felt floor that turns up in a steep cove at its edge, under a glass
+  sphere centred on the middle of the floor. The pedestal shakes the dome with short hard kicks, up, sideways and
+  rocking, for a second and a half or so, then lets the dice settle. Everything is worked out in the dome's own frame,
+  where a kick is felt as a brief pseudo-force (which is all a moving floor does to what lies on it); the solver's
+  contacts are made a step ahead when a gap is about to close (the kicks bring the floor up to meet falling dice at
+  20 units a second and more).
 
   Which faces come up is chaotic, so it is never steered. The dice are relabelled instead: a cube looks the same under
   any of its 24 rotations, so while a die flies clear of everything (no contact, and far enough from the felt, the
@@ -24,16 +27,6 @@ import type { Die } from './rules'
   Units: a die's edge is 1. Time is in seconds of the show at normal speed.
 */
 
-export type Q = [number, number, number, number]
-export type V3 = [number, number, number]
-
-/** half a die's edge */
-export const HALF = 0.5
-/** the radius its edges and corners are rounded to */
-export const ROUND = 0.085
-const CORE = HALF - ROUND
-/** the farthest any point of a die is from its centre */
-export const REACH = Math.sqrt(3) * CORE + ROUND
 /** the glass: a sphere of this radius round the middle of the floor */
 export const DOME_R = 3.4
 /**
@@ -46,13 +39,7 @@ export const COVE = (62 * Math.PI) / 180
 const COVE_S = Math.sin(COVE)
 const COVE_C = Math.cos(COVE)
 const GRAV = 64
-const DT = 1 / 360
-/** the roll is recorded at this rate (samples per second) */
-export const RATE = 120
-const EVERY = Math.round(1 / (DT * RATE))
 const N = 3
-/** a die's mass is 1, and a cube's inertia is the same about every axis through its centre: edge² / 6 */
-const INV_I = 6
 
 /** what each pair of surfaces does: bounce (restitution) and friction */
 const FELT = { e: 0.26, mu: 0.6 }
@@ -60,20 +47,6 @@ const GLASS = { e: 0.5, mu: 0.16 }
 /** the cove: slick (its friction kept low, so a die cannot lean on it: it slides off and falls flat) */
 const SLOPE = { e: 0.35, mu: 0.04 }
 const BONE = { e: 0.42, mu: 0.3 }
-const ITER = 8
-/** how hard overlap is pushed out (a share of it per step), what is let be, and how fast at most */
-const BETA = 0.22
-const SLOP = 0.003
-const MAX_PUSH = 4
-/** slower than this, a contact does not bounce */
-const BOUNCE_V = 1.1
-/** a knock worth a sound: a new contact arriving faster than this */
-const HIT_V = 1.3
-/**
- * Contacts are made this far ahead (speculatively): a corner closing a gap within the step is caught as it arrives
- * rather than after it has sunk in (the kicks bring the floor up to meet falling dice at 20 units a second and more)
- */
-const AHEAD = 0.09
 /** how far clear of everything a die must be (beyond its reach) for its pips to be turned */
 const CLEAR = 0.02
 /** the shortest stretch of clear flight a turn is blended across, s */
@@ -81,112 +54,7 @@ const MIN_WINDOW = 0.1
 /** a die lying on the floor rolls against the felt: its spin dies away at this rate (1/s) */
 const FELT_DRAG = 2.4
 
-/* ---------------- quaternions ---------------- */
-
-export const qmul = (a: Q, b: Q): Q => [
-  a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
-  a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
-  a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
-  a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
-]
-const qconj = (q: Q): Q => [-q[0], -q[1], -q[2], q[3]]
-/** a turn of `a` radians about the unit axis (x, y, z) */
-export const axisAngle = (x: number, y: number, z: number, a: number): Q => {
-  const l = Math.hypot(x, y, z) || 1
-  const s = Math.sin(a / 2) / l
-  return [x * s, y * s, z * s, Math.cos(a / 2)]
-}
-/** a vector turned by a quaternion */
-export const rotate = (q: Q, v: V3): V3 => {
-  const [x, y, z, w] = q
-  // t = 2 q.xyz × v; v' = v + w t + q.xyz × t
-  const tx = 2 * (y * v[2] - z * v[1])
-  const ty = 2 * (z * v[0] - x * v[2])
-  const tz = 2 * (x * v[1] - y * v[0])
-  return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)]
-}
-const normQ = (q: Q): Q => {
-  const l = Math.hypot(q[0], q[1], q[2], q[3]) || 1
-  return [q[0] / l, q[1] / l, q[2] / l, q[3] / l]
-}
-
-/* ---------------- the pips ---------------- */
-
-/**
- * The body axis each face's pips are on. Opposite faces add up to 7 and 1, 2, 3 run anticlockwise round the corner
- * they share, as on a real die.
- */
-export const FACE_AXIS: Readonly<Record<Die, V3>> = { 1: [0, 1, 0], 6: [0, -1, 0], 2: [0, 0, 1], 5: [0, 0, -1], 3: [1, 0, 0], 4: [-1, 0, 0] }
-const FACES: readonly Die[] = [1, 2, 3, 4, 5, 6]
-
-/** the face of a body axis (a unit vector along one of them) */
-const faceOfAxis = (v: V3): Die => FACES.find((f) => FACE_AXIS[f][0] * v[0] + FACE_AXIS[f][1] * v[1] + FACE_AXIS[f][2] * v[2] > 0.5)!
-
-/** the body axis nearest a body-frame direction */
-const nearestAxis = (v: V3): V3 => {
-  const ax = Math.abs(v[0])
-  const ay = Math.abs(v[1])
-  const az = Math.abs(v[2])
-  if (ax >= ay && ax >= az) return [Math.sign(v[0]), 0, 0]
-  if (ay >= az) return [0, Math.sign(v[1]), 0]
-  return [0, 0, Math.sign(v[2])]
-}
-
-/** the face showing on top of a die turned `q` (the body axis nearest straight up) */
-export function topFace(q: Q): Die {
-  return faceOfAxis(nearestAxis(rotate(qconj(q), [0, 1, 0])))
-}
-
-/** how far a die turned `q` is from lying flat, radians */
-export function tiltOf(q: Q): number {
-  const up = rotate(qconj(q), [0, 1, 0])
-  return Math.acos(Math.min(1, Math.max(Math.abs(up[0]), Math.abs(up[1]), Math.abs(up[2]))))
-}
-
-/** a die lying flat with `face` on top, turned `yaw` radians about the vertical */
-export function restQuat(face: Die, yaw: number): Q {
-  const [x, y, z] = FACE_AXIS[face]
-  // the turn that stands the face's axis straight up
-  const base: Q = y > 0 ? [0, 0, 0, 1] : y < 0 ? axisAngle(1, 0, 0, Math.PI) : z !== 0 ? axisAngle(z, 0, 0, -Math.PI / 2) : axisAngle(0, 0, x, Math.PI / 2)
-  return normQ(qmul(axisAngle(0, 1, 0, yaw), base))
-}
-
-/** the 24 turns that map a cube onto itself, each with its axis and angle (0 to π) */
-const CUBE_TURNS: readonly { q: Q; axis: V3; angle: number }[] = (() => {
-  const out: { q: Q; axis: V3; angle: number }[] = [{ q: [0, 0, 0, 1], axis: [0, 1, 0], angle: 0 }]
-  const add = (x: number, y: number, z: number, a: number) => {
-    const l = Math.hypot(x, y, z)
-    out.push({ q: axisAngle(x, y, z, a), axis: [x / l, y / l, z / l], angle: a })
-  }
-  // quarter and half turns about the face axes (three quarters = a quarter the other way)
-  for (const ax of [[1, 0, 0], [0, 1, 0], [0, 0, 1]] as V3[]) {
-    add(ax[0], ax[1], ax[2], Math.PI / 2)
-    add(-ax[0], -ax[1], -ax[2], Math.PI / 2)
-    add(ax[0], ax[1], ax[2], Math.PI)
-  }
-  // thirds of a turn about the four long diagonals, each way
-  for (const [x, y, z] of [[1, 1, 1], [1, 1, -1], [1, -1, 1], [-1, 1, 1]] as V3[]) {
-    add(x, y, z, (Math.PI * 2) / 3)
-    add(-x, -y, -z, (Math.PI * 2) / 3)
-  }
-  // half turns about the six edge diagonals
-  for (const [x, y, z] of [[1, 1, 0], [1, -1, 0], [1, 0, 1], [1, 0, -1], [0, 1, 1], [0, 1, -1]] as V3[]) add(x, y, z, Math.PI)
-  return out
-})()
-
 /* ---------------- the shake ---------------- */
-
-/** a seeded random source, so a roll can be worked out again exactly */
-export function mulberry(seed: number) {
-  let a = seed >>> 0
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0
-    let t = a
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
 
 /**
  * One kick of the pedestal: the dome jolts up (and a little sideways, and rocks about a level axis) and straight
@@ -251,13 +119,6 @@ function domeAt(kicks: readonly Kick[], t: number, out: Float64Array | Float32Ar
 
 /* ---------------- the record ---------------- */
 
-/** a die lying at rest on the floor (its centre is HALF above it): where, and turned how */
-export interface Pose {
-  x: number
-  z: number
-  q: Q
-}
-
 export interface Hit {
   /** sim time of the knock */
   t: number
@@ -303,352 +164,25 @@ export interface Sim {
   final: Pose[]
 }
 
-/* ---------------- the solver ---------------- */
-
-/** the corners of a die's inner cube in its own frame, and its edges (pairs of corners one bit apart) */
-const CORNER = new Float64Array(24)
-for (let k = 0; k < 8; k++) CORNER.set([k & 1 ? CORE : -CORE, k & 2 ? CORE : -CORE, k & 4 ? CORE : -CORE], k * 3)
-const EDGES: [number, number][] = []
-for (let a = 0; a < 8; a++) for (const bit of [1, 2, 4]) if (!(a & bit)) EDGES.push([a, a | bit])
-/** an edge's end in another die's frame can only matter within this far of its centre, along each axis */
-const EDGE_BOX = CORE + 2 * ROUND + AHEAD
-
-/** past the inner cube's face along one axis (signed), 0 within it */
-const outside = (x: number) => (x > CORE ? x - CORE : x < -CORE ? x + CORE : 0)
-/** half the slope of the squared distance to the inner cube, along a + s d */
-const slope = (ax: number, ay: number, az: number, dx: number, dy: number, dz: number, s: number) => dx * outside(ax + s * dx) + dy * outside(ay + s * dy) + dz * outside(az + s * dz)
-const brk = new Float64Array(8)
-
-/**
- * Where on the segment a + s d (s from 0 to 1) it comes nearest the inner cube (local frame). The squared distance is
- * convex along the segment and its slope piecewise linear, changing only where a coordinate crosses a face's plane:
- * so the slope is checked at those breaks in order, and solved exactly between the two where it turns from falling
- * to rising.
- */
-function nearestOnEdge(ax: number, ay: number, az: number, dx: number, dy: number, dz: number) {
-  if (slope(ax, ay, az, dx, dy, dz, 0) >= 0) return 0
-  if (slope(ax, ay, az, dx, dy, dz, 1) <= 0) return 1
-  let n = 0
-  brk[n++] = 0
-  for (let k = 0; k < 3; k++) {
-    const a = k === 0 ? ax : k === 1 ? ay : az
-    const d = k === 0 ? dx : k === 1 ? dy : dz
-    if (Math.abs(d) < 1e-12) continue
-    for (let side = -1; side <= 1; side += 2) {
-      const s = (side * CORE - a) / d
-      if (s > 0 && s < 1) brk[n++] = s
-    }
-  }
-  brk[n++] = 1
-  // (a handful of breaks: insertion sort)
-  for (let i = 1; i < n; i++) {
-    const v = brk[i]
-    let j = i - 1
-    while (j >= 0 && brk[j] > v) {
-      brk[j + 1] = brk[j]
-      j--
-    }
-    brk[j + 1] = v
-  }
-  let s0 = 0
-  let g0 = slope(ax, ay, az, dx, dy, dz, 0)
-  for (let i = 1; i < n; i++) {
-    const s1 = brk[i]
-    const g1 = slope(ax, ay, az, dx, dy, dz, s1)
-    if (g1 >= 0) return g1 - g0 > 1e-15 ? s0 - (g0 * (s1 - s0)) / (g1 - g0) : s1
-    s0 = s1
-    g0 = g1
-  }
-  return 1
-}
-/** a point on a die's inner cube can only touch another die within this distance of that die's centre */
-const PT_R2 = (Math.sqrt(3) * CORE + 2 * ROUND + AHEAD) ** 2
-const PAIR_R2 = (2 * REACH + AHEAD) ** 2
-const PAIRS: readonly [number, number][] = [
-  [0, 1],
-  [0, 2],
-  [1, 2],
-]
-
-const FLOOR = 0
-const WALL = 1
-const BODY = 2
+/* ---------------- the dome, for the solver ---------------- */
 
 /** how far a point is above the cove's slope (along its normal; the slope extended below the floor inwards) */
 export const coveGap = (x: number, y: number, z: number) => -(Math.hypot(x, z) - FLAT_R) * COVE_S + y * COVE_C
 
-// a contact's slots in the contact buffer: its bodies and kind; then for the normal (from b into a) and the two
-// friction directions in turn: the direction (3 each), ra × it and rb × it (the lever arms), its effective mass and
-// the impulse so far; the target normal velocity (a bounce, or a push out) and the friction coefficient
-const CA = 0 // the die
-const CB = 1 // the other die, or -1 for the dome
-const KIND = 2
-const NX = 3
-const RAN = 12
-const RBN = 21
-const KN = 30
-const TGT = 33
-const JN = 34
-const MU = 37
-const F = 38
-const MAXC = 160
-
-class World {
-  readonly p = new Float64Array(N * 3)
-  readonly v = new Float64Array(N * 3)
-  readonly q = new Float64Array(N * 4)
-  readonly w = new Float64Array(N * 3)
-  /** rotation matrices (row-major) and the corners' offsets from the centre, in the dome's frame */
-  readonly R = new Float64Array(N * 9)
-  readonly off = new Float64Array(N * 24)
-  readonly c = new Float64Array(MAXC * F)
-  nc = 0
-  /** per die this step: contacts, and on the floor */
-  readonly touching = new Uint8Array(N)
-  readonly onFloor = new Uint8Array(N)
+class World extends DiceWorld {
   // what touched last step, for telling new knocks from resting contact
   private readonly cornerWas = new Uint8Array(N * 8)
   private readonly cornerNow = new Uint8Array(N * 8)
   private readonly glassWas = new Uint8Array(N)
   private readonly glassNow = new Uint8Array(N)
   private readonly pairWas = new Uint8Array(3)
-  private readonly pairNow = new Uint8Array(3)
   private readonly lastHit = new Float64Array(N * 2 + 3).fill(-1)
   /** the hardest new knock this step per die on the floor and the glass, and per pair (speed, and where) */
   private readonly knock = new Float64Array((N * 2 + 3) * 4)
-  private readonly local = new Float64Array(24)
-  private readonly hitK = new Uint8Array(8)
   readonly hits: Hit[] = []
 
   constructor(start: readonly Pose[]) {
-    for (let i = 0; i < N; i++) {
-      const s = start[i]
-      this.p.set([s.x, HALF, s.z], i * 3)
-      this.q.set(normQ(s.q), i * 4)
-    }
-  }
-
-  /** rotation matrices and corner offsets from the orientations */
-  frames() {
-    const { q, R, off } = this
-    for (let i = 0; i < N; i++) {
-      const x = q[i * 4]
-      const y = q[i * 4 + 1]
-      const z = q[i * 4 + 2]
-      const w = q[i * 4 + 3]
-      const o = i * 9
-      R[o] = 1 - 2 * (y * y + z * z)
-      R[o + 1] = 2 * (x * y - w * z)
-      R[o + 2] = 2 * (x * z + w * y)
-      R[o + 3] = 2 * (x * y + w * z)
-      R[o + 4] = 1 - 2 * (x * x + z * z)
-      R[o + 5] = 2 * (y * z - w * x)
-      R[o + 6] = 2 * (x * z - w * y)
-      R[o + 7] = 2 * (y * z + w * x)
-      R[o + 8] = 1 - 2 * (x * x + y * y)
-      for (let k = 0; k < 8; k++) {
-        const cx = CORNER[k * 3]
-        const cy = CORNER[k * 3 + 1]
-        const cz = CORNER[k * 3 + 2]
-        off[i * 24 + k * 3] = R[o] * cx + R[o + 1] * cy + R[o + 2] * cz
-        off[i * 24 + k * 3 + 1] = R[o + 3] * cx + R[o + 4] * cy + R[o + 5] * cz
-        off[i * 24 + k * 3 + 2] = R[o + 6] * cx + R[o + 7] * cy + R[o + 8] * cz
-      }
-    }
-  }
-
-  /**
-   * Adds a contact on die a (against die b, or the dome when b < 0) at offset (rx, ry, rz) from a's centre, normal n
-   * pointing from b into a, `depth` deep (negative: a gap, made only if it closes this step). Returns the speed the
-   * two meet at (0 if they are parting), or -1 when no contact was made.
-   */
-  add(a: number, b: number, kind: number, nx: number, ny: number, nz: number, rx: number, ry: number, rz: number, depth: number, e: number, mu: number) {
-    if (this.nc >= MAXC) return -1
-    const { p, v, w, c } = this
-    // the other body's lever arm to the same point
-    let sx = 0
-    let sy = 0
-    let sz = 0
-    if (b >= 0) {
-      sx = p[a * 3] + rx - p[b * 3]
-      sy = p[a * 3 + 1] + ry - p[b * 3 + 1]
-      sz = p[a * 3 + 2] + rz - p[b * 3 + 2]
-    }
-    // relative velocity at the point
-    let ux = v[a * 3] + (w[a * 3 + 1] * rz - w[a * 3 + 2] * ry)
-    let uy = v[a * 3 + 1] + (w[a * 3 + 2] * rx - w[a * 3] * rz)
-    let uz = v[a * 3 + 2] + (w[a * 3] * ry - w[a * 3 + 1] * rx)
-    if (b >= 0) {
-      ux -= v[b * 3] + (w[b * 3 + 1] * sz - w[b * 3 + 2] * sy)
-      uy -= v[b * 3 + 1] + (w[b * 3 + 2] * sx - w[b * 3] * sz)
-      uz -= v[b * 3 + 2] + (w[b * 3] * sy - w[b * 3 + 1] * sx)
-    }
-    const vn = ux * nx + uy * ny + uz * nz
-    // a gap that cannot close this step needs no contact (one that might, if the step's other knocks speed it up, does)
-    if (depth < 0 && vn * DT > depth + 0.5 * AHEAD) return -1
-    const o = this.nc++ * F
-    // friction acts along the slip, or any way across the normal when there is none
-    let t1x = ux - vn * nx
-    let t1y = uy - vn * ny
-    let t1z = uz - vn * nz
-    let tl = Math.hypot(t1x, t1y, t1z)
-    if (tl < 1e-6) {
-      if (Math.abs(nx) < 0.9) {
-        t1x = 0
-        t1y = nz
-        t1z = -ny
-      } else {
-        t1x = -nz
-        t1y = 0
-        t1z = nx
-      }
-      tl = Math.hypot(t1x, t1y, t1z)
-    }
-    t1x /= tl
-    t1y /= tl
-    t1z /= tl
-    const t2x = ny * t1z - nz * t1y
-    const t2y = nz * t1x - nx * t1z
-    const t2z = nx * t1y - ny * t1x
-    c[o + CA] = a
-    c[o + CB] = b
-    c[o + KIND] = kind
-    const inv = b >= 0 ? 2 : 1
-    for (let d = 0; d < 3; d++) {
-      const dx = d === 0 ? nx : d === 1 ? t1x : t2x
-      const dy = d === 0 ? ny : d === 1 ? t1y : t2y
-      const dz = d === 0 ? nz : d === 1 ? t1z : t2z
-      c[o + NX + d * 3] = dx
-      c[o + NX + d * 3 + 1] = dy
-      c[o + NX + d * 3 + 2] = dz
-      const ax = ry * dz - rz * dy
-      const ay = rz * dx - rx * dz
-      const az = rx * dy - ry * dx
-      c[o + RAN + d * 3] = ax
-      c[o + RAN + d * 3 + 1] = ay
-      c[o + RAN + d * 3 + 2] = az
-      let k = inv + INV_I * (ax * ax + ay * ay + az * az)
-      if (b >= 0) {
-        const bx = sy * dz - sz * dy
-        const by = sz * dx - sx * dz
-        const bz = sx * dy - sy * dx
-        c[o + RBN + d * 3] = bx
-        c[o + RBN + d * 3 + 1] = by
-        c[o + RBN + d * 3 + 2] = bz
-        k += INV_I * (bx * bx + by * by + bz * bz)
-      }
-      c[o + KN + d] = 1 / k
-    }
-    // a fast arrival (now, or within this step) bounces; otherwise overlap is pushed out, or a gap may close exactly
-    const bounce = vn < -BOUNCE_V && vn * DT <= depth ? -e * vn : 0
-    c[o + TGT] = depth < 0 ? bounce || depth / DT : Math.max(bounce, Math.min(MAX_PUSH, (BETA / DT) * Math.max(0, depth - SLOP)))
-    c[o + JN] = c[o + JN + 1] = c[o + JN + 2] = 0
-    c[o + MU] = mu
-    this.touching[a] = 1
-    if (b >= 0) this.touching[b] = 1
-    return Math.max(0, -vn)
-  }
-
-  /** a point of die a (its inner cube's, at local (lx, ly, lz) in b's frame, offset (ox, oy, oz) from a) against die b */
-  private pointBox(a: number, b: number, lx: number, ly: number, lz: number, ox: number, oy: number, oz: number) {
-    if (lx * lx + ly * ly + lz * lz > PT_R2) return -1
-    const cx = lx < -CORE ? -CORE : lx > CORE ? CORE : lx
-    const cy = ly < -CORE ? -CORE : ly > CORE ? CORE : ly
-    const cz = lz < -CORE ? -CORE : lz > CORE ? CORE : lz
-    let dx = lx - cx
-    let dy = ly - cy
-    let dz = lz - cz
-    const d2 = dx * dx + dy * dy + dz * dz
-    let depth: number
-    if (d2 > 1e-14) {
-      if (d2 >= (2 * ROUND + AHEAD) ** 2) return -1
-      const d = Math.sqrt(d2)
-      dx /= d
-      dy /= d
-      dz /= d
-      depth = 2 * ROUND - d
-    } else {
-      // inside b's inner cube: out through its nearest face
-      const ex = CORE - Math.abs(lx)
-      const ey = CORE - Math.abs(ly)
-      const ez = CORE - Math.abs(lz)
-      dx = dy = dz = 0
-      if (ex <= ey && ex <= ez) dx = Math.sign(lx) || 1
-      else if (ey <= ez) dy = Math.sign(ly) || 1
-      else dz = Math.sign(lz) || 1
-      depth = 2 * ROUND + Math.min(ex, ey, ez)
-    }
-    const R = this.R
-    const o = b * 9
-    const nx = R[o] * dx + R[o + 1] * dy + R[o + 2] * dz
-    const ny = R[o + 3] * dx + R[o + 4] * dy + R[o + 5] * dz
-    const nz = R[o + 6] * dx + R[o + 7] * dy + R[o + 8] * dz
-    return this.add(a, b, BODY, nx, ny, nz, ox - nx * ROUND, oy - ny * ROUND, oz - nz * ROUND, depth, BONE.e, BONE.mu)
-  }
-
-  /** die a's corners, and the edges between corners that did not touch, against die b; the hardest knock */
-  private pair(a: number, b: number) {
-    const { p, R, off, local: L, hitK } = this
-    const o = b * 9
-    let knock = 0
-    for (let k = 0; k < 8; k++) {
-      const ox = off[a * 24 + k * 3]
-      const oy = off[a * 24 + k * 3 + 1]
-      const oz = off[a * 24 + k * 3 + 2]
-      const rx = p[a * 3] + ox - p[b * 3]
-      const ry = p[a * 3 + 1] + oy - p[b * 3 + 1]
-      const rz = p[a * 3 + 2] + oz - p[b * 3 + 2]
-      const lx = R[o] * rx + R[o + 3] * ry + R[o + 6] * rz
-      const ly = R[o + 1] * rx + R[o + 4] * ry + R[o + 7] * rz
-      const lz = R[o + 2] * rx + R[o + 5] * ry + R[o + 8] * rz
-      L[k * 3] = lx
-      L[k * 3 + 1] = ly
-      L[k * 3 + 2] = lz
-      const s = this.pointBox(a, b, lx, ly, lz, ox, oy, oz)
-      hitK[k] = s >= 0 ? 1 : 0
-      if (s > knock) knock = s
-    }
-    // two dice meeting edge to edge touch between their corners: each edge near b at its point nearest b's inner cube
-    // (an edge lying on b with both ends touching is held up by its corners already)
-    for (const [i, j] of EDGES) {
-      if (hitK[i] && hitK[j]) continue
-      const ax = L[i * 3]
-      const ay = L[i * 3 + 1]
-      const az = L[i * 3 + 2]
-      const bx = L[j * 3]
-      const by = L[j * 3 + 1]
-      const bz = L[j * 3 + 2]
-      if (Math.min(ax, bx) > EDGE_BOX || Math.max(ax, bx) < -EDGE_BOX || Math.min(ay, by) > EDGE_BOX || Math.max(ay, by) < -EDGE_BOX || Math.min(az, bz) > EDGE_BOX || Math.max(az, bz) < -EDGE_BOX) continue
-      const f = nearestOnEdge(ax, ay, az, bx - ax, by - ay, bz - az)
-      // at a touching corner: that corner's contact is the one
-      if ((f < 0.02 && hitK[i]) || (f > 0.98 && hitK[j])) continue
-      const g = 1 - f
-      const s = this.pointBox(
-        a,
-        b,
-        ax * g + bx * f,
-        ay * g + by * f,
-        az * g + bz * f,
-        off[a * 24 + i * 3] * g + off[a * 24 + j * 3] * f,
-        off[a * 24 + i * 3 + 1] * g + off[a * 24 + j * 3 + 1] * f,
-        off[a * 24 + i * 3 + 2] * g + off[a * 24 + j * 3 + 2] * f,
-      )
-      if (s > knock) knock = s
-    }
-    return knock
-  }
-
-  /** how far die i's centre is from die j's surface (as j is, unturned) */
-  gap(i: number, j: number) {
-    const { p, R } = this
-    const o = j * 9
-    const rx = p[i * 3] - p[j * 3]
-    const ry = p[i * 3 + 1] - p[j * 3 + 1]
-    const rz = p[i * 3 + 2] - p[j * 3 + 2]
-    const lx = Math.abs(R[o] * rx + R[o + 3] * ry + R[o + 6] * rz)
-    const ly = Math.abs(R[o + 1] * rx + R[o + 4] * ry + R[o + 7] * rz)
-    const lz = Math.abs(R[o + 2] * rx + R[o + 5] * ry + R[o + 8] * rz)
-    return Math.hypot(Math.max(0, lx - CORE), Math.max(0, ly - CORE), Math.max(0, lz - CORE)) - ROUND
+    super(start, BONE)
   }
 
   private noteKnock(key: number, speed: number, x: number, y: number, z: number) {
@@ -663,12 +197,9 @@ class World {
   /** every contact this step: corners on the felt and against the glass, then die against die */
   contacts() {
     const { p, off } = this
-    this.nc = 0
-    this.touching.fill(0)
-    this.onFloor.fill(0)
+    this.beginContacts()
     this.cornerNow.fill(0)
     this.glassNow.fill(0)
-    this.pairNow.fill(0)
     this.knock.fill(0)
     for (let i = 0; i < N; i++) {
       const px = p[i * 3]
@@ -717,18 +248,10 @@ class World {
         }
       }
     }
-    for (let pi = 0; pi < PAIRS.length; pi++) {
-      const [a, b] = PAIRS[pi]
-      const dx = p[a * 3] - p[b * 3]
-      const dy = p[a * 3 + 1] - p[b * 3 + 1]
-      const dz = p[a * 3 + 2] - p[b * 3 + 2]
-      if (dx * dx + dy * dy + dz * dz > PAIR_R2) continue
-      const before = this.nc
-      const s = Math.max(this.pair(a, b), this.pair(b, a))
-      if (this.nc > before) {
-        this.pairNow[pi] = 1
-        if (!this.pairWas[pi]) this.noteKnock(2 * N + pi, s, (p[a * 3] + p[b * 3]) / 2, (p[a * 3 + 1] + p[b * 3 + 1]) / 2, (p[a * 3 + 2] + p[b * 3 + 2]) / 2)
-      }
+    this.pairContacts()
+    for (let pi = 0; pi < this.pairs.length; pi++) {
+      const [a, b] = this.pairs[pi]
+      if (this.pairNow[pi] && !this.pairWas[pi]) this.noteKnock(2 * N + pi, this.pairSpeed[pi], (p[a * 3] + p[b * 3]) / 2, (p[a * 3 + 1] + p[b * 3 + 1]) / 2, (p[a * 3 + 2] + p[b * 3 + 2]) / 2)
     }
   }
 
@@ -739,74 +262,12 @@ class World {
       if (s < HIT_V || t - this.lastHit[key] < 0.04) continue
       this.lastHit[key] = t
       const on = key < N ? 'floor' : key < 2 * N ? 'glass' : 'die'
-      const die = key < 2 * N ? key % N : PAIRS[key - 2 * N][0]
+      const die = key < 2 * N ? key % N : this.pairs[key - 2 * N][0]
       this.hits.push({ t, v: s, die, on, x: this.knock[key * 4 + 1], y: this.knock[key * 4 + 2], z: this.knock[key * 4 + 3] })
     }
     this.cornerWas.set(this.cornerNow)
     this.glassWas.set(this.glassNow)
     this.pairWas.set(this.pairNow)
-  }
-
-  /** sequential impulses: each contact in turn pushes its bodies apart and holds them by friction */
-  solve() {
-    const { v, w, c } = this
-    const nc = this.nc
-    for (let it = 0; it < ITER; it++)
-      for (let n = 0; n < nc; n++) {
-        const o = n * F
-        const a = c[o + CA]
-        const b = c[o + CB]
-        for (let d = 0; d < 3; d++) {
-          const dx = c[o + NX + d * 3]
-          const dy = c[o + NX + d * 3 + 1]
-          const dz = c[o + NX + d * 3 + 2]
-          const ax = c[o + RAN + d * 3]
-          const ay = c[o + RAN + d * 3 + 1]
-          const az = c[o + RAN + d * 3 + 2]
-          let u = dx * v[a * 3] + dy * v[a * 3 + 1] + dz * v[a * 3 + 2] + ax * w[a * 3] + ay * w[a * 3 + 1] + az * w[a * 3 + 2]
-          let bx = 0
-          let by = 0
-          let bz = 0
-          if (b >= 0) {
-            bx = c[o + RBN + d * 3]
-            by = c[o + RBN + d * 3 + 1]
-            bz = c[o + RBN + d * 3 + 2]
-            u -= dx * v[b * 3] + dy * v[b * 3 + 1] + dz * v[b * 3 + 2] + bx * w[b * 3] + by * w[b * 3 + 1] + bz * w[b * 3 + 2]
-          }
-          let j: number
-          if (d === 0) {
-            // the normal: never pulls
-            const acc = c[o + JN]
-            const nj = Math.max(0, acc + (c[o + TGT] - u) * c[o + KN])
-            j = nj - acc
-            c[o + JN] = nj
-          } else {
-            // friction: no more than mu times the push
-            const slot = o + JN + d
-            const lim = c[o + MU] * c[o + JN]
-            const acc = c[slot]
-            let nj = acc - u * c[o + KN + d]
-            nj = nj < -lim ? -lim : nj > lim ? lim : nj
-            j = nj - acc
-            c[slot] = nj
-          }
-          if (j === 0) continue
-          v[a * 3] += j * dx
-          v[a * 3 + 1] += j * dy
-          v[a * 3 + 2] += j * dz
-          w[a * 3] += INV_I * j * ax
-          w[a * 3 + 1] += INV_I * j * ay
-          w[a * 3 + 2] += INV_I * j * az
-          if (b >= 0) {
-            v[b * 3] -= j * dx
-            v[b * 3 + 1] -= j * dy
-            v[b * 3 + 2] -= j * dz
-            w[b * 3] -= INV_I * j * bx
-            w[b * 3 + 1] -= INV_I * j * by
-            w[b * 3 + 2] -= INV_I * j * bz
-          }
-        }
-      }
   }
 
   /** gravity and the kick's pseudo-forces (the floor's push up and sideways, its rocking), before the contacts */
@@ -822,42 +283,6 @@ class World {
       v[i * 3 + 2] += (-az - alx * py) * DT
       w[i * 3] -= alx * DT
       w[i * 3 + 2] -= alz * DT
-    }
-  }
-
-  integrate() {
-    const { p, v, q, w } = this
-    for (let i = 0; i < N; i++) {
-      p[i * 3] += v[i * 3] * DT
-      p[i * 3 + 1] += v[i * 3 + 1] * DT
-      p[i * 3 + 2] += v[i * 3 + 2] * DT
-      if (this.onFloor[i]) {
-        const k = 1 - FELT_DRAG * DT
-        w[i * 3] *= k
-        w[i * 3 + 1] *= k
-        w[i * 3 + 2] *= k
-      }
-      const wx = w[i * 3]
-      const wy = w[i * 3 + 1]
-      const wz = w[i * 3 + 2]
-      let qx = q[i * 4]
-      let qy = q[i * 4 + 1]
-      let qz = q[i * 4 + 2]
-      let qw = q[i * 4 + 3]
-      const h = 0.5 * DT
-      const dx = h * (wx * qw + wy * qz - wz * qy)
-      const dy = h * (wy * qw + wz * qx - wx * qz)
-      const dz = h * (wz * qw + wx * qy - wy * qx)
-      const dw = h * (-wx * qx - wy * qy - wz * qz)
-      qx += dx
-      qy += dy
-      qz += dz
-      qw += dw
-      const l = 1 / Math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
-      q[i * 4] = qx * l
-      q[i * 4 + 1] = qy * l
-      q[i * 4 + 2] = qz * l
-      q[i * 4 + 3] = qw * l
     }
   }
 }
@@ -952,7 +377,7 @@ export function simulate(start: readonly Pose[], seed: number, quick = false, ma
       }
     }
     W.solve()
-    W.integrate()
+    W.integrate(FELT_DRAG)
 
     // flat on the felt: the faces can be read from here; and at rest, a little after the last kick
     let allFlat = true
@@ -970,7 +395,7 @@ export function simulate(start: readonly Pose[], seed: number, quick = false, ma
     still = allStill ? still + DT : 0
     if (still >= 0.15) {
       const end = (n - 1) / RATE
-      const final = settleFlat(pos, quat, n)
+      const final = settleFlat(pos, quat, n, N)
       if (!final) return null
       return {
         n,
@@ -988,58 +413,6 @@ export function simulate(start: readonly Pose[], seed: number, quick = false, ma
     }
   }
   return null
-}
-
-/**
- * The dice at the end, set exactly flat on the felt: the last tenth of a second of samples eased onto the flat poses
- * (a hair's correction: they are already still). Null if one is not lying flat on the floor.
- */
-function settleFlat(pos: Float32Array, quat: Float32Array, n: number): Pose[] | null {
-  const out: Pose[] = []
-  const K = Math.min(n - 1, Math.round(0.1 * RATE))
-  for (let i = 0; i < N; i++) {
-    const L = ((n - 1) * N + i) * 4
-    const q: Q = normQ([quat[L], quat[L + 1], quat[L + 2], quat[L + 3]])
-    const y = pos[((n - 1) * N + i) * 3 + 1]
-    if (tiltOf(q) > 0.03 || Math.abs(y - HALF) > 0.012) return null
-    // the small turn that stands its upper face exactly level
-    const upB = nearestAxis(rotate(qconj(q), [0, 1, 0]))
-    const now = rotate(q, upB)
-    const fix = fromTo(now, [0, 1, 0])
-    const flat = normQ(qmul(fix, q))
-    for (let j = 0; j < K; j++) {
-      const s = j + 1 === K ? 1 : smooth((j + 1) / K)
-      const at = n - K + j
-      const o = (at * N + i) * 4
-      const a: Q = [quat[o], quat[o + 1], quat[o + 2], quat[o + 3]]
-      quat.set(nlerp(a, flat, s), o)
-      const po = (at * N + i) * 3
-      pos[po + 1] += (HALF - pos[po + 1]) * s
-    }
-    const po = ((n - 1) * N + i) * 3
-    out.push({ x: pos[po], z: pos[po + 2], q: flat })
-  }
-  return out
-}
-
-/** the shortest turn taking unit vector a to unit vector b */
-function fromTo(a: V3, b: V3): Q {
-  const d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-  const cx = a[1] * b[2] - a[2] * b[1]
-  const cy = a[2] * b[0] - a[0] * b[2]
-  const cz = a[0] * b[1] - a[1] * b[0]
-  return normQ([cx, cy, cz, 1 + d])
-}
-
-const smooth = (t: number) => {
-  const u = Math.min(1, Math.max(0, t))
-  return u * u * (3 - 2 * u)
-}
-
-/** the normalised blend of two orientations, the short way round */
-function nlerp(a: Q, b: Q, t: number): Q {
-  const s = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3] < 0 ? -1 : 1
-  return normQ([a[0] + (b[0] * s - a[0]) * t, a[1] + (b[1] * s - a[1]) * t, a[2] + (b[2] * s - a[2]) * t, a[3] + (b[3] * s - a[3]) * t])
 }
 
 /* ---------------- landing on the drawn faces ---------------- */

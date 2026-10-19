@@ -3,7 +3,9 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { safeStorage } from '../lib/storage'
 import { round2 } from '../lib/format'
-import type { GameId } from './games'
+import { gameById, type GameId } from './games'
+import { rand } from '../lib/rng'
+import { LOG_SIZE, MISSION_MIN_BET, RAKEBACK, TIER_BONUS, WHEEL_PRIZES, dayKey, missionStep, missionTarget, missionText, missionsFor, msToMidnight, pickWheel, type RewardEntry, type RewardKind } from './rewards'
 
 /* ------------------------------------------------------------------ */
 /*  Economy tuning. Play money only, deliberately slow to earn.        */
@@ -68,6 +70,10 @@ export const TIERS = [
   { min: 40, name: 'Diamond', color: '#b892ff' },
 ] as const
 export const tierOf = (level: number) => [...TIERS].reverse().find((t) => level >= t.min)!
+/** the VIP tier's index in TIERS for a level (0 Bronze … 4 Diamond) */
+export const tierIndexOf = (level: number) => TIERS.reduce((i, t, k) => (level >= t.min ? k : i), 0)
+/** the share of each stake set aside as rakeback at this level */
+export const rakebackRate = (level: number) => RAKEBACK[tierIndexOf(level)]
 
 /** Bets below this don't count toward challenges, so they can't be farmed with tiny stakes. */
 export const CHALLENGE_MIN_BET = 25
@@ -302,6 +308,24 @@ export const CHALLENGES: Challenge[] = [
     step: (e, p) => (e.game === 'sicbo' && e.meta?.tripleWin === true ? 1 : p),
   },
   {
+    id: 'craps-hot',
+    game: 'craps',
+    title: 'Hot Shooter',
+    desc: 'Make 4 different points in one shooter’s hand in Craps.',
+    reward: 3000,
+    goal: 1,
+    step: (e, p) => (e.game === 'craps' && Number(e.meta?.points) >= 4 ? 1 : p),
+  },
+  {
+    id: 'lines-six',
+    game: 'lines',
+    title: 'Bingo Master',
+    desc: 'Complete 6 or more lines on one Lucky Lines card.',
+    reward: 3000,
+    goal: 1,
+    step: (e, p) => (e.game === 'lines' && Number(e.meta?.lines) >= 6 ? 1 : p),
+  },
+  {
     id: 'plunder-mult',
     game: 'plunder',
     title: 'Sea Legs',
@@ -380,6 +404,27 @@ export interface Toast {
   amount?: number
 }
 
+/** today's missions: progress and claims for the day they were drawn for (see src/store/rewards.ts) */
+export interface MissionState {
+  day: string
+  progress: number[]
+  claimed: boolean[]
+  /** games played today with a counting bet, for the variety mission */
+  games: string[]
+  /** the Lucky Wheel: unlocked by claiming all three, one spin a day */
+  wheel: 'locked' | 'ready' | 'spun'
+}
+
+/** a Lucky Wheel spin drawn and waiting to be collected (kept across days, so it is never lost) */
+export interface WheelSpin {
+  index: number
+  amount: number
+}
+
+const freshMissions = (day: string): MissionState => ({ day, progress: [0, 0, 0], claimed: [false, false, false], games: [], wheel: 'locked' })
+/** the stored missions if they are today's, or a fresh day */
+export const missionsToday = (m: MissionState | undefined, day = dayKey()): MissionState => (m && m.day === day ? m : freshMissions(day))
+
 interface WalletState {
   balance: number
   xp: number
@@ -395,10 +440,18 @@ interface WalletState {
   levelClaimed: number
   challenges: Record<string, { progress: number; claimed: boolean }>
   heist: HeistState
+  missions: MissionState
+  wheelSpin: WheelSpin | null
+  /** rakeback set aside and not yet claimed (kept to 4 decimals; claims pay whole cents) */
+  rakeback: number
+  /** the highest VIP tier whose one-time bonus has been claimed (0: none beyond Bronze) */
+  tierClaimed: number
+  /** the most recent rewards, newest first */
+  rewardLog: RewardEntry[]
   toasts: Toast[]
 
-  /** Deducts the stake. Returns false if the balance can't cover it. */
-  placeBet: (amount: number) => boolean
+  /** Deducts the stake. Returns false if the balance can't cover it (or it is under `min`, MIN_BET by default). */
+  placeBet: (amount: number, min?: number) => boolean
   /** Credits the payout (0 for a loss) and records the round. */
   settle: (ev: BetEvent) => void
   /** Refund without recording (e.g. a round that never started). */
@@ -411,6 +464,18 @@ interface WalletState {
   heistStart: () => boolean
   /** Ends a run: banks the loot (0 if the alarm went off) without counting it as a bet. */
   heistEnd: (vaults: number, loot: number) => void
+  /** claims mission i of today once it is complete; claiming the last one unlocks the Lucky Wheel */
+  claimMission: (i: number) => number
+  /** spins the Lucky Wheel if it is unlocked: the prize is drawn now and collected with collectWheel */
+  spinWheel: () => WheelSpin | null
+  /** pays a drawn Lucky Wheel prize */
+  collectWheel: () => number
+  /** pays the rakeback set aside, in whole cents */
+  claimRakeback: () => number
+  /** pays the bonus of every VIP tier reached and not yet claimed */
+  claimTierBonus: () => number
+  /** a new day: yesterday's finished missions are paid and an earned spin is spun (see rolloverState) */
+  rollover: () => void
   pushToast: (t: Omit<Toast, 'id'>) => void
   dismissToast: (id: number) => void
   reset: () => void
@@ -435,17 +500,73 @@ const initial = () => ({
   levelClaimed: 0,
   challenges: {} as Record<string, { progress: number; claimed: boolean }>,
   heist: { picks: HEIST_MAX_PICKS, at: 0, best: 0, earned: 0, runs: 0 } as HeistState,
+  missions: freshMissions(''),
+  wheelSpin: null as WheelSpin | null,
+  rakeback: 0,
+  tierClaimed: 0,
+  rewardLog: [] as RewardEntry[],
   toasts: [] as Toast[],
 })
+
+/** the history with a new entry on top */
+const logged = (log: RewardEntry[] | undefined, kind: RewardKind, amount: number, label: string) =>
+  [{ kind, amount, label, time: Date.now() }, ...(log ?? [])].slice(0, LOG_SIZE)
+
+/** VIP tiers reached at this level whose bonus hasn't been claimed: their indexes and the coins together */
+export function tierBonusDue(level: number, tierClaimed: number) {
+  const reached = tierIndexOf(level)
+  const tiers: number[] = []
+  for (let t = Math.max(1, (tierClaimed ?? 0) + 1); t <= reached; t++) tiers.push(t)
+  return { tiers, coins: tiers.reduce((a, t) => a + TIER_BONUS[t], 0) }
+}
+
+const missionTitle = (day: string, i: number) => {
+  const m = missionsFor(day)[i]
+  return m ? missionText(m, (id) => gameById(id)?.name ?? id).title : 'Daily mission'
+}
+
+/**
+ * What a new day does to rewards the old day left behind, so midnight never takes anything away: missions finished but
+ * not claimed are paid, and a Lucky Wheel spin that was earned (unlocked, or all three missions finished) but not taken
+ * is spun for the player: its prize waits to be collected like any other spin (or, if one is already waiting, is paid
+ * straight in). Null when the stored missions are already today's.
+ */
+export function rolloverState(s: Pick<WalletState, 'missions' | 'wheelSpin' | 'balance' | 'rewardLog'>, day = dayKey(), rng: () => number = rand) {
+  const old = s.missions
+  if (!old || old.day === day) return null
+  const fresh = { missions: freshMissions(day) }
+  if (!old.day) return { next: fresh, paid: 0, spin: null as WheelSpin | null }
+  const list = missionsFor(old.day)
+  const finished = list.map((mi, i) => old.claimed[i] || (old.progress[i] ?? 0) >= missionTarget(mi))
+  let paid = 0
+  let log = s.rewardLog
+  list.forEach((mi, i) => {
+    if (old.claimed[i] || (old.progress[i] ?? 0) < missionTarget(mi)) return
+    paid += mi.reward
+    log = logged(log, 'mission', mi.reward, missionTitle(old.day, i))
+  })
+  let spin: WheelSpin | null = null
+  let wheelSpin = s.wheelSpin
+  if (old.wheel === 'ready' || (old.wheel === 'locked' && finished.every(Boolean))) {
+    const index = pickWheel(rng)
+    spin = { index, amount: WHEEL_PRIZES[index].amount }
+    if (!wheelSpin) wheelSpin = spin
+    else {
+      paid += spin.amount
+      log = logged(log, 'wheel', spin.amount, 'Lucky Wheel')
+    }
+  }
+  return { next: { ...fresh, wheelSpin, balance: round2(s.balance + paid), rewardLog: log }, paid, spin }
+}
 
 export const useWallet = create<WalletState>()(
   persist(
     (set, get) => ({
       ...initial(),
 
-      placeBet: (amount) => {
+      placeBet: (amount, min = MIN_BET) => {
         amount = round2(amount)
-        if (!(amount >= MIN_BET) || amount > get().balance) return false
+        if (!(amount >= Math.max(0.01, min)) || amount > get().balance) return false
         set((s) => ({ balance: round2(s.balance - amount) }))
         return true
       },
@@ -453,6 +574,7 @@ export const useWallet = create<WalletState>()(
       refund: (amount) => set((s) => ({ balance: round2(s.balance + amount) })),
 
       settle: (ev) => {
+        get().rollover()
         const payout = round2(ev.payout)
         set((s) => {
           const counts = ev.bet >= CHALLENGE_MIN_BET
@@ -485,6 +607,13 @@ export const useWallet = create<WalletState>()(
             }
           }
           next.challenges = ch
+          // today's missions
+          const m = missionsToday(s.missions)
+          const games = ev.bet >= MISSION_MIN_BET && !m.games.includes(ev.game) ? [...m.games, ev.game] : m.games
+          const list = missionsFor(m.day)
+          next.missions = { ...m, games, progress: list.map((mi, i) => (m.claimed[i] ? m.progress[i] : missionStep(mi, ev, m.progress[i] ?? 0, games))) }
+          // rakeback, at the tier the player was at when the bet was placed
+          next.rakeback = Math.round(((s.rakeback ?? 0) + ev.bet * rakebackRate(levelFromXp(s.xp).level)) * 10000) / 10000
           return next
         })
       },
@@ -495,7 +624,7 @@ export const useWallet = create<WalletState>()(
         if (now - s.dailyLast < DAILY_COOLDOWN) return 0
         const streak = s.dailyLast && now - s.dailyLast < DAILY_STREAK_RESET ? Math.min(s.dailyStreak + 1, 7) : 1
         const amt = dailyReward(streak)
-        set({ balance: round2(s.balance + amt), dailyLast: now, dailyStreak: streak })
+        set({ balance: round2(s.balance + amt), dailyLast: now, dailyStreak: streak, rewardLog: logged(s.rewardLog, 'daily', amt, `Day ${streak} bonus`) })
         return amt
       },
 
@@ -503,7 +632,7 @@ export const useWallet = create<WalletState>()(
         const s = get()
         const now = Date.now()
         if (s.balance >= FAUCET_THRESHOLD || now - s.faucetLast < FAUCET_COOLDOWN) return 0
-        set({ balance: round2(s.balance + FAUCET_AMOUNT), faucetLast: now })
+        set({ balance: round2(s.balance + FAUCET_AMOUNT), faucetLast: now, rewardLog: logged(s.rewardLog, 'refill', FAUCET_AMOUNT, 'Emergency refill') })
         return FAUCET_AMOUNT
       },
 
@@ -512,7 +641,7 @@ export const useWallet = create<WalletState>()(
         const { level } = levelFromXp(s.xp)
         let total = 0
         for (let l = s.levelClaimed + 1; l <= level; l++) total += levelReward(l)
-        if (total > 0) set({ balance: round2(s.balance + total), levelClaimed: level })
+        if (total > 0) set({ balance: round2(s.balance + total), levelClaimed: level, rewardLog: logged(s.rewardLog, 'level', total, level - s.levelClaimed > 1 ? `Levels ${s.levelClaimed + 1} to ${level}` : `Level ${level}`) })
         return total
       },
 
@@ -521,7 +650,7 @@ export const useWallet = create<WalletState>()(
         const c = CHALLENGES.find((x) => x.id === id)
         const cur = s.challenges[id]
         if (!c || !cur || cur.claimed || cur.progress < c.goal) return 0
-        set({ balance: round2(s.balance + c.reward), challenges: { ...s.challenges, [id]: { ...cur, claimed: true } } })
+        set({ balance: round2(s.balance + c.reward), challenges: { ...s.challenges, [id]: { ...cur, claimed: true } }, rewardLog: logged(s.rewardLog, 'challenge', c.reward, c.title) })
         return c.reward
       },
 
@@ -543,8 +672,65 @@ export const useWallet = create<WalletState>()(
           return {
             balance: round2(s.balance + loot),
             heist: { ...h, best: Math.max(h.best, vaults), earned: round2(h.earned + loot), runs: h.runs + 1 },
+            rewardLog: loot > 0 ? logged(s.rewardLog, 'heist', loot, `Vault Heist: ${vaults} vault${vaults === 1 ? '' : 's'}`) : s.rewardLog,
           }
         })
+      },
+
+      claimMission: (i) => {
+        get().rollover()
+        const s = get()
+        const m = missionsToday(s.missions)
+        const mission = missionsFor(m.day)[i]
+        if (!mission || m.claimed[i] || (m.progress[i] ?? 0) < missionTarget(mission)) return 0
+        const claimed = m.claimed.map((c, k) => c || k === i)
+        const wheel = claimed.every(Boolean) && m.wheel === 'locked' ? 'ready' : m.wheel
+        set({ balance: round2(s.balance + mission.reward), missions: { ...m, claimed, wheel }, rewardLog: logged(s.rewardLog, 'mission', mission.reward, missionTitle(m.day, i)) })
+        return mission.reward
+      },
+
+      spinWheel: () => {
+        get().rollover()
+        const s = get()
+        const m = missionsToday(s.missions)
+        if (m.wheel !== 'ready' || s.wheelSpin) return null
+        const index = pickWheel(rand)
+        const spin = { index, amount: WHEEL_PRIZES[index].amount }
+        set({ missions: { ...m, wheel: 'spun' }, wheelSpin: spin })
+        return spin
+      },
+
+      collectWheel: () => {
+        const s = get()
+        const w = s.wheelSpin
+        if (!w) return 0
+        set({ balance: round2(s.balance + w.amount), wheelSpin: null, rewardLog: logged(s.rewardLog, 'wheel', w.amount, 'Lucky Wheel') })
+        return w.amount
+      },
+
+      claimRakeback: () => {
+        const s = get()
+        const amount = Math.floor((s.rakeback ?? 0) * 100) / 100
+        if (amount < 0.01) return 0
+        set({ balance: round2(s.balance + amount), rakeback: Math.round(((s.rakeback ?? 0) - amount) * 10000) / 10000, rewardLog: logged(s.rewardLog, 'rakeback', amount, 'VIP rakeback') })
+        return amount
+      },
+
+      claimTierBonus: () => {
+        const s = get()
+        const { tiers, coins } = tierBonusDue(levelFromXp(s.xp).level, s.tierClaimed)
+        if (!coins) return 0
+        const top = tiers[tiers.length - 1]
+        set({ balance: round2(s.balance + coins), tierClaimed: top, rewardLog: logged(s.rewardLog, 'tier', coins, tiers.length > 1 ? `${TIERS[tiers[0]].name} to ${TIERS[top].name} bonuses` : `${TIERS[top].name} bonus`) })
+        return coins
+      },
+
+      rollover: () => {
+        const r = rolloverState(get())
+        if (!r) return
+        set(r.next)
+        if (r.paid > 0) queueMicrotask(() => get().pushToast({ kind: 'reward', title: "Yesterday's finished missions were paid", amount: r.paid }))
+        else if (r.spin) queueMicrotask(() => get().pushToast({ kind: 'reward', title: "Yesterday's Lucky Wheel spin was spun for you: collect it in Rewards" }))
       },
 
       pushToast: (t) => {
@@ -598,6 +784,7 @@ export function switchWallet(key: string, data?: Record<string, unknown> | null)
   const clean = Object.fromEntries(Object.entries(src).filter(([k, v]) => k !== 'toasts' && typeof v !== 'function'))
   useWallet.persist.setOptions({ name: key })
   useWallet.setState({ ...initial(), ...clean, toasts: useWallet.getState().toasts } as Partial<WalletState>)
+  useWallet.getState().rollover()
 }
 
 /** Lockpicks ready right now, refreshed every 10 seconds. */
@@ -611,18 +798,64 @@ export function useHeistPicks() {
   return heist ? heistPicks(heist, now).picks : HEIST_MAX_PICKS
 }
 
-/** Claimable rewards count, for the badge on the Rewards button. */
+/** rakeback this large or more counts toward the Rewards badge (smaller amounts can still be claimed) */
+export const RAKEBACK_BADGE = 5
+
+/** Claimable rewards count, for the badge on the Rewards button. It also follows the clock (the daily bonus and a refill
+ *  opening, missions turning over at midnight), recounting every 20 seconds. */
 export function useClaimableCount() {
-  return useWallet((s) => {
-    const now = Date.now()
-    let n = 0
-    if (now - s.dailyLast >= DAILY_COOLDOWN) n++
-    if (levelFromXp(s.xp).level > s.levelClaimed) n++
-    if (s.balance < FAUCET_THRESHOLD && now - s.faucetLast >= FAUCET_COOLDOWN) n++
-    for (const c of CHALLENGES) {
-      const cur = s.challenges[c.id]
-      if (cur && !cur.claimed && cur.progress >= c.goal) n++
-    }
-    return n
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 20_000)
+    return () => clearInterval(t)
+  }, [])
+  return useWallet((s) => claimableCount(s, Date.now()))
+}
+
+/** How many rewards are ready to claim in this wallet at time `now` (what the badge shows). */
+export function claimableCount(s: WalletState, now: number) {
+  let n = 0
+  if (now - s.dailyLast >= DAILY_COOLDOWN) n++
+  if (levelFromXp(s.xp).level > s.levelClaimed) n++
+  if (s.balance < FAUCET_THRESHOLD && now - s.faucetLast >= FAUCET_COOLDOWN) n++
+  for (const c of CHALLENGES) {
+    const cur = s.challenges[c.id]
+    if (cur && !cur.claimed && cur.progress >= c.goal) n++
+  }
+  const m = missionsToday(s.missions, dayKey(now))
+  missionsFor(m.day).forEach((mi, i) => {
+    if (!m.claimed[i] && (m.progress[i] ?? 0) >= missionTarget(mi)) n++
   })
+  if (m.wheel === 'ready' || s.wheelSpin) n++
+  if ((s.rakeback ?? 0) >= RAKEBACK_BADGE) n++
+  if (tierBonusDue(levelFromXp(s.xp).level, s.tierClaimed).coins > 0) n++
+  return n
+}
+
+/* ------------------------------------------------------------------ */
+/*  Keeping up with other tabs and the clock                           */
+/* ------------------------------------------------------------------ */
+
+if (typeof window !== 'undefined') {
+  // another tab saved the wallet: follow it, so this tab never writes an older balance over it
+  window.addEventListener('storage', (e) => {
+    if (e.key && e.newValue != null && e.key === useWallet.persist.getOptions().name) void useWallet.persist.rehydrate()
+  })
+  // a new day turns the missions over (and pays what the old one left), on time or as soon as the page is back
+  const roll = () => useWallet.getState().rollover()
+  let midnight: ReturnType<typeof setTimeout> | null = null
+  const arm = () => {
+    if (midnight) clearTimeout(midnight)
+    midnight = setTimeout(() => {
+      roll()
+      arm()
+    }, msToMidnight() + 1000)
+  }
+  arm()
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return
+    roll()
+    arm()
+  })
+  setTimeout(roll, 0)
 }

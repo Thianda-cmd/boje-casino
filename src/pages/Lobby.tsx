@@ -3,7 +3,9 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { CATEGORIES, GAMES, type Category, type GameId } from '../store/games'
 import { navigate } from '../lib/router'
 import { GameCover, HeroRoad } from '../components/covers'
-import { DAILY_COOLDOWN, dailyReward, levelFromXp, tierOf, useWallet } from '../store/wallet'
+import { DAILY_COOLDOWN, dailyReward, levelFromXp, missionsToday, tierOf, useWallet } from '../store/wallet'
+import { dayKey, missionTarget, missionsFor } from '../store/rewards'
+import { dailyState } from './rewards/daily'
 import { Coin, IconChart, IconChevron, IconFire, IconGift, IconStar, IconTrophy } from '../components/icons'
 import { fmt, fmtDuration } from '../lib/format'
 import { BetsTable } from './History'
@@ -879,8 +881,25 @@ function DailyCard() {
   const now = useNow(1000)
   const dailyLast = useWallet((s) => s.dailyLast)
   const dailyStreak = useWallet((s) => s.dailyStreak)
-  const ready = now - dailyLast >= DAILY_COOLDOWN
-  const day = ready ? Math.min(dailyStreak + 1, 7) : dailyStreak
+  // the same rules as the Rewards page: a lapsed streak pays day 1 again
+  const { ready, alive, day } = dailyState(dailyLast, dailyStreak, now)
+  const lapsed = ready && dailyLast > 0 && !alive
+  // today's missions and the Lucky Wheel, teased under the streak (the full hub is on Rewards): the count on the left,
+  // what's next in a pill on the right (missions to claim, or the wheel's state), so it's never what gets cut off
+  const missions = useWallet((s) => s.missions)
+  const wheelSpin = useWallet((s) => s.wheelSpin)
+  const m = missionsToday(missions, dayKey(now))
+  const finished = missionsFor(m.day).map((mi, i) => m.claimed[i] || (m.progress[i] ?? 0) >= missionTarget(mi))
+  const unclaimed = finished.filter((f, i) => f && !m.claimed[i]).length
+  const wheel = wheelSpin
+    ? ['Prize waiting', 'bg-gold/15 text-gold']
+    : m.wheel === 'ready'
+      ? ['Spin ready', 'bg-[#ff5fa2]/15 text-[#ff8cc0]']
+      : unclaimed
+        ? [`${unclaimed} to claim`, 'bg-gold/15 text-gold']
+        : m.wheel === 'spun'
+          ? ['Spun today', 'bg-accent/12 text-accent']
+          : ['Wheel locked', 'bg-raised text-dim']
   return (
     <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-panel p-5 shadow-[0_24px_60px_-30px_rgba(0,0,0,.8)]">
       <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-gold/10 blur-2xl" />
@@ -894,7 +913,22 @@ function DailyCard() {
             <div key={i} className={`h-1.5 flex-1 rounded-full ${i < day ? 'bg-gold' : 'bg-raised'}`} />
           ))}
         </div>
-        <p className="mt-2 text-[12px] text-muted">Day {Math.max(1, day)} of a 7 day streak. Miss a day and it resets.</p>
+        <p className="mt-2 text-[12px] text-muted">{lapsed ? 'Your streak lapsed, so this is day 1 again.' : `Day ${Math.max(1, day)} of a 7 day streak. Miss a day and it resets.`}</p>
+        <button
+          onClick={() => navigate('/rewards')}
+          className="group mt-3 flex h-10 w-full items-center gap-2.5 rounded-lg bg-stage/80 px-3 text-left text-[12px] font-bold text-muted ring-1 ring-white/[.04] transition hover:text-ink"
+        >
+          <span className="flex shrink-0 gap-1">
+            {finished.map((f, i) => (
+              <span key={i} className={`h-2 w-2 rounded-full ${m.claimed[i] ? 'bg-accent' : f ? 'bg-gold' : 'bg-raised'}`} />
+            ))}
+          </span>
+          <span className="min-w-0 truncate">
+            Missions <span className="tnum text-ink">{finished.filter(Boolean).length}/3</span>
+          </span>
+          <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-extrabold ${wheel[1]}`}>{wheel[0]}</span>
+          <IconChevron size={14} className="-ml-1 shrink-0 transition-transform group-hover:translate-x-0.5" />
+        </button>
       </div>
       <button
         onClick={() => navigate('/rewards')}

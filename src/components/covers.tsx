@@ -20,6 +20,8 @@ import { bojeFacets } from '../art/brand'
 import { FaceDesign } from '../games/coinflip/art'
 import { ReefCover } from '../games/reef/cover'
 import { SicBoCover } from '../games/sicbo/cover'
+import { CrapsCover } from '../games/craps/cover'
+import { LinesCover } from '../games/lines/cover'
 
 /* Lobby art. Chicken Road keeps its pixel look; everything else is clean vector art on a bold gradient. */
 
@@ -76,6 +78,10 @@ export function GameCover({ id }: { id: GameId }) {
       return <ReefCover />
     case 'sicbo':
       return <SicBoCover />
+    case 'craps':
+      return <CrapsCover />
+    case 'lines':
+      return <LinesCover />
     case 'cases':
       return <CasesCover />
     case 'baccarat':

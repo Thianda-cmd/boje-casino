@@ -1,6 +1,8 @@
 import type { GameId } from '../store/games'
 import { ReefIcon } from '../games/reef/cover'
 import { SicBoIcon } from '../games/sicbo/cover'
+import { CrapsIcon } from '../games/craps/cover'
+import { LinesIcon } from '../games/lines/cover'
 
 // Small 20px monochrome icons for navigation.
 export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
@@ -173,6 +175,10 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
       return <ReefIcon {...p} />
     case 'sicbo':
       return <SicBoIcon {...p} />
+    case 'craps':
+      return <CrapsIcon {...p} />
+    case 'lines':
+      return <LinesIcon {...p} />
     case 'plunder':
       return (
         <svg {...p}>

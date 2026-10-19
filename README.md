@@ -1,9 +1,9 @@
 # Boje Casino (play money)
 
-A Stake-style casino with twenty-eight games. Originals: Chicken Road, Crash, Double, Coin Flip, Reef Raid, Mines, Plinko,
-Dice, Limbo, Keno, Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Table
-and machine games: Blackjack, Live Blackjack, Baccarat, Sic Bo, Roulette, Video Poker, Chompers, Pop Party, Robo Riot and
-Plunder Bay.
+A Stake-style casino with thirty games. Originals: Chicken Road, Crash, Double, Coin Flip, Reef Raid, Lucky Lines,
+Mines, Plinko, Dice, Limbo, Keno, Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and
+Scratch & Win. Table and machine games: Blackjack, Live Blackjack, Baccarat, Sic Bo, Craps, Roulette, Video Poker,
+Chompers, Pop Party, Robo Riot and Plunder Bay.
 Vault Heist is a free skill game that pays coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
 
@@ -15,7 +15,10 @@ browser (localStorage); signed-in players have it saved to their account.
 
 ## Stack
 Vite + React 19 + TypeScript, Tailwind CSS v4, Framer Motion, Zustand, supabase-js. Plinko and Crash draw on
-canvas; the slots (Chompers, Pop Party, Robo Riot and Plunder Bay) are three.js scenes, loaded only when the game opens. Hash
+canvas; the slots (Chompers, Pop Party, Robo Riot and Plunder Bay) are three.js scenes, loaded only when the game opens.
+The wallet is saved to localStorage in batches (src/lib/storage.ts): its writes, and Reef Raid's ledger with them, land
+together at the end of a task and at most every 250 ms while they keep coming, any other write lands them first, and
+hiding or leaving the page writes everything at once (`tools/storage-test.ts`). Hash
 routing and relative asset paths mean `dist/` works as-is inside Capacitor:
 
     npm i @capacitor/core @capacitor/cli && npx cap init "Boje Casino" com.example.boje --web-dir dist
@@ -133,13 +136,19 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
 ## Economy (src/store/wallet.ts)
 - Start with 1,000 coins.
 - Daily bonus: 100 → 500 over a 7-day streak, 22h cooldown, streak resets after 48h.
-- Levels: 1 XP per coin wagered, each level needs more XP; level-ups pay 75 × level. The VIP tiers (Bronze, Silver,
-  Gold, Platinum, Diamond at levels 0, 5, 12, 25, 40) are cosmetic badges and pay nothing extra.
+- Levels: 1 XP per coin wagered, each level needs more XP; level-ups pay 75 × level. VIP tiers (Bronze, Silver, Gold,
+  Platinum, Diamond at levels 0, 5, 12, 25, 40) set the rakeback rate (0.2%, 0.3%, 0.4%, 0.5%, 0.75% of every stake,
+  set aside as you play and claimable any time) and pay a one-time tier-up bonus (1,000, 3,000, 8,000 and 20,000).
+- Daily missions (src/store/rewards.ts): three a day, the same for everyone on a given date, one from each group
+  (play rounds or wager coins; play different games or the day's featured game; land a big multiple or win rounds),
+  paying 60 to 180 each; rounds count from 10-coin bets. Claiming all three unlocks one Lucky Wheel spin (50 to 1,000
+  coins, about 159 on average), drawn when spun and kept until collected. They reset at local midnight. The last 40
+  rewards are kept as a history.
 - Emergency refill: 50 coins, only below 10 coins, once per 30 minutes.
 - Vault Heist: crack up to eight dials by timing each pick; the bag holds 10, 25, 50, 90, 150, 250, 400 and 650
   coins after each vault, plus a bonus for each gold notch hit, banked whenever you like and lost on a miss. Three
   lockpicks, one back every 45 min; practice runs cost none and pay nothing.
-- Challenges: 29 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
+- Challenges: 31 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
   Crash, a 2% Dice win); Live Blackjack rounds count towards Explorer and High Roller. Only bets of 25+ count,
   except towards High Roller, which counts every bet.
 
@@ -275,6 +284,25 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   for 3 s) through a ledger that is saved as it changes, so a closed or crashed page refunds the torpedoes still in the
   water, pays any chest win still owed and records the shots that landed, once (`tools/reef-test.ts` checks every species' return exactly and by sampling, the wheel, and
   thousands of random sessions against a mock wallet: no coin is ever lost or invented).
+- Lucky Lines: a 5 × 5 bingo card (column c holds five numbers from 15c+1 to 15c+15) played with five reels, one per
+  column. Each spin lands, per reel, out of 15 + 1 + 0.25 + 0.5: one of the column's 15 numbers (marked if it is on
+  the card), a Joker (mark any number in that column), a Super Joker (any number on the card) or, on paid-up spins, a
+  Free Spin. Rows, columns and diagonals are lines; the ladder pays 0.3×, 0.75×, 1.5×, 2.5×, 5×, 10×, 20×, 40× and 80×
+  for 2 to 10 lines and 500× for a full card. A game is 10 spins plus free spins (1.75 a game on average); placing
+  jokers as suggested it returns 95.5% (3 million games, ±0.9; `tools/lines-sim.ts`). Then up to 10 extra spins can be
+  bought one at a time, each priced at the exact expected rise of the ladder over one spin (every combination of the
+  five reels counted, jokers placed as suggested) ÷ 0.97, so each returns 97% of its price. The game is saved after
+  every step and resumes after a reload (`tools/lines-test.ts` checks the cards, the reel weights, jokers, lines and
+  the ladder, and the extra spin's value against a simulation).
+- Craps (src/games/craps/rules.ts): Pass Line and Don't Pass (1.41% and 1.36% house edge), Come and Don't Come with
+  their own points, free odds behind them at true odds (3-4-5× behind pass, lays up to 6× the flat bet; 0% edge; come
+  odds off on the come-out), place bets (9:5, 7:5, 7:6; off on the come-out unless working), the Field (2 pays 2:1, 12
+  pays 3:1; 2.78%), hardways (7:1 and 9:1), one-roll props (Any 7 4:1, Any Craps 7:1, Aces and Boxcars 30:1, Ace-Deuce
+  and Yo 15:1) and the Fire Bet (4, 5 or 6 different points before a seven-out pay 24:1, 249:1, 999:1; returns 79.2%,
+  worked out by a Markov chain). Bets stay on the table across rolls and are saved; each roll is drawn when thrown
+  and applied once, even if the page closes mid-throw. A decided bet counts as one wager; a place bet that wins pays
+  and stays up (`tools/craps-test.ts` checks every bet on every roll from every table state against a direct reading
+  of the rules, the exact edges, the Fire Bet by simulation, and long random sessions for coin conservation).
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
 - Sic Bo: three dice, 52 spots: Small / Big and Odd / Even (1 to 1, lose on any triple), the totals 4 to 17 (50, 25,
   15, 10, 7, 6, 5 to 1 from the ends inwards), doubles (8 to 1), triples (160 to 1), any triple (24 to 1), the 15

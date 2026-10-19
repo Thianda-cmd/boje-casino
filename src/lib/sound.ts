@@ -2646,6 +2646,465 @@ export const sfx = {
       },
     }
   })(),
+  /* the Rewards page: the Lucky Wheel's pegs flicking the pointer (slowing as the wheel does), its landing and a prize
+     fanfare that grows with the prize, and the claims: missions, the wheel unlocking, rakeback, tier bonuses */
+  rewards: (() => {
+    const g = { tick: gate(24) }
+    const bell = (f: number, gain: number, delay = 0, len = 0.6) => {
+      tone(f, len, 'sine', gain, delay)
+      tone(f * 2.76, len * 0.5, 'sine', gain * 0.35, delay)
+      tone(f * 5.4, len * 0.25, 'sine', gain * 0.15, delay)
+    }
+    const coins = (n: number, delay = 0, gain = 0.012) => {
+      for (let i = 0; i < n; i++) {
+        const f = 2200 + Math.random() * 1200
+        tone(f, 0.06, 'square', gain, delay + i * 0.055 + Math.random() * 0.02)
+        tone(f * 1.34, 0.1, 'sine', gain * 1.2, delay + 0.02 + i * 0.055)
+      }
+    }
+    return {
+      // a peg flicks the pointer: a woody clack, a little brighter while the wheel is fast (speed 0..1)
+      tick: (speed = 0.5) => {
+        if (!g.tick()) return
+        const k = 0.85 + Math.min(1, Math.max(0, speed)) * 0.3
+        noise(0.016, 0.08, 2600 * k, 'bandpass')
+        tone(1250 * k, 0.028, 'triangle', 0.026)
+        tone(380 * k, 0.045, 'sine', 0.035, 0, 300 * k)
+      },
+      // the spin: a ratchet as the wheel is pulled back, then air rushing as it lets go
+      spin: () => {
+        for (let i = 0; i < 5; i++) noise(0.02, 0.06, 1900 + i * 320, 'bandpass', i * 0.04)
+        sweep(0.8, 0.06, 350, 2400, 'bandpass', 1.1, 0.2)
+        tone(200, 0.55, 'triangle', 0.025, 0.2, 640)
+      },
+      // the pointer drops into the winning slot: a soft clack and a bell
+      land: () => {
+        tone(170, 0.12, 'sine', 0.08, 0, 105)
+        noise(0.03, 0.07, 1700, 'bandpass')
+        bell(1319, 0.035, 0.06, 0.7)
+      },
+      // the prize, by size: a chime for a small one, an arpeggio and coins for a middling one, a sparkling run for 300,
+      // and brass over a cymbal swell for 500 and the 1,000
+      prize: (amount = 100) => {
+        if (amount < 150) {
+          ;[784, 988, 1319].forEach((f, i) => tone(f, 0.22, 'triangle', 0.045, i * 0.07))
+          coins(3, 0.2)
+          return
+        }
+        ;[523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, 'triangle', 0.05, i * 0.07))
+        coins(amount >= 300 ? 8 : 5, 0.24)
+        if (amount >= 300) [1568, 1976, 2349, 3136].forEach((f, i) => tone(f, 0.5, 'sine', 0.016, 0.34 + i * 0.06, undefined, [6, 8]))
+        if (amount >= 500) {
+          noise(0.7, 0.05, 6000, 'highpass', 0.3)
+          ;[392, 523, 659].forEach((f, i) => hold(f, 0.14, 'sawtooth', 0.014, 0.42 + i * 0.12))
+          ;[523, 659, 784, 1047].forEach((f) => hold(f, amount >= 1000 ? 1.3 : 0.8, 'sawtooth', 0.011, 0.8, f, [5, 4]))
+          tone(65, 1, 'sine', 0.09, 0.8, 49)
+        }
+        if (amount >= 1000) {
+          coins(10, 0.9, 0.011)
+          ;[2093, 2637, 3136, 4186].forEach((f, i) => tone(f, 1, 'sine', 0.012, 1 + i * 0.07, undefined, [6, 9]))
+        }
+      },
+      // a mission claimed: two bright bells and a coin
+      mission: () => {
+        bell(1047, 0.04)
+        bell(1568, 0.04, 0.09)
+        coins(2, 0.16)
+      },
+      // the third mission claimed: the wheel unlocks with a shimmer rising to a bright chord
+      unlock: () => {
+        sweep(0.55, 0.05, 600, 5200, 'bandpass', 1.6)
+        ;[659, 784, 988, 1319, 1568, 1976].forEach((f, i) => tone(f, 0.18, 'triangle', 0.035, 0.08 + i * 0.05))
+        ;[1319, 1661, 1976].forEach((f) => tone(f, 0.9, 'sine', 0.016, 0.42, undefined, [6, 9]))
+      },
+      // rakeback paid: coins trickling back, falling a little in pitch, then a soft bell
+      rakeback: () => {
+        for (let i = 0; i < 6; i++) {
+          const f = 2900 - i * 160
+          tone(f, 0.05, 'square', 0.012, i * 0.06)
+          tone(f * 1.34, 0.09, 'sine', 0.014, 0.02 + i * 0.06)
+        }
+        bell(988, 0.03, 0.38, 0.5)
+      },
+      // a VIP tier's bonus: a regal brass flourish over a low drum
+      tier: () => {
+        tone(73, 0.5, 'sine', 0.1, 0, 55)
+        ;[392, 523, 659].forEach((f, i) => hold(f, 0.13, 'sawtooth', 0.016, i * 0.11))
+        ;[523, 659, 784, 1047].forEach((f) => hold(f, 0.9, 'sawtooth', 0.012, 0.36, f, [5, 4]))
+        ;[1568, 2093, 2637].forEach((f, i) => tone(f, 0.8, 'sine', 0.014, 0.42 + i * 0.06, undefined, [6, 9]))
+        coins(6, 0.4)
+      },
+      // the wheel's prize taken, or Claim all: coins poured into the purse, more for more rewards
+      collect: (n = 1) => {
+        tone(1568, 0.06, 'square', 0.03)
+        tone(2093, 0.12, 'square', 0.03, 0.06)
+        coins(Math.min(12, 3 + n * 2), 0.1)
+      },
+    }
+  })(),
+  /**
+   * Craps' sounds: clay chips on felt, the dice rattled in the shooter's hand and let go, their knocks down the table
+   * (a muffled thud on the felt, a padded knock on the rail, a hard clack off the rubber pyramids, a click die on
+   * die), the stickman's stick, the puck, a little melodic sting for each call, the dealer's sweep and payout, the
+   * wins by tier and the Fire Bet catching light.
+   */
+  craps: (() => {
+    const g = { felt: gate(32), wall: gate(30), back: gate(26), die: gate(28), chip: gate(30), count: gate(45), knock: gate(40) }
+    /** a marimba-ish note: a sine with a quick knock of its octave on top */
+    const mallet = (f: number, gain: number, delay = 0, len = 0.32) => {
+      tone(f, len, 'sine', gain, delay)
+      tone(f * 4, 0.05, 'sine', gain * 0.35, delay)
+      tone(f * 2, len * 0.6, 'triangle', gain * 0.25, delay)
+    }
+    return {
+      // a chip set on a spot: a clay clack on felt
+      chip: () => {
+        if (!g.chip()) return
+        noise(0.022, 0.1, 3300, 'bandpass')
+        tone(2300, 0.03, 'triangle', 0.015)
+        tone(1600, 0.05, 'sine', 0.018, 0.016)
+      },
+      // a chip taken back off: the same clack, softer, sliding away
+      remove: () => {
+        noise(0.03, 0.06, 2100, 'bandpass')
+        tone(1450, 0.07, 'sine', 0.016, 0, 1000)
+      },
+      // a chip the table won't take
+      nope: () => tone(233, 0.1, 'triangle', 0.045, 0, 165),
+      // the stickman's stick pushes the dice back over the felt
+      collect: () => {
+        sweep(0.55, 0.022, 900, 320, 'lowpass', 0.7)
+        noise(0.05, 0.035, 1500, 'bandpass', 0.46)
+        tone(1250, 0.03, 'triangle', 0.008, 0.48)
+      },
+      // the dice rattled in the shooter's closed hand: a quick run of knocks, then the hand opens
+      shake: (dur = 0.42) => {
+        const n = Math.max(4, Math.round(dur / 0.05))
+        for (let i = 0; i < n; i++) {
+          const t = i * (dur / n) + Math.random() * 0.012
+          noise(0.014, 0.045 + Math.random() * 0.035, 2400 + Math.random() * 1600, 'bandpass', t)
+          if (i % 2) tone(1300 + Math.random() * 600, 0.022, 'triangle', 0.007, t)
+        }
+      },
+      // the dice leave the hand: a soft whoosh
+      release: () => sweep(0.3, 0.028, 450, 2300, 'bandpass', 1.1),
+      // a knock (k 0-1, how hard): the felt, the padded rail, the rubber pyramids of the backboard, the other die
+      hit: (on: 'felt' | 'wall' | 'back' | 'die', k: number) => {
+        if (k < 0.06) return
+        if (on === 'felt') {
+          if (!g.felt()) return
+          noise(0.05, 0.03 + 0.09 * k, 480, 'lowpass')
+          tone(140, 0.06, 'sine', 0.012 + 0.03 * k, 0, 85)
+        } else if (on === 'wall') {
+          if (!g.wall()) return
+          noise(0.03, 0.04 + 0.08 * k, 900, 'lowpass')
+          tone(310 + Math.random() * 60, 0.07, 'triangle', 0.012 + 0.025 * k, 0, 200)
+        } else if (on === 'back') {
+          if (!g.back()) return
+          noise(0.016, 0.06 + 0.12 * k, 3000 + Math.random() * 1200, 'bandpass')
+          tone(720 + Math.random() * 160, 0.05, 'square', 0.006 + 0.014 * k, 0, 520)
+          tone(190, 0.07, 'sine', 0.02 + 0.03 * k, 0.004, 120)
+        } else {
+          if (!g.die()) return
+          noise(0.016, 0.04 + 0.1 * k, 2700 + Math.random() * 900, 'bandpass')
+          tone(1300 + Math.random() * 450, 0.034, 'triangle', 0.01 + 0.022 * k)
+        }
+      },
+      // the dice lie still and can be read
+      settle: () => {
+        tone(98, 0.16, 'sine', 0.045, 0, 70)
+        tone(1175, 0.3, 'sine', 0.012, 0.04)
+      },
+      // the dealer sets the puck down, flipped ON or OFF
+      puck: (on: boolean) => {
+        if (!g.knock()) return
+        noise(0.02, 0.08, 1700, 'bandpass')
+        tone(on ? 920 : 620, 0.05, 'triangle', 0.02)
+        tone(240, 0.09, 'sine', 0.035, 0.012, 170)
+      },
+      // the stickman's call, as a little sting: a natural rises, craps sags, the point is marked with two firm notes,
+      // a point made gets a fanfare, a seven-out falls away; any other roll a single note by its total (a pair
+      // sparkles)
+      call: (event: 'natural' | 'craps' | 'point-set' | 'point-made' | 'seven-out' | 'roll', total: number, hard: boolean) => {
+        switch (event) {
+          case 'natural':
+            ;[659, 831, 988, 1319].forEach((f, i) => mallet(f, 0.04, i * 0.065))
+            break
+          case 'craps':
+            mallet(392, 0.045)
+            mallet(370, 0.04, 0.13)
+            tone(185, 0.4, 'triangle', 0.03, 0.26, 150)
+            break
+          case 'point-set':
+            mallet(523, 0.045)
+            mallet(784, 0.05, 0.12, 0.45)
+            break
+          case 'point-made':
+            ;[523, 659, 784].forEach((f, i) => mallet(f, 0.045, i * 0.07))
+            ;[523, 659, 784, 1047].forEach((f) => hold(f, 0.7, 'triangle', 0.012, 0.24, undefined, [5, 3]))
+            break
+          case 'seven-out':
+            ;[659, 523, 440, 349].forEach((f, i) => mallet(f, 0.042, i * 0.11, 0.4))
+            tone(87, 0.6, 'sine', 0.06, 0.4, 60)
+            break
+          default:
+            mallet(330 * 2 ** ((total - 2) / 12), 0.035)
+            if (hard) [1568, 2093, 2637].forEach((f, i) => tone(f, 0.22, 'sine', 0.012, 0.08 + i * 0.05))
+        }
+      },
+      // the dealer sweeps the losing chips off to the house
+      sweep: () => {
+        sweep(0.34, 0.04, 2500, 800, 'bandpass', 1.2)
+        ;[2800, 2400].forEach((f, i) => tone(f, 0.03, 'square', 0.009, 0.1 + i * 0.09))
+      },
+      // winnings slide in beside the winning stakes: a run of chip clicks
+      pay: () => {
+        noise(0.2, 0.035, 1600, 'bandpass')
+        ;[2700, 3150, 2900, 3300].forEach((f, i) => tone(f, 0.03, 'square', 0.011, 0.06 + i * 0.055))
+      },
+      // the win, by tier: 0 a plain win (bigger for a win over the stakes), 1 Big, 2 Huge, 3 Massive
+      win: (tier: number) => {
+        if (tier <= 0) {
+          ;[784, 988, 1175].forEach((f, i) => tone(f, 0.24, 'triangle', 0.045, i * 0.07))
+          tone(2349, 0.45, 'sine', 0.011, 0.22)
+          return
+        }
+        if (tier >= 3) reverseCymbal(0.6, 0.05)
+        const lead = tier >= 3 ? 0.6 : 0
+        ;[523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.24, 'triangle', 0.06, lead + i * 0.07))
+        ;[523, 659, 784, 1047].forEach((f) => hold(f, 0.9 + tier * 0.3, 'triangle', 0.016, lead + 0.36, undefined, [5, 3]))
+        ;[2093, 2637, 3136].forEach((f, i) => tone(f, 0.9, 'sine', 0.01, lead + 0.42 + i * 0.08, undefined, [6, 8]))
+        if (tier >= 2) tone(65, 1.2, 'sine', 0.1, lead + 0.34, 46)
+      },
+      // a big win counted up (p 0-1): ticks that climb
+      count: (p: number) => {
+        if (!g.count()) return
+        tone(1150 + p * 900, 0.04, 'square', 0.011)
+      },
+      // a point made lights the Fire Bet's square (n: points made so far, 1-6): a flame's whoosh and a bell that
+      // climbs with every point; the payouts get a roar
+      fire: (n: number) => {
+        sweep(0.45, 0.03 + 0.008 * n, 300, 2600, 'bandpass', 0.9)
+        crackle(0.3 + 0.05 * n, 0.012 + 0.003 * n, 0.05)
+        const f = 587 * 2 ** ([0, 2, 4, 7, 9, 12][Math.max(0, Math.min(5, n - 1))] / 12)
+        tone(f, 0.6, 'sine', 0.025, 0.08, undefined, [6, 6])
+        tone(f * 1.5, 0.5, 'sine', 0.012, 0.12)
+        if (n >= 4) {
+          noise(0.9, 0.05, 260, 'lowpass', 0.1)
+          ;[1047, 1319, 1568, 2093].forEach((x, i) => tone(x, 0.7, 'sine', 0.012, 0.2 + i * 0.06, undefined, [6, 7]))
+        }
+      },
+    }
+  })(),
+  /* lucky lines: the reels' whirr and wooden stops (a shimmer rising under a teased one), the dauber's stamp (higher
+     the fuller its line), a chime run for a line and a brassy step up the ladder, the jester's bells for a Joker
+     (golden ones for a Super Joker), a torn ticket for a free spin, a coin for a bought spin, coins for the collect
+     and the big wins by tier. Its own compressor, like Pop Party's, so five stops, daubs and a chime at once never
+     clip; the voices here are local so nothing else is routed through it. */
+  lines: (() => {
+    let bus: AudioNode | null = null
+    const linesOut = (a: AudioContext) => {
+      if (!bus) {
+        const c = a.createDynamicsCompressor()
+        c.threshold.value = -15
+        c.knee.value = 10
+        c.ratio.value = 4
+        c.attack.value = 0.003
+        // opens instantly for its first moments (see the party bus), then settles to the real release
+        c.release.value = 0
+        c.release.setValueAtTime(0.16, a.currentTime + 0.06)
+        const trim = a.createGain()
+        trim.gain.value = 0.72
+        c.connect(trim).connect(a.destination)
+        bus = c
+      }
+      return bus
+    }
+    /** a note: quick attack, exponential fall over `dur` */
+    const v = (f: number, dur: number, type: OscillatorType, gain: number, delay = 0, slideTo?: number, vib?: [number, number]) => {
+      const a = ac()
+      if (!a) return
+      const t = a.currentTime + delay
+      const o = osc(a, t, f, dur, type, slideTo, vib)
+      const g = a.createGain()
+      g.gain.setValueAtTime(0.0001, t)
+      g.gain.exponentialRampToValueAtTime(gain, t + 0.008)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+      o.connect(g).connect(linesOut(a))
+    }
+    /** a burst of filtered noise, falling away */
+    const n = (dur: number, gain: number, freq: number, kind: BiquadFilterType = 'lowpass', delay = 0, q = 1) => {
+      const a = ac()
+      if (!a) return
+      const len = Math.max(1, Math.floor(a.sampleRate * dur))
+      const buf = a.createBuffer(1, len, a.sampleRate)
+      const d = buf.getChannelData(0)
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2
+      const src = a.createBufferSource()
+      src.buffer = buf
+      const fl = a.createBiquadFilter()
+      fl.type = kind
+      fl.frequency.value = freq
+      fl.Q.value = q
+      const g = a.createGain()
+      g.gain.value = gain
+      src.connect(fl).connect(g).connect(linesOut(a))
+      src.start(a.currentTime + delay)
+    }
+    /** noise whose filter glides from f0 to f1 (a whirr, a tear, a whoosh); `up` swells to the end and stops dead */
+    const sw = (dur: number, gain: number, f0: number, f1: number, kind: BiquadFilterType = 'bandpass', q = 1, delay = 0, up = false) => {
+      const a = ac()
+      if (!a) return
+      const t = a.currentTime + delay
+      const fl = noiseThrough(a, t, dur + 0.02, kind, f0, q)
+      fl.frequency.exponentialRampToValueAtTime(f1, t + dur)
+      const g = a.createGain()
+      g.gain.setValueAtTime(0.0001, t)
+      if (up) {
+        g.gain.exponentialRampToValueAtTime(gain, t + dur)
+        g.gain.linearRampToValueAtTime(0, t + dur + 0.02)
+      } else {
+        g.gain.linearRampToValueAtTime(gain, t + dur * 0.2)
+        g.gain.linearRampToValueAtTime(0, t + dur)
+      }
+      fl.connect(g).connect(linesOut(a))
+    }
+    /** a little bell: the strike and its bright partials */
+    const bell = (f: number, gain: number, delay = 0, len = 0.5) => {
+      v(f, len, 'sine', gain, delay)
+      v(f * 2.76, len * 0.5, 'sine', gain * 0.4, delay)
+      v(f * 5.4, len * 0.25, 'sine', gain * 0.18, delay)
+    }
+    const ping = (f: number, gain: number, delay: number) => {
+      v(f, 0.1, 'square', gain * 0.45, delay)
+      v(f * 1.5, 0.2, 'sine', gain, delay + 0.035)
+    }
+    /** a brass-ish held note */
+    const horn = (f: number, dur: number, gain: number, delay = 0) => {
+      v(f, dur, 'sawtooth', gain, delay, undefined, [5, 3])
+      v(f * 1.004, dur, 'sawtooth', gain * 0.6, delay)
+      v(f * 2, Math.min(dur, 0.3), 'triangle', gain * 0.7, delay)
+    }
+    const gt = { stop: gate(25), daub: gate(30), count: gate(40), line: gate(80) }
+    // C major pentatonic, rising: the stamps and the chimes climb it as the card fills
+    const PENTA = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760, 2093]
+    const note = (i: number) => PENTA[Math.max(0, Math.min(PENTA.length - 1, i))]
+    return {
+      // the reels kick off: a whirr rising under a soft clatter
+      spin: (quick = false) => {
+        sw(quick ? 0.3 : 0.45, 0.05, 300, 1800, 'bandpass', 1.2)
+        v(140, quick ? 0.25 : 0.4, 'sawtooth', 0.012, 0, 260)
+        for (let i = 0; i < 4; i++) n(0.02, 0.04, 2500, 'bandpass', i * 0.05, 2)
+      },
+      // reel i stops: a wooden clunk, a little higher reel by reel
+      stop: (i = 0) => {
+        if (!gt.stop()) return
+        const k = 2 ** ((i * 2) / 12)
+        v(170 * k, 0.09, 'sine', 0.09, 0, 95 * k)
+        n(0.04, 0.09, 1400 * k, 'bandpass', 0, 1.5)
+        v(880 * k, 0.05, 'triangle', 0.02)
+      },
+      // a reel that could finish a line crawls to its stop: a shimmer rising
+      tease: () => {
+        v(392, 0.75, 'triangle', 0.025, 0, 784, [9, 6])
+        v(588, 0.75, 'sine', 0.012, 0, 1176, [9, 9])
+        sw(0.75, 0.025, 1500, 5000, 'bandpass', 2)
+      },
+      // the dauber's stamp: a wet thump and a pop, higher the fuller its fullest line (1-5); a joker's rings a bell too
+      daub: (fill = 1, joker = false) => {
+        if (!gt.daub()) return
+        const f = note((fill - 1) * 2)
+        v(150, 0.1, 'sine', 0.12, 0, 70)
+        n(0.07, 0.12, 900, 'lowpass')
+        n(0.03, 0.05, 3500, 'bandpass', 0.005, 2)
+        v(f, 0.16, 'triangle', 0.05, 0.01, f * 1.02)
+        v(f * 2, 0.1, 'sine', 0.018, 0.01)
+        if (joker) bell(f * 1.5, 0.03, 0.04, 0.4)
+      },
+      // `fresh` lines finished at once (`total` on the card): a chime run, longer for more, higher as lines add up
+      line: (fresh = 1, total = 1) => {
+        if (!gt.line()) return
+        const base = Math.min(4, total - 1)
+        const notes = 3 + Math.min(3, fresh)
+        for (let i = 0; i < notes; i++) v(note(base + i), 0.3, 'triangle', 0.045, i * 0.055)
+        bell(note(base + notes), 0.03, notes * 0.055, 0.8)
+        n(0.4, 0.02, 7000, 'highpass', 0.05)
+      },
+      // the ladder steps up (to step s, 0-9): a brassy pair, higher each step
+      step: (s = 0) => {
+        const f = 261.63 * 2 ** ((Math.min(9, s) * 2) / 12)
+        horn(f, 0.12, 0.016)
+        horn(f * 1.5, 0.34, 0.018, 0.09)
+      },
+      // a Joker lands: the jester's bells jingle over a springy boing
+      joker: () => {
+        for (let i = 0; i < 6; i++) bell(2400 + (i % 3) * 300 + Math.random() * 80, 0.016, i * 0.045, 0.22)
+        v(260, 0.25, 'sine', 0.05, 0.02, 620, [14, 25])
+      },
+      // a Super Joker: golden bells climbing, a sweep and a sparkle
+      superJoker: () => {
+        ;[784, 988, 1175, 1568, 1976].forEach((f, i) => bell(f, 0.028, i * 0.06, 0.6))
+        sw(0.5, 0.03, 1200, 7000, 'bandpass', 1.5)
+        for (let i = 0; i < 6; i++) v(3000 + i * 400, 0.08, 'sine', 0.012, 0.3 + i * 0.04)
+      },
+      // a joker sent to its number: a cheeky slide whistle (the stamp follows as it lands)
+      placed: () => v(500, 0.16, 'sine', 0.035, 0, 1100),
+      // a free spin: a ticket torn off and a happy two-note ding
+      free: () => {
+        sw(0.16, 0.06, 2500, 800, 'bandpass', 1.4)
+        v(1047, 0.16, 'triangle', 0.05, 0.1)
+        v(1568, 0.35, 'triangle', 0.05, 0.2)
+        bell(2093, 0.02, 0.2, 0.5)
+      },
+      // a fresh card is dealt: a paper flick and a riffle
+      deal: () => {
+        n(0.06, 0.07, 3000, 'bandpass', 0, 1.2)
+        for (let i = 0; i < 5; i++) n(0.025, 0.035, 2200 + i * 300, 'bandpass', 0.05 + i * 0.03, 1.5)
+      },
+      // an extra spin bought: a coin into the slot
+      buy: () => {
+        v(2093, 0.06, 'square', 0.02)
+        v(2637, 0.12, 'square', 0.018, 0.05)
+        v(160, 0.1, 'sine', 0.05, 0.16, 90)
+      },
+      // collected, under a big win: a little fanfare and coins into the purse
+      collect: (mult = 1) => {
+        ;[784, 988, 1175, 1568].forEach((f, i) => v(f, 0.18, 'triangle', 0.04, i * 0.07))
+        const k = Math.min(10, 3 + Math.round(mult * 2))
+        for (let i = 0; i < k; i++) ping(1800 + Math.random() * 900, 0.02, 0.25 + i * 0.05)
+      },
+      // collected with nothing: a soft "aww"
+      over: () => {
+        v(440, 0.24, 'triangle', 0.03, 0, 415, [5, 6])
+        v(370, 0.45, 'triangle', 0.03, 0.22, 330, [5, 9])
+      },
+      // a game picked up again: a soft rising chime
+      welcome: () => [659, 880, 1175].forEach((f, i) => v(f, 0.25, 'sine', 0.03, i * 0.08)),
+      // the big win's amount rolling up
+      count: () => {
+        if (!gt.count()) return
+        v(1400 + Math.random() * 300, 0.04, 'square', 0.012)
+      },
+      // the big wins: Big (1), Mega (2), the full card (3)
+      bigWin: (tier = 1) => {
+        ;[523, 659, 784, 1047].forEach((f, i) => v(f, 0.16, 'triangle', 0.055, i * 0.08))
+        ;[1047, 1319, 1568].forEach((f) => v(f, 0.8, 'triangle', 0.03, 0.34))
+        for (let i = 0; i < 8; i++) ping(2000 + Math.random() * 1200, 0.016, 0.4 + i * 0.06)
+        if (tier >= 2) {
+          ;[392, 523, 659].forEach((f, i) => horn(f, 0.12, 0.014, i * 0.1))
+          horn(784, 0.7, 0.016, 0.32)
+          ;[2093, 2637, 3136, 2637, 3136, 4186].forEach((f, i) => v(f, 0.12, 'sine', 0.016, 0.6 + i * 0.06))
+        }
+        if (tier >= 3) {
+          sw(0.6, 0.05, 3000, 9000, 'highpass', 0.7, 0, true)
+          ;[523, 659, 784, 1047, 1319].forEach((f, i) => horn(f, i === 4 ? 1.4 : 0.14, 0.013, 0.7 + i * 0.1))
+          ;[1568, 2093, 2637, 3136].forEach((f, i) => v(f, 1.4, 'sine', 0.014, 1.1 + i * 0.05, undefined, [6, 9]))
+          v(65, 1.4, 'sine', 0.12, 0.7, 49)
+          n(1.0, 0.04, 6000, 'highpass', 1.1)
+        }
+      },
+    }
+  })(),
   /* sic bo: clay chips on the felt, the crack and thunder of the lucky strikes, the dome's rattle and every knock of
      the dice on the glass, the felt and each other, the dealer's sweep and payout, and the wins by tier */
   sicbo: (() => {

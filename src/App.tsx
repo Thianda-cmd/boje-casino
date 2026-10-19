@@ -42,6 +42,8 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   plunder: lazy(() => import('./games/plunder/Plunder')),
   reef: lazy(() => import('./games/reef/Reef')),
   sicbo: lazy(() => import('./games/sicbo/SicBo')),
+  craps: lazy(() => import('./games/craps/Craps')),
+  lines: lazy(() => import('./games/lines/LuckyLines')),
   penalty: lazy(() => import('./games/penalty/Penalty')),
   scratch: lazy(() => import('./games/scratch/Scratch')),
   battles: lazy(() => import('./games/battles/CaseBattles')),
