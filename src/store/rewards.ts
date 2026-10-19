@@ -173,7 +173,7 @@ export const TIER_BONUS = [0, 1000, 3000, 8000, 20000] as const
 
 /* ---------------- the reward history ---------------- */
 
-export type RewardKind = 'daily' | 'level' | 'refill' | 'challenge' | 'mission' | 'wheel' | 'rakeback' | 'tier' | 'heist'
+export type RewardKind = 'daily' | 'level' | 'refill' | 'challenge' | 'mission' | 'wheel' | 'rakeback' | 'tier' | 'heist' | 'tycoon'
 
 export interface RewardEntry {
   kind: RewardKind

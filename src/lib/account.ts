@@ -1,6 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { apiUrl, backend, backendConfig, fetchWithTimeout, rpc, type BackendConfig } from './backend'
 import { safeStorage } from './storage'
+import { round2 } from './format'
 import { useAuth, type Profile } from '../store/auth'
 import { accountWalletKey, GUEST_WALLET_KEY, switchWallet, useWallet, walletSnapshot } from '../store/wallet'
 
@@ -40,6 +41,8 @@ let firstChange = 0
 let unsubscribe: (() => void) | null = null
 let applying = false
 let resetGuestOnEnter = false
+/** the guest balance sent with a sign-up: play that moves it before the account opens is carried over (enterAccount) */
+let signupBalance: number | null = null
 let entering: string | null = null
 
 const writeMeta = () => {
@@ -123,6 +126,9 @@ async function enterAccount(uid: string, email: string | null, metaName: string 
   const meta = readMeta(uid)
   const cached = safeStorage.getItem(key)
   stopSync()
+  // a game that settled (or staked) while the sign-up was on its way moved the guest balance after the snapshot the
+  // account was made from: that difference comes along
+  const carryDelta = resetGuestOnEnter && signupBalance !== null && Number.isFinite(signupBalance) ? round2(useWallet.getState().balance - signupBalance) : 0
   if (prof) {
     const server = prof.wallet && Object.keys(prof.wallet).length ? prof.wallet : null
     // keep unsaved play from this device if nobody has saved since; otherwise the server copy wins
@@ -151,6 +157,12 @@ async function enterAccount(uid: string, email: string | null, metaName: string 
   writeMeta()
   if (resetGuestOnEnter) {
     resetGuestOnEnter = false
+    signupBalance = null
+    if (carryDelta) {
+      useWallet.setState((w) => ({ balance: Math.max(0, round2(w.balance + carryDelta)) }))
+      // sync is not listening yet: make sure this gets saved
+      dirty = true
+    }
     safeStorage.removeItem(GUEST_WALLET_KEY)
     // Live Blackjack moves the guest's open stakes into this account (games/livebj/ledger.ts)
     safeStorage.setItem(CARRIED_KEY, JSON.stringify({ to: uid, at: Date.now() }))
@@ -300,6 +312,7 @@ export const authMessage = (code: string) => MESSAGES[code] ?? MESSAGES.server
 export async function register(input: { email: string; password: string; username: string; avatar: number }): Promise<AuthResult> {
   if (!sb) return { ok: false, error: 'offline' }
   const guest = useAuth.getState().status === 'guest' ? walletSnapshot() : null
+  signupBalance = guest ? Number(guest.balance) : null
   let res: Response
   try {
     res = await fetchWithTimeout(

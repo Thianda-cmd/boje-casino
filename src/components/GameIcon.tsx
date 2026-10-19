@@ -3,6 +3,7 @@ import { ReefIcon } from '../games/reef/cover'
 import { SicBoIcon } from '../games/sicbo/cover'
 import { CrapsIcon } from '../games/craps/cover'
 import { LinesIcon } from '../games/lines/cover'
+import { HoldemIcon } from '../games/holdem/cover'
 
 // Small 20px monochrome icons for navigation.
 export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
@@ -179,6 +180,8 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
       return <CrapsIcon {...p} />
     case 'lines':
       return <LinesIcon {...p} />
+    case 'holdem':
+      return <HoldemIcon {...p} />
     case 'plunder':
       return (
         <svg {...p}>

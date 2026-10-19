@@ -8,6 +8,7 @@
   Collect, a tier bonus), and the coins should still fly, past the edge of their card. Everything animates with
   transform and opacity only, and there are no sprays when the player asks for reduced motion.
 */
+import { TycoonIcon } from '../../games/tycoon/icon'
 import { useCallback, useEffect, useRef, useState, type ReactNode, type SVGProps } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -409,6 +410,7 @@ export const KINDS: Record<RewardKind, { name: string; one: string; color: strin
   rakeback: { name: 'Rakeback', one: 'Rakeback', color: '#2fd6c3', icon: (s) => <IconReturn size={s} /> },
   challenge: { name: 'Challenges', one: 'Challenge', color: '#ffb02e', icon: (s) => <IconTrophy size={s} /> },
   heist: { name: 'Vault Heist', one: 'Vault Heist', color: '#ff9a52', icon: (s) => <IconVault size={s} /> },
+  tycoon: { name: 'Casino Tycoon', one: 'Casino Tycoon', color: '#f5b83d', icon: (s) => <TycoonIcon width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /> },
   refill: { name: 'Refills', one: 'Refill', color: '#4cb4ff', icon: (s) => <IconBolt size={s} /> },
 }
 

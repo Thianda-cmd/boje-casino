@@ -15,7 +15,7 @@ import { DailyMissions } from './rewards/DailyMissions'
 import { DailyBonus } from './rewards/DailyBonus'
 import { RewardLog } from './rewards/RewardLog'
 import { RakebackCard, TierBonusCard, VipCard } from './rewards/Vip'
-import { HeistCard, RefillCard } from './rewards/FreeCoins'
+import { HeistCard, RefillCard, TycoonCard } from './rewards/FreeCoins'
 import { Challenges } from './rewards/Challenges'
 import { CoinLayer, IconCrown, SectionTitle } from './rewards/kit'
 
@@ -41,6 +41,7 @@ export default function Rewards() {
       </div>
 
       <SectionTitle icon={<IconBolt size={21} className="text-sky" />}>More free coins</SectionTitle>
+      <TycoonCard />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <HeistCard />
         <RefillCard />

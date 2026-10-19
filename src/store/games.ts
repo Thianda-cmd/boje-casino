@@ -1,4 +1,4 @@
-export type GameId = 'chicken' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'coinflip' | 'reef' | 'lines' | 'sicbo' | 'craps' | 'plunder' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
+export type GameId = 'chicken' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'coinflip' | 'reef' | 'lines' | 'sicbo' | 'craps' | 'holdem' | 'plunder' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
 
 export type Category = 'originals' | 'table'
 
@@ -41,6 +41,7 @@ export const GAMES: GameInfo[] = [
   { id: 'baccarat', name: 'Baccarat', category: 'table', tagline: 'Player, Banker or Tie. Squeeze the cards, follow the road.', accent: '#e8c46a', tag: 'new' },
   { id: 'sicbo', name: 'Sic Bo', category: 'table', tagline: 'Three dice under the dome. Lucky multipliers strike the table every roll, up to 1,000 to 1.', accent: '#e0434f', tag: 'new' },
   { id: 'craps', name: 'Craps', category: 'table', tagline: 'Roll the bones down the felt. Pass Line, odds, place bets, hardways and the Fire Bet.', accent: '#17a673', tag: 'new' },
+  { id: 'holdem', name: "Hold'em Showdown", category: 'table', tagline: 'Heads-up Texas Hold\u2019em against the dealer. Raise 4× on a monster, or fold and live to fight again.', accent: '#3b82f6', tag: 'new' },
   { id: 'roulette', name: 'Roulette', category: 'table', tagline: 'European single zero. Red, black, or your lucky number.', accent: '#ff4d61' },
   { id: 'videopoker', name: 'Video Poker', category: 'table', tagline: 'Jacks or Better. Hold, draw, chase the royal flush.', accent: '#2fb8ff', tag: 'new' },
 ]

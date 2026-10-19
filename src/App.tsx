@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } 
 import { AnimatePresence, motion } from 'framer-motion'
 import { navigate, useRoute } from './lib/router'
 import { CATEGORIES, GAMES, type GameId } from './store/games'
-import { levelFromXp, tierOf, useClaimableCount, useHeistPicks, useWallet } from './store/wallet'
+import { HEIST_MAX_PICKS, levelFromXp, tierOf, useClaimableCount, useHeistPicks, useWallet } from './store/wallet'
 import { AnimatedNumber } from './components/ui'
 import { Coin, IconGift, IconGrid, IconHistory, IconHome, IconMenu, IconMute, IconLogout, IconSearch, IconUser, IconVault, IconVolume, IconX, Logo } from './components/icons'
 import { AuthModal } from './components/AuthModal'
@@ -20,6 +20,9 @@ import { GameCover } from './components/covers'
 import { Toasts } from './components/Toasts'
 import { isMuted, setMuted } from './lib/sound'
 import { BootDone } from './lib/boot'
+import { TycoonIcon } from './games/tycoon/icon'
+import { useTycoonBadge, useTycoonStatus } from './games/tycoon/status'
+import { VaultDoor } from './art/Vault'
 import Lobby from './pages/Lobby'
 
 const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
@@ -43,6 +46,7 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   reef: lazy(() => import('./games/reef/Reef')),
   sicbo: lazy(() => import('./games/sicbo/SicBo')),
   craps: lazy(() => import('./games/craps/Craps')),
+  holdem: lazy(() => import('./games/holdem/Holdem')),
   lines: lazy(() => import('./games/lines/LuckyLines')),
   penalty: lazy(() => import('./games/penalty/Penalty')),
   scratch: lazy(() => import('./games/scratch/Scratch')),
@@ -55,6 +59,7 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   videopoker: lazy(() => import('./games/videopoker/VideoPoker')),
 }
 const Heist = lazy(() => import('./games/heist/Heist'))
+const Tycoon = lazy(() => import('./games/tycoon/Tycoon'))
 // the lobby is the landing page and ships with the app; the other pages load when first opened
 const Rewards = lazy(() => import('./pages/Rewards'))
 const History = lazy(() => import('./pages/History'))
@@ -98,7 +103,14 @@ export default function App() {
         <BootDone />
       </Suspense>
     )
-  } else if (route.startsWith('/heist'))
+  } else if (route.startsWith('/tycoon'))
+    page = (
+      <Suspense fallback={pageFallback}>
+        <Tycoon />
+        <BootDone />
+      </Suspense>
+    )
+  else if (route.startsWith('/heist'))
     page = (
       <Suspense fallback={pageFallback}>
         <Heist />
@@ -228,6 +240,7 @@ function useBattlePayouts(who: string, on: boolean) {
 function Sidebar({ route, collapsed }: { route: string; collapsed: boolean }) {
   const claimable = useClaimableCount()
   const picks = useHeistPicks()
+  const tycoon = useTycoonBadge()
   const item = (to: string, icon: ReactNode, label: string, badge?: number, accent?: string) => {
     const active = to === '/' ? route === '/' : route.startsWith(to)
     return (
@@ -266,7 +279,10 @@ function Sidebar({ route, collapsed }: { route: string; collapsed: boolean }) {
         </nav>
         <div className="mt-4">
           {!collapsed ? <div className="px-3 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-dim">Earn coins</div> : <div className="mx-3 mb-2 h-px bg-line" />}
-          <nav className="flex flex-col gap-0.5 rounded-xl bg-panel2/60 p-1.5">{item('/heist', <IconVault size={19} />, 'Vault Heist', picks || undefined, '#f7c548')}</nav>
+          <nav className="flex flex-col gap-0.5 rounded-xl bg-panel2/60 p-1.5">
+            {item('/heist', <IconVault size={19} />, 'Vault Heist', picks || undefined, '#f7c548')}
+            {item('/tycoon', <TycoonIcon width={19} height={19} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />, 'Casino Tycoon', tycoon || undefined, '#f5b83d')}
+          </nav>
         </div>
         {CATEGORIES.map((c) => (
           <div key={c.id} className="mt-4">
@@ -496,17 +512,29 @@ function UserMenu({ muted, onMute }: { muted: boolean; onMute: () => void }) {
   )
 }
 
+/** the finder's "Earn coins" games, and the words that find them */
+const EARN = [
+  { to: '/heist', name: 'Vault Heist', words: 'vault heist free coins earn skill' },
+  { to: '/tycoon', name: 'Casino Tycoon', words: 'casino tycoon idle free coins earn vault' },
+] as const
+
 /** Ctrl+K game finder; also the mobile "Games" sheet. */
 function SearchModal({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState('')
-  const list = useMemo(() => {
-    const t = q.trim().toLowerCase()
-    return t ? GAMES.filter((g) => g.name.toLowerCase().includes(t) || g.tagline.toLowerCase().includes(t)) : GAMES
-  }, [q])
+  const picks = useHeistPicks()
+  const tycoon = useTycoonStatus()
+  const t = q.trim().toLowerCase()
+  const list = useMemo(() => (t ? GAMES.filter((g) => g.name.toLowerCase().includes(t) || g.tagline.toLowerCase().includes(t)) : GAMES), [t])
+  const earn = EARN.filter((e) => !t || e.name.toLowerCase().includes(t) || e.words.includes(t))
   const go = (id: GameId) => {
     navigate(`/game/${id}`)
     onClose()
   }
+  const open = (to: string) => {
+    navigate(to)
+    onClose()
+  }
+  const tycoonLine = !tycoon ? 'Build your casino' : tycoon.fullIn === 0 ? 'Vault full!' : tycoon.due ? `${tycoon.due} to claim` : `Vault ${Math.floor(tycoon.vault)} / ${Math.round(tycoon.cap)}`
   return (
     <motion.div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-start sm:pt-[10vh]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div
@@ -523,7 +551,7 @@ function SearchModal({ onClose }: { onClose: () => void }) {
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && list[0] && go(list[0].id)}
+            onKeyDown={(e) => e.key === 'Enter' && (list[0] ? go(list[0].id) : earn[0] && open(earn[0].to))}
             placeholder="Search games"
             className="h-14 flex-1 bg-transparent text-[16px] font-semibold outline-none placeholder:text-dim"
           />
@@ -531,18 +559,59 @@ function SearchModal({ onClose }: { onClose: () => void }) {
             <IconX size={18} />
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-2.5 overflow-y-auto p-4 sm:grid-cols-4">
-          {list.map((g) => (
-            <button key={g.id} onClick={() => go(g.id)} className="group text-left">
-              <div className="relative aspect-[4/5] overflow-hidden rounded-xl ring-1 ring-white/5 transition group-hover:-translate-y-1">
-                <GameCover id={g.id} />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-2 pt-8 text-[13px] font-extrabold text-white">{g.name}</div>
+        <div className="overflow-y-auto p-4">
+          {earn.length > 0 && (
+            <>
+              <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-dim">Earn coins</div>
+              <div className="mb-4 grid grid-cols-2 gap-2.5">
+                {earn.map((e) =>
+                  e.to === '/heist' ? (
+                    <EarnTile key={e.to} name={e.name} line={`${picks} of ${HEIST_MAX_PICKS} picks ready`} bg="linear-gradient(135deg,#2d2611,#191a14)" art={<VaultDoor size={38} />} onClick={() => open(e.to)} />
+                  ) : (
+                    <EarnTile
+                      key={e.to}
+                      name={e.name}
+                      line={tycoonLine}
+                      bg="linear-gradient(135deg,#3a1d3e,#171230)"
+                      art={
+                        <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-gradient-to-b from-[#ffe08a] to-[#f2a93b] text-[#3a2400] shadow-[inset_0_-2px_0_rgba(0,0,0,.18)]">
+                          <TycoonIcon width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                        </span>
+                      }
+                      onClick={() => open(e.to)}
+                    />
+                  ),
+                )}
               </div>
-            </button>
-          ))}
-          {!list.length && <div className="col-span-full py-10 text-center text-[14px] text-muted">No games match “{q}”.</div>}
+              {list.length > 0 && <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-dim">Games</div>}
+            </>
+          )}
+          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+            {list.map((g) => (
+              <button key={g.id} onClick={() => go(g.id)} className="group text-left">
+                <div className="relative aspect-[4/5] overflow-hidden rounded-xl ring-1 ring-white/5 transition group-hover:-translate-y-1">
+                  <GameCover id={g.id} />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-2 pt-8 text-[13px] font-extrabold text-white">{g.name}</div>
+                </div>
+              </button>
+            ))}
+            {!list.length && !earn.length && <div className="col-span-full py-10 text-center text-[14px] text-muted">No games match “{q}”.</div>}
+          </div>
         </div>
       </motion.div>
     </motion.div>
+  )
+}
+
+/** an "Earn coins" game in the finder: its picture, its name and what is waiting in it */
+function EarnTile({ name, line, bg, art, onClick }: { name: string; line: string; bg: string; art: ReactNode; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="flex min-w-0 items-center gap-2.5 rounded-xl p-2.5 text-left ring-1 ring-white/5 transition hover:-translate-y-0.5" style={{ background: bg }}>
+      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center">{art}</span>
+      <span className="min-w-0">
+        <span className="block truncate text-[13.5px] font-extrabold text-white">{name}</span>
+        <span className="tnum block truncate text-[11.5px] font-semibold text-white/65">{line}</span>
+      </span>
+    </button>
   )
 }

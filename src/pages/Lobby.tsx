@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CATEGORIES, GAMES, type Category, type GameId } from '../store/games'
 import { navigate } from '../lib/router'
@@ -63,6 +63,9 @@ interface Slide {
   bg: string
   art: ReactNode
 }
+
+// Casino Tycoon's art comes with its own small chunk, so the game adds next to nothing to the landing page
+const TycoonHero = lazy(() => import('../games/tycoon/hero').then((m) => ({ default: m.TycoonHero })))
 
 const SLIDES: Slide[] = [
   {
@@ -183,6 +186,27 @@ const SLIDES: Slide[] = [
     to: '/heist',
     bg: 'linear-gradient(110deg,#191a14 0%,#1f1d12 55%,#2d2611 100%)',
     art: <HeroVault />,
+  },
+  {
+    key: 'tycoon',
+    eyebrow: 'New · Free coins',
+    tone: 'text-[#ffcf4a] bg-[#f5b83d]/15',
+    title: (
+      <>
+        Build a casino.
+        <br />
+        Wake up richer.
+      </>
+    ),
+    text: 'An idle tycoon: hire managers to run it while you are away, and collect real coins from its vault every day.',
+    cta: 'Open Casino Tycoon',
+    to: '/tycoon',
+    bg: 'linear-gradient(110deg,#171230 0%,#231640 55%,#3a1d3e 100%)',
+    art: (
+      <Suspense fallback={null}>
+        <TycoonHero />
+      </Suspense>
+    ),
   },
   {
     key: 'chompers',

@@ -1,10 +1,10 @@
 # Boje Casino (play money)
 
-A Stake-style casino with thirty games. Originals: Chicken Road, Crash, Double, Coin Flip, Reef Raid, Lucky Lines,
+A Stake-style casino with thirty-one games. Originals: Chicken Road, Crash, Double, Coin Flip, Reef Raid, Lucky Lines,
 Mines, Plinko, Dice, Limbo, Keno, Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and
-Scratch & Win. Table and machine games: Blackjack, Live Blackjack, Baccarat, Sic Bo, Craps, Roulette, Video Poker,
-Chompers, Pop Party, Robo Riot and Plunder Bay.
-Vault Heist is a free skill game that pays coins. Coins are play money only. Guests keep their wallet in the
+Scratch & Win. Table and machine games: Blackjack, Live Blackjack, Baccarat, Sic Bo, Craps, Hold'em Showdown, Roulette,
+Video Poker, Chompers, Pop Party, Robo Riot and Plunder Bay.
+Vault Heist (a skill game) and Casino Tycoon (an idle game) are free and pay coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
 
 ## Run
@@ -148,7 +148,16 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
 - Vault Heist: crack up to eight dials by timing each pick; the bag holds 10, 25, 50, 90, 150, 250, 400 and 650
   coins after each vault, plus a bonus for each gold notch hit, banked whenever you like and lost on a miss. Three
   lockpicks, one back every 45 min; practice runs cost none and pay nothing.
-- Challenges: 31 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
+- Casino Tycoon (src/games/tycoon/engine.ts): an idle game. Ten attractions earn Cash, the game's own currency, in
+  cycles; counts of 25, 50 and 100 halve an attraction's cycle and every 100 from 200 doubles its pay; managers run
+  them while away (8 hours, 12 with a perk); 33 upgrades double pay; selling the casino gives Stars (25 × ∛(lifetime
+  Cash / 10¹²)), each +2% to all pay, five cities and five perks. Cash never turns into coins: coins come from the
+  Coin Vault, which fills at 10 to 62 coins an hour by progress and holds 4 to 9 hours' worth, from 32 one-time
+  milestones (about 13,000 coins in all) and from golden chips (5 to 20) offered to an active player. The save is
+  part of the wallet, so an account carries it (`tools/tycoon-test.ts` checks prices, the clock, the vault and
+  sales; `tools/tycoon-sim.ts` plays it for pacing: a dedicated player reaches Riverside on day 2 and Monaco Heights
+  around day 14, earning roughly 600 to 2,000 coins a day).
+- Challenges: 32 one-time goals, one per game except Live Blackjack, plus Explorer and High Roller (e.g. 25× in
   Crash, a 2% Dice win); Live Blackjack rounds count towards Explorer and High Roller. Only bets of 25+ count,
   except towards High Roller, which counts every bet.
 
@@ -303,6 +312,14 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   and applied once, even if the page closes mid-throw. A decided bet counts as one wager; a place bet that wins pays
   and stays up (`tools/craps-test.ts` checks every bet on every roll from every table state against a direct reading
   of the rules, the exact edges, the Fire Bet by simulation, and long random sessions for coin conservation).
+- Hold'em Showdown (src/games/holdem/rules.ts): heads-up Texas Hold'em against the dealer. Ante and an equal Blind
+  (and an optional Trips); check or bet 4× or 3× before the flop, 2× on the flop, 1× or fold on the river. The dealer
+  qualifies with a pair. A win pays the Play 1:1, the Ante 1:1 (returned if the dealer didn't qualify) and the Blind
+  by hand (straight 1:1, flush 3:2, full house 3:1, quads 10:1, straight flush 50:1, royal 500:1); a tie returns
+  everything. Trips pays 3, 5, 6, 8, 30, 40, 50 to 1 on the player's hand, folded or not, and returns 98.1%. Played by
+  the built-in advice (a pre-flop chart, the flop rules, and on the river the exact best move over every dealer hand
+  that can still come) it returns about 99.3% of everything wagered (`tools/holdem-test.ts` checks the evaluator on
+  all 2,598,960 five-card hands and the known seven-card frequencies, every settlement rule, and the returns).
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
 - Sic Bo: three dice, 52 spots: Small / Big and Odd / Even (1 to 1, lose on any triple), the totals 4 to 17 (50, 25,
   15, 10, 7, 6, 5 to 1 from the ends inwards), doubles (8 to 1), triples (160 to 1), any triple (24 to 1), the 15

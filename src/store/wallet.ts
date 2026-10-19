@@ -4,6 +4,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { safeStorage } from '../lib/storage'
 import { round2 } from '../lib/format'
 import { gameById, type GameId } from './games'
+import type { Save as TycoonSave } from '../games/tycoon/engine'
 import { rand } from '../lib/rng'
 import { LOG_SIZE, MISSION_MIN_BET, RAKEBACK, TIER_BONUS, WHEEL_PRIZES, dayKey, missionStep, missionTarget, missionText, missionsFor, msToMidnight, pickWheel, type RewardEntry, type RewardKind } from './rewards'
 
@@ -24,6 +25,9 @@ export const dailyReward = (streakDay: number) => [100, 125, 150, 200, 250, 300,
 export const FAUCET_THRESHOLD = 10
 export const FAUCET_AMOUNT = 50
 export const FAUCET_COOLDOWN = 30 * 60_000
+
+/** Casino Tycoon pays at most this many coins in one collect (its vault holds less; the biggest milestone is 2,000) */
+export const TYCOON_MAX_PAY = 2_500
 
 /** Vault Heist: a skill game that pays coins. Lockpicks cap how often it can be played. */
 export const HEIST_MAX_PICKS = 3
@@ -308,6 +312,15 @@ export const CHALLENGES: Challenge[] = [
     step: (e, p) => (e.game === 'sicbo' && e.meta?.tripleWin === true ? 1 : p),
   },
   {
+    id: 'holdem-flush',
+    game: 'holdem',
+    title: 'Flush Rush',
+    desc: "Win a hand of Hold'em Showdown with a flush or better.",
+    reward: 2500,
+    goal: 1,
+    step: (e, p) => (e.game === 'holdem' && e.meta?.bigWin === true ? 1 : p),
+  },
+  {
     id: 'craps-hot',
     game: 'craps',
     title: 'Hot Shooter',
@@ -448,6 +461,8 @@ interface WalletState {
   tierClaimed: number
   /** the most recent rewards, newest first */
   rewardLog: RewardEntry[]
+  /** Casino Tycoon's saved game (src/games/tycoon/engine.ts), kept with the wallet so an account carries it */
+  tycoon: TycoonSave | null
   toasts: Toast[]
 
   /** Deducts the stake. Returns false if the balance can't cover it (or it is under `min`, MIN_BET by default). */
@@ -476,6 +491,13 @@ interface WalletState {
   claimTierBonus: () => number
   /** a new day: yesterday's finished missions are paid and an earned spin is spun (see rolloverState) */
   rollover: () => void
+  /** saves Casino Tycoon's game */
+  saveTycoon: (save: TycoonSave) => void
+  /**
+   * Pays coins Casino Tycoon earned (its vault, a milestone, a golden chip) and saves the game they came from, in one
+   * step, so the coins and the save can never land apart. At most TYCOON_MAX_PAY at a time; returns what was paid.
+   */
+  tycoonCollect: (coins: number, label: string, save: TycoonSave) => number
   pushToast: (t: Omit<Toast, 'id'>) => void
   dismissToast: (id: number) => void
   reset: () => void
@@ -505,6 +527,7 @@ const initial = () => ({
   rakeback: 0,
   tierClaimed: 0,
   rewardLog: [] as RewardEntry[],
+  tycoon: null as TycoonSave | null,
   toasts: [] as Toast[],
 })
 
@@ -723,6 +746,15 @@ export const useWallet = create<WalletState>()(
         const top = tiers[tiers.length - 1]
         set({ balance: round2(s.balance + coins), tierClaimed: top, rewardLog: logged(s.rewardLog, 'tier', coins, tiers.length > 1 ? `${TIERS[tiers[0]].name} to ${TIERS[top].name} bonuses` : `${TIERS[top].name} bonus`) })
         return coins
+      },
+
+      saveTycoon: (save) => set({ tycoon: save }),
+
+      tycoonCollect: (coins, label, save) => {
+        // whole cents, with a hair of room so 139.2 (13919.999… cents in floating point) stays 139.20
+        const pay = Math.max(0, Math.min(TYCOON_MAX_PAY, Math.floor(coins * 100 + 1e-6) / 100))
+        set((s) => ({ tycoon: save, ...(pay > 0 ? { balance: round2(s.balance + pay), rewardLog: logged(s.rewardLog, 'tycoon', pay, label) } : {}) }))
+        return pay
       },
 
       rollover: () => {
