@@ -41,31 +41,90 @@ export function BonusShell({ spot, boost, stake, bg, children, note, noteOnPhone
   )
 }
 
-/** counts down from `secs` while `on`, calling onEnd at zero; ticks the last three seconds */
-export function useCountdown(secs: number, on: boolean, onEnd: () => void) {
-  const [left, setLeft] = useState(secs)
-  const end = useRef(onEnd)
-  end.current = onEnd
+/** the times a bonus round plays to, on the shared clock (clock.ts) */
+export interface BonusTimes {
+  bonusAt: number
+  playAt: number
+  picksUntil: number | null
+  endsAt: number
+}
+
+/**
+ * Runs `frame(now)` on every animation frame with the shared clock's time, and returns the step of the show at that
+ * moment: the last of `steps` (in time order) whose time has come. A page that opens mid-show starts at the step in
+ * play, so every browser shows the same step at the same moment.
+ */
+export function useShow<S extends string>(clock: () => number, steps: readonly (readonly [S, number])[], frame?: (now: number) => void): S {
+  const stepsRef = useRef(steps)
+  stepsRef.current = steps
+  const frameRef = useRef(frame)
+  frameRef.current = frame
+  const at = (now: number) => {
+    let cur = stepsRef.current[0][0]
+    for (const [s, t] of stepsRef.current) if (now >= t) cur = s
+    return cur
+  }
+  const [step, setStep] = useState(() => at(clock()))
+  useEffect(() => {
+    let raf = 0
+    const tick = () => {
+      const now = clock()
+      setStep(at(now))
+      frameRef.current?.(now)
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+    // the clock and the steps are read fresh every frame
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return step
+}
+
+/** the step the show was at when the page put it up: sounds for steps that had already started are skipped */
+export function useFirstStep<S>(step: S) {
+  return useRef(step).current
+}
+
+/** whole seconds left until `until` on the shared clock, ticking the last three */
+export function useSecondsLeft(clock: () => number, until: number, on: boolean) {
+  const [left, setLeft] = useState(() => Math.max(0, Math.ceil((until - clock()) / 1000)))
   useEffect(() => {
     if (!on) return
-    setLeft(secs)
-    const t0 = Date.now()
-    let last = secs
+    let last = -1
     const id = window.setInterval(() => {
-      const l = Math.max(0, secs - Math.floor((Date.now() - t0) / 1000))
+      const l = Math.max(0, Math.ceil((until - clock()) / 1000))
       if (l !== last) {
+        if (last !== -1 && l > 0 && l <= 3) showtimeSfx.count(l)
         last = l
         setLeft(l)
-        if (l > 0 && l <= 3) showtimeSfx.count(l)
-        if (l === 0) {
-          clearInterval(id)
-          end.current()
-        }
       }
     }, 100)
     return () => clearInterval(id)
-  }, [secs, on])
+  }, [clock, until, on])
   return left
+}
+
+/** a small generator from a round id and a number, so every browser makes up the same motion */
+export function seeded(id: number, k: number) {
+  let a = (Math.imul(id | 0, 0x9e3779b1) ^ Math.imul(k + 1, 0x85ebca6b)) | 0
+  return () => {
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** what a pick says while the picks are open: whether it is in, on its way, or only on this screen */
+export function PickNote({ state, children }: { state: 'sending' | 'ok' | 'failed' | 'local' | null; children?: ReactNode }) {
+  if (!state) return null
+  const text = state === 'ok' ? 'Your pick is in' : state === 'sending' ? 'Sending your pick…' : state === 'failed' ? 'Your pick didn’t reach the show' : 'No stake on it: just for fun'
+  return (
+    <span className={`rounded-full px-2.5 py-0.5 text-[11.5px] font-bold ${state === 'ok' ? 'bg-accent/20 text-accent' : state === 'failed' ? 'bg-danger/25 text-white' : 'bg-white/10 text-white/75'}`}>
+      {children ?? text}
+    </span>
+  )
 }
 
 export function CountdownPill({ left, label }: { left: number; label: string }) {

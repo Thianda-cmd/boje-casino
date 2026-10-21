@@ -21,11 +21,16 @@
                 doubled or tripled and it spins again.
   A bonus round's win is capped at MAX_WIN times the stake.
 
-  Everything is drawn up front by drawRound(): the Booster, the segment, and the whole bonus round. The two rounds
-  where the player chooses (a tile, a flapper) draw what the player's choice will turn up; the screen then puts that
-  result under whichever tile or flapper is chosen. Every tile and every flapper is alike until it is revealed, so the
-  odds are the same as revealing the tile picked. (tools/showtime-test.ts checks every spot's exact return and samples
-  the draw against it.)
+  The show is shared: everyone watches the same round, drawn by drawRound() from the round's seed (fair.ts). The two
+  rounds with a choice are played on that shared draw, each player with their own pick:
+    Prize Wall  one wall for everyone; each player's prize is the one behind the tile they picked. The prizes are
+                drawn independently, so every tile hides a draw from WALL and no pick is better than another.
+    Mega Spin   one wheel for everyone, spun until every flapper has stopped on a multiplier; each player follows
+                their own flapper. The wheel stops at random each spin, so each flapper's run of DOUBLEs and TRIPLEs
+                and the multiplier it ends on are distributed as if the wheel were spun for it alone.
+  The picks are made before anyone can know what they turn up: the prizes and the stops are drawn from the seed, which
+  is only revealed once the picks are in. (tools/showtime-test.ts checks every spot's exact return and samples the
+  draw against it, for every tile and flapper.)
 */
 
 import { round2 } from '../../lib/format'
@@ -244,10 +249,10 @@ export interface PegDrop {
 
 export interface PrizeWall {
   kind: 'wall'
-  /** the prizes behind the tiles (before the boost), in the order drawn */
-  prizes: number[]
-  /** which of them the player's pick turns up; the screen puts it behind the tile picked */
-  hit: number
+  /** the prizes behind the tiles (before the boost), once the picks are in; null until then */
+  prizes: number[] | null
+  /** the tile played for a player who never picked one */
+  auto: number
 }
 
 export interface MegaSpin {
@@ -255,10 +260,12 @@ export interface MegaSpin {
   /** the wheel as first shown: a multiplier (before the boost), or -2 for a DOUBLE and -3 for a TRIPLE */
   wheel: number[]
   /**
-   * The segment under the player's flapper after each spin; every spin but the last ends on a DOUBLE or TRIPLE. The
-   * screen turns the wheel so the flapper chosen points there.
+   * The segment at the top after each spin, once the picks are in (null until then). The flapper at segment position
+   * `at` reads the segment at + top; the wheel spins again until every flapper has stopped on a multiplier.
    */
-  stops: number[]
+  spins: number[] | null
+  /** the flapper (0 to 2) played for a player who never picked one */
+  auto: number
 }
 
 export type Bonus = CoinToss | PegDrop | PrizeWall | MegaSpin
@@ -269,86 +276,135 @@ export interface Round {
   segment: number
   spot: Spot
   bonus: Bonus | null
-  /** what the bonus round ended on, boost and cap included, to 1 (0 when there is none) */
-  bonusWin: number
 }
 
-const DOUBLE = 0
+/**
+ * Where a round's numbers come from: draw(what, i) is the i-th whole number in [0, 2^52) drawn for `what`, and the
+ * same arguments always give the same number. fair.ts draws them from the round's seed.
+ */
+export type Draw = (what: string, i: number) => number
+/** a draw as a uniform number in [0, 1) (exact: it has 52 bits) */
+const unit = (d: Draw, what: string, i = 0) => d(what, i) / 2 ** 52
+/** a draw as a whole number below n, in integers so the database gets the same one (_st_below in api/_lib/schema.js) */
+export const below = (d: Draw, what: string, i: number, n: number) => Number((BigInt(d(what, i)) * BigInt(n)) >> 52n)
 
-function drawBooster(r: () => number): Booster | null {
-  let x = r()
-  for (const s of SPOTS) if ((x -= BOOST_CHANCE[s]) < 0) return { spot: s, mult: pick(BOOST, r()) }
+const DOUBLE = 0
+/** the sixths of the Mega Spin wheel, each with one DOUBLE or TRIPLE: segments MEGA_SIXTHS[i] to MEGA_SIXTHS[i + 1] */
+export const MEGA_SIXTHS = Array.from({ length: 7 }, (_, i) => Math.round((i * MEGA_SEGMENTS) / 6))
+const MEGA_MARKS = [-2, -3, -2, -2, -3, -2]
+/** the most spins a Mega Spin, and the most drops a Peg Drop, can take */
+export const MEGA_MAX_SPINS = 30
+export const PEG_MAX_DROPS = 40
+
+function drawBooster(d: Draw): Booster | null {
+  let x = unit(d, 'booster', 0)
+  for (const s of SPOTS) if ((x -= BOOST_CHANCE[s]) < 0) return { spot: s, mult: pick(BOOST, unit(d, 'booster', 1)) }
   return null
 }
 
-function drawCoin(r: () => number): CoinToss {
-  return { kind: 'coin', faces: [pick(COIN, r()), pick(COIN, r())], up: r() < 0.5 ? 0 : 1 }
+function drawCoin(d: Draw): CoinToss {
+  return { kind: 'coin', faces: [pick(COIN, unit(d, 'coin', 0)), pick(COIN, unit(d, 'coin', 1))], up: unit(d, 'coin', 2) < 0.5 ? 0 : 1 }
 }
 
-function drawPeg(r: () => number): PegDrop {
-  const row = Array.from({ length: PEG_SLOTS }, () => pick(PEG, r()))
+function drawPeg(d: Draw): PegDrop {
+  const row = Array.from({ length: PEG_SLOTS }, (_, i) => pick(PEG, unit(d, 'peg', i)))
   // the DOUBLEs go in two different slots
-  const at = new Set<number>()
-  while (at.size < PEG_DOUBLES) at.add(Math.floor(r() * PEG_SLOTS))
-  for (const i of at) row[i] = DOUBLE
+  const a = below(d, 'pegdouble', 0, PEG_SLOTS)
+  let b = below(d, 'pegdouble', 1, PEG_SLOTS - 1)
+  if (b >= a) b++
+  row[a] = row[b] = DOUBLE
   const drops: number[] = []
-  for (;;) {
-    const d = Math.floor(r() * PEG_SLOTS)
-    drops.push(d)
-    if (row[d] !== DOUBLE || drops.length >= 40) break
+  for (let i = 0; i < PEG_MAX_DROPS; i++) {
+    drops.push(below(d, 'pegdrop', i, PEG_SLOTS))
+    if (row[drops[i]] !== DOUBLE) break
   }
   // a run of 40 DOUBLEs (never, in practice) ends on the first multiplier
   if (row[drops[drops.length - 1]] === DOUBLE) drops[drops.length - 1] = row.findIndex((v) => v !== DOUBLE)
   return { kind: 'peg', row, drops }
 }
 
-function drawWall(r: () => number): PrizeWall {
-  const prizes = Array.from({ length: WALL_TILES }, () => pick(WALL, r()))
-  return { kind: 'wall', prizes, hit: Math.floor(r() * WALL_TILES) }
+function drawWall(open: Draw, hidden: Draw | null): PrizeWall {
+  const prizes = hidden ? Array.from({ length: WALL_TILES }, (_, i) => pick(WALL, unit(hidden, 'wall', i))) : null
+  return { kind: 'wall', prizes, auto: below(open, 'wallpick', 0, WALL_TILES) }
 }
 
-function drawMega(r: () => number): MegaSpin {
-  const wheel = Array.from({ length: MEGA_SEGMENTS }, () => pick(MEGA, r()))
+function drawMega(open: Draw, hidden: Draw | null): MegaSpin {
+  const wheel = Array.from({ length: MEGA_SEGMENTS }, (_, i) => pick(MEGA, unit(open, 'mega', i)))
   // the DOUBLEs and TRIPLEs spread round the wheel: one in each sixth, the rest of each sixth multipliers
-  const marks = [-2, -3, -2, -2, -3, -2]
-  marks.forEach((m, i) => {
-    const from = Math.round((i * MEGA_SEGMENTS) / 6)
-    const to = Math.round(((i + 1) * MEGA_SEGMENTS) / 6)
-    wheel[from + Math.floor(r() * (to - from))] = m
-  })
-  const stops: number[] = []
-  for (;;) {
-    const s = Math.floor(r() * MEGA_SEGMENTS)
-    stops.push(s)
-    if (wheel[s] > 0 || stops.length >= 30) break
+  MEGA_MARKS.forEach((m, i) => (wheel[MEGA_SIXTHS[i] + below(open, 'megamark', i, MEGA_SIXTHS[i + 1] - MEGA_SIXTHS[i])] = m))
+  let spins: number[] | null = null
+  if (hidden) {
+    spins = []
+    const going = FLAPPERS.map(() => true)
+    for (let k = 0; k < MEGA_MAX_SPINS && going.some(Boolean); k++) {
+      const top = below(hidden, 'megaspin', k, MEGA_SEGMENTS)
+      spins.push(top)
+      FLAPPERS.forEach((f, i) => {
+        if (wheel[(top + f.at) % MEGA_SEGMENTS] > 0) going[i] = false
+      })
+    }
   }
-  if (wheel[stops[stops.length - 1]] < 0) stops[stops.length - 1] = wheel.findIndex((v) => v > 0)
-  return { kind: 'mega', wheel, stops }
+  return { kind: 'mega', wheel, spins, auto: below(open, 'megapick', 0, FLAPPERS.length) }
 }
 
-/** what a bonus round ends on, before the boost and the cap */
-export function bonusValue(b: Bonus): number {
-  if (b.kind === 'coin') return b.faces[b.up]
-  if (b.kind === 'wall') return b.prizes[b.hit]
-  if (b.kind === 'peg') return b.row[b.drops[b.drops.length - 1]] * 2 ** (b.drops.length - 1)
-  let f = 1
-  for (const s of b.stops.slice(0, -1)) f *= -b.wheel[s]
-  return b.wheel[b.stops[b.stops.length - 1]] * f
-}
-
-/** the round, all of it, from a source of uniform numbers in [0, 1) */
-export function drawRound(r: () => number): Round {
-  const booster = drawBooster(r)
-  const segment = Math.floor(r() * SEGMENTS)
+/**
+ * The round from its two streams: `open`, revealed when betting closes (the Booster, the segment, and the bonus round
+ * as everyone sees it), and `hidden`, revealed once the picks are in (the wall's prizes, the Mega Spin's stops). With
+ * `hidden` null those are left out.
+ */
+export function drawRound(open: Draw, hidden: Draw | null): Round {
+  const booster = drawBooster(open)
+  const segment = below(open, 'segment', 0, SEGMENTS)
   const spot = WHEEL[segment]
   let bonus: Bonus | null = null
-  if (spot === 'coin') bonus = drawCoin(r)
-  else if (spot === 'peg') bonus = drawPeg(r)
-  else if (spot === 'wall') bonus = drawWall(r)
-  else if (spot === 'mega') bonus = drawMega(r)
-  const boost = booster?.spot === spot ? booster.mult : 1
-  const bonusWin = bonus ? Math.min(MAX_WIN, bonusValue(bonus) * boost) : 0
-  return { booster, segment, spot, bonus, bonusWin }
+  if (spot === 'coin') bonus = drawCoin(open)
+  else if (spot === 'peg') bonus = drawPeg(open)
+  else if (spot === 'wall') bonus = drawWall(open, hidden)
+  else if (spot === 'mega') bonus = drawMega(open, hidden)
+  return { booster, segment, spot, bonus }
+}
+
+/** the round's boost of its own spot: the Booster's multiplier if it lit the spot the wheel stopped on, else 1 */
+export const boostOf = (r: Round) => (r.booster?.spot === r.spot ? r.booster.mult : 1)
+
+/** whether a round's results are all known (the wall's prizes and the Mega Spin's stops come with the seed) */
+export const revealed = (r: Round) => !r.bonus || (r.bonus.kind === 'wall' ? !!r.bonus.prizes : r.bonus.kind === 'mega' ? !!r.bonus.spins : true)
+
+/** a player's pick in a round with a choice, or the round's own pick for them when they made none (or a bad one) */
+export function pickOf(b: Bonus, pick: number | null | undefined): number {
+  if (b.kind !== 'wall' && b.kind !== 'mega') return 0
+  const n = b.kind === 'wall' ? WALL_TILES : FLAPPERS.length
+  return pick != null && Number.isInteger(pick) && pick >= 0 && pick < n ? pick : b.auto
+}
+
+/** where flapper f (0 to 2) stops after each spin: every stop but the last is a DOUBLE or TRIPLE */
+export function megaStops(m: MegaSpin, f: number): number[] {
+  const stops: number[] = []
+  for (const top of m.spins ?? []) {
+    stops.push((top + FLAPPERS[f].at) % MEGA_SEGMENTS)
+    if (m.wheel[stops[stops.length - 1]] > 0) return stops
+  }
+  // thirty DOUBLEs and TRIPLEs in a row (never, in practice) end on the first multiplier
+  if (stops.length) stops[stops.length - 1] = m.wheel.findIndex((v) => v > 0)
+  return stops
+}
+
+/** what a bonus round ends on for a player with this pick, before the boost and the cap (null until it is revealed) */
+export function bonusValue(b: Bonus, pick: number | null = null): number | null {
+  if (b.kind === 'coin') return b.faces[b.up]
+  if (b.kind === 'peg') return b.row[b.drops[b.drops.length - 1]] * 2 ** (b.drops.length - 1)
+  if (b.kind === 'wall') return b.prizes ? b.prizes[pickOf(b, pick)] : null
+  if (!b.spins) return null
+  const stops = megaStops(b, pickOf(b, pick))
+  let f = 1
+  for (const s of stops.slice(0, -1)) f *= -b.wheel[s]
+  return b.wheel[stops[stops.length - 1]] * f
+}
+
+/** what a bonus round pays to 1 for a player with this pick, boost and cap included (null until it is revealed) */
+export function bonusWin(r: Round, pick: number | null = null): number | null {
+  const v = r.bonus ? bonusValue(r.bonus, pick) : null
+  return v == null ? null : Math.min(MAX_WIN, v * boostOf(r))
 }
 
 /* ---------------- stakes and payouts ---------------- */
@@ -356,16 +412,16 @@ export function drawRound(r: () => number): Round {
 export type Stakes = Partial<Record<Spot, number>>
 export const stakeTotal = (s: Stakes) => round2(SPOTS.reduce((a, k) => a + (s[k] ?? 0), 0))
 
-/** what the winning spot pays, to 1 */
-export function winOf(round: Round): number {
-  if (round.bonus) return round.bonusWin
-  const boost = round.booster?.spot === round.spot ? round.booster.mult : 1
-  return PAYS[round.spot as NumberSpot] * boost
+/** what the winning spot pays to 1, for a player with this pick (null while a bonus round is not revealed) */
+export function winOf(round: Round, pick: number | null = null): number | null {
+  if (round.bonus) return bonusWin(round, pick)
+  return PAYS[round.spot as NumberSpot] * boostOf(round)
 }
 
-/** what the stakes return: the winning spot's stake and its win (0 if it had no stake) */
-export function settle(stakes: Stakes, round: Round) {
+/** what the stakes return: the winning spot's stake and its win (0 if it had no stake); the round must be revealed */
+export function settle(stakes: Stakes, round: Round, pick: number | null = null) {
   const on = stakes[round.spot] ?? 0
-  const ret = on > 0 ? round2(on * (1 + winOf(round))) : 0
-  return { ret, on, win: winOf(round) }
+  const win = winOf(round, pick) ?? 0
+  const ret = on > 0 ? round2(on * (1 + win)) : 0
+  return { ret, on, win }
 }

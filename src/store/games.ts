@@ -13,7 +13,7 @@ export interface GameInfo {
 }
 
 export const GAMES: GameInfo[] = [
-  { id: 'showtime', name: 'Showtime', category: 'originals', tagline: 'A game-show money wheel: a Booster on every spin and four bonus rounds, up to 20,000×.', accent: '#ff4d61', tag: 'new' },
+  { id: 'showtime', name: 'Showtime', category: 'originals', tagline: 'A live game-show money wheel: everyone bets the same spin, with a Booster and four bonus rounds up to 20,000×.', accent: '#ff4d61', tag: 'live' },
   { id: 'chicken', name: 'Chicken Road', category: 'originals', tagline: 'Cross lane by lane, cash out before the traffic gets you.', accent: '#f7a440', tag: 'hot' },
   { id: 'crash', name: 'Crash', category: 'originals', tagline: 'Everyone rides the same rocket. Cash out before it blows.', accent: '#9b7bff', tag: 'live' },
   { id: 'double', name: 'Double', category: 'originals', tagline: 'Red, black or green. One strip, and everyone bets the same spin.', accent: '#ef3e5c', tag: 'live' },

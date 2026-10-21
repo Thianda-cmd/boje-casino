@@ -1,49 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { MAX_WIN, type CoinToss as CoinTossRound } from '../rules'
+import { TOSS_MS } from '../clock'
 import { fmtX } from '../words'
 import { showtimeSfx } from '../sound'
-import { BonusShell, ResultPlate, shownX } from './kit'
+import { BonusShell, ResultPlate, shownX, useFirstStep, useShow, type BonusTimes } from './kit'
 
 /*
   Coin Toss: a coin with a multiplier on each face (gold heads, blue tails). The faces are shown, boosted if the
-  Booster lit the round, the coin goes up turning over and over, and the face that lands up pays.
+  Booster lit the round, the coin goes up turning over and over, and the face that lands up pays. It plays on the
+  shared clock (clock.ts): the faces at the stage, the toss when the intro ends, the result TOSS_MS later.
 */
 
 type Step = 'faces' | 'boost' | 'toss' | 'landed' | 'done'
+const FLIGHT_MS = 2300
 
-export function CoinTossShow({ round, boost, stake, win, onDone }: { round: CoinTossRound; boost: number; stake: number; win: number; onDone: () => void }) {
-  const [step, setStep] = useState<Step>('faces')
+export function CoinTossShow({ clock, t, round, boost, stake, win }: { clock: () => number; t: BonusTimes; round: CoinTossRound; boost: number; stake: number; win: number }) {
   const boosted = boost > 1
-  const [faces, setFaces] = useState<[number, number]>(round.faces)
+  const step = useShow<Step>(clock, [
+    ['faces', t.bonusAt],
+    ['boost', boosted ? t.bonusAt + 1200 : Infinity],
+    ['toss', t.playAt],
+    ['landed', t.playAt + FLIGHT_MS],
+    ['done', t.playAt + TOSS_MS],
+  ])
+  const first = useFirstStep(step)
   useEffect(() => {
-    const t: number[] = []
-    const at = (ms: number, f: () => void) => t.push(window.setTimeout(f, ms))
-    showtimeSfx.bonusIn()
-    let ms = 1400
-    if (boosted) {
-      at(ms, () => {
-        setStep('boost')
-        setFaces([shownX(round.faces[0], boost), shownX(round.faces[1], boost)])
-        showtimeSfx.boost(boost)
-      })
-      ms += 1300
-    }
-    at(ms, () => {
-      setStep('toss')
-      showtimeSfx.toss()
-    })
-    at(ms + 2300, () => {
-      setStep('landed')
+    if (step === first && step !== 'faces') return
+    if (step === 'faces') showtimeSfx.bonusIn()
+    else if (step === 'boost') showtimeSfx.boost(boost)
+    else if (step === 'toss') showtimeSfx.toss()
+    else if (step === 'landed') {
       showtimeSfx.coinLand()
       showtimeSfx.reveal(win)
-    })
-    at(ms + 3000, () => setStep('done'))
-    at(ms + 5000, onDone)
-    return () => t.forEach(clearTimeout)
-    // the show runs once, on mount
+    }
+    // a sound for each step as it comes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [step])
+  const faces: [number, number] = step === 'faces' ? round.faces : [shownX(round.faces[0], boost), shownX(round.faces[1], boost)]
   const tossed = step === 'landed' || step === 'done'
   // eight and a half turns, or eight for heads; rotateX 0 shows heads, 180 tails
   const turns = 360 * 8 + (round.up ? 180 : 0)
@@ -80,8 +74,8 @@ export function CoinTossShow({ round, boost, stake, win, onDone }: { round: Coin
         <div className="relative h-[140px] w-[140px] [perspective:800px] sm:h-[170px] sm:w-[170px]">
           <motion.div
             className="absolute inset-0 [transform-style:preserve-3d]"
-            initial={{ rotateX: 0, y: 0 }}
-            animate={step === 'toss' || tossed ? { rotateX: turns, y: [0, -150, -170, 0], scale: [1, 0.8, 0.8, 1] } : { rotateX: 0, y: 0 }}
+            initial={tossed ? { rotateX: turns, y: 0 } : { rotateX: 0, y: 0 }}
+            animate={step === 'toss' || tossed ? { rotateX: turns, y: tossed ? 0 : [0, -150, -170, 0], scale: tossed ? 1 : [1, 0.8, 0.8, 1] } : { rotateX: 0, y: 0 }}
             transition={{ rotateX: { duration: 2.2, ease: [0.2, 0.6, 0.3, 1] }, y: { duration: 2.2, times: [0, 0.45, 0.55, 1], ease: 'easeInOut' }, scale: { duration: 2.2, times: [0, 0.45, 0.55, 1] } }}
           >
             <CoinFace side={0} value={faces[0]} />

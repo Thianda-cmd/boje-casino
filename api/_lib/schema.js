@@ -15,9 +15,11 @@
   per-battle advisory lock, and the rounds play out on the database clock. Wallets stay on the client.
   Double: one red, black and green strip spun for everyone. Rounds repeat lazily like Crash; each commits to
   sha256(seed) when it is created, the roll is revealed when betting closes and the seed once the strip has landed.
+  Showtime: one game-show money wheel for everyone. Rounds repeat lazily like Double's on a fixed timetable; each
+  commits to sha256(seed), reveals a key drawn from the seed when betting closes and the seed once the picks are in.
 */
 
-export const SCHEMA_VERSION = '2026-10-16.3'
+export const SCHEMA_VERSION = '2026-10-21.1'
 
 export const SCHEMA_SQL = /* sql */ `
 set local lock_timeout = '8s';
@@ -2068,6 +2070,352 @@ language sql stable security definer set search_path = public as $$
   from public.dbl_round where id = p_round and ends_at <= public._now_ms()
 $$;
 
+/* ------------------------------------------------------------------ */
+/*  Showtime                                                           */
+/* ------------------------------------------------------------------ */
+-- One game-show money wheel shown to everyone. Rounds repeat lazily like Double's, created under advisory lock
+-- (7356, 0): 15 s of betting, then the show on the fixed timetable of src/games/showtime/clock.ts. Each round commits
+-- to sha256(seed) when it is created, and everything it does comes from the seed (src/games/showtime/fair.ts): the
+-- key, sha256(seed + ':key'), is revealed when betting closes and draws the Booster, the segment and the bonus round
+-- as everyone sees it; the seed itself is revealed once the Prize Wall or Mega Spin picks are in (or when the show
+-- ends) and draws the prizes behind the wall and where the Mega Spin wheel stops. The database only draws what the
+-- timetable needs: the segment, how many drops a Peg Drop takes and how many spins a Mega Spin takes. The browser works
+-- out the payouts from the seed and what the database holds of each player's stakes and pick; wallets stay on the
+-- client, as in Crash. Up to 10,000 a spot for each player in a round.
+
+create table if not exists public.st_round (
+  id bigint primary key,
+  starts_at bigint not null,                -- the show starts (the Booster); betting closed 500 ms before
+  lands_at bigint not null,                 -- the wheel stops
+  picks_until bigint,                       -- Prize Wall and Mega Spin: the picks close and the seed is revealed
+  ends_at bigint not null,                  -- the result is final
+  next_at bigint not null,                  -- the next round opens
+  segment smallint not null check (segment between 0 and 53),
+  seed text not null,
+  key text not null,
+  hash text not null
+);
+create table if not exists public.st_bet (
+  round_id bigint not null references public.st_round (id) on delete cascade,
+  player text not null,                     -- auth uid or guest id; never sent to clients
+  spot text not null check (spot in ('1', '2', '5', '10', 'coin', 'peg', 'wall', 'mega')),
+  name text not null,
+  avatar smallint not null default 0,
+  amount numeric(14, 2) not null check (amount > 0 and amount <= 10000),
+  placed_at bigint not null,
+  primary key (round_id, player, spot)
+);
+create index if not exists st_bet_player on public.st_bet (player, round_id desc);
+create table if not exists public.st_pick (
+  round_id bigint not null references public.st_round (id) on delete cascade,
+  player text not null,
+  pick smallint not null check (pick between 0 and 59), -- a Prize Wall tile, or a Mega Spin flapper (0 to 2)
+  primary key (round_id, player)
+);
+create table if not exists public.st_watch (
+  viewer text primary key,                  -- auth uid or guest id of a browser polling st_state
+  seen_at bigint not null
+);
+create index if not exists st_watch_seen on public.st_watch (seen_at);
+alter table public.st_round enable row level security;
+alter table public.st_bet enable row level security;
+alter table public.st_pick enable row level security;
+alter table public.st_watch enable row level security;
+revoke all on public.st_round, public.st_bet, public.st_pick, public.st_watch from anon, authenticated;
+
+/* ---------- helpers (not granted) ---------- */
+
+-- the i-th number drawn from root for a purpose: the first 52 bits of sha256(root:what:i) (src/games/showtime/fair.ts)
+create or replace function public._st_u(root text, what text, i int) returns bigint
+language sql immutable set search_path = public as $$
+  select ('x' || substr(encode(sha256(convert_to(root || ':' || what || ':' || i, 'UTF8')), 'hex'), 1, 13))::bit(52)::bigint
+$$;
+
+-- that number as a whole number below n, by integer arithmetic (below() in src/games/showtime/rules.ts)
+create or replace function public._st_below(root text, what text, i int, n int) returns int
+language sql immutable set search_path = public as $$
+  select ((public._st_u(root, what, i) * n) / 4503599627370496)::int
+$$;
+
+-- the spot of a segment of the wheel, clockwise from the top (WHEEL in src/games/showtime/rules.ts)
+create or replace function public._st_spot(seg int) returns text
+language sql immutable set search_path = public as $$
+  select (array['mega', '1', '2', '1', '5', '1', 'coin', '1', '2', '1', '10', '1', '2', 'peg', '1', '5', '1', '2', '1', '5', 'coin', '1', '2', '1', '10', '1', '2',
+                'wall', '1', '5', '1', '2', '1', 'coin', '1', '2', '1', '10', '1', '5', 'peg', '1', '2', '1', '5', '1', '2', 'coin', '2', '10', '2', 'wall', '5', '2'])[seg + 1]
+$$;
+
+-- how many drops a Peg Drop takes: the puck drops again while it lands on one of the two DOUBLEs (drawPeg)
+create or replace function public._st_peg_drops(k text) returns int
+language plpgsql immutable set search_path = public as $$
+declare
+  a int := public._st_below(k, 'pegdouble', 0, 16);
+  b int := public._st_below(k, 'pegdouble', 1, 15);
+  d int;
+begin
+  if b >= a then b := b + 1; end if;
+  for i in 0..39 loop
+    d := public._st_below(k, 'pegdrop', i, 16);
+    if d <> a and d <> b then return i + 1; end if;
+  end loop;
+  return 40;
+end $$;
+
+-- how many spins a Mega Spin takes: the wheel spins until each of the three flappers (at segments 0, 21 and 43) has
+-- stopped on a multiplier; one DOUBLE or TRIPLE sits in each sixth of the wheel (drawMega)
+create or replace function public._st_mega_spins(k text, s text) returns int
+language plpgsql immutable set search_path = public as $$
+declare
+  sixths int[] := array[0, 11, 21, 32, 43, 53, 64];
+  ats int[] := array[0, 21, 43];
+  marks int[] := '{}';
+  going boolean[] := array[true, true, true];
+  top int;
+  more boolean;
+begin
+  for i in 1..6 loop
+    marks := marks || (sixths[i] + public._st_below(k, 'megamark', i - 1, sixths[i + 1] - sixths[i]));
+  end loop;
+  for n in 0..29 loop
+    top := public._st_below(s, 'megaspin', n, 64);
+    more := false;
+    for f in 1..3 loop
+      if going[f] then
+        if (top + ats[f]) % 64 = any(marks) then more := true; else going[f] := false; end if;
+      end if;
+    end loop;
+    if not more then return n + 1; end if;
+  end loop;
+  return 30;
+end $$;
+
+create or replace function public._st_phase(r public.st_round, now_ms bigint) returns text
+language sql immutable set search_path = public as $$
+  select case when now_ms < r.starts_at - 500 then 'betting' when now_ms < r.ends_at then 'show' else 'done' end
+$$;
+
+-- the round in play; once the last one's result has shown, one caller creates the next on the timetable of
+-- src/games/showtime/clock.ts and the rest wait on the lock and then read it. Every 100th round clears rounds over
+-- three days old and viewers gone a minute.
+create or replace function public._st_current(now_ms bigint) returns public.st_round
+language plpgsql volatile set search_path = public as $$
+declare
+  r public.st_round;
+  s text;
+  k text;
+  seg int;
+  sp text;
+  t bigint;
+  lands bigint;
+  play bigint;
+  picks bigint;
+  ends bigint;
+  n int;
+begin
+  select * into r from public.st_round order by id desc limit 1;
+  if found and now_ms < r.next_at then
+    return r;
+  end if;
+  perform pg_advisory_xact_lock(7356, 0);
+  select * into r from public.st_round order by id desc limit 1;
+  if found and now_ms < r.next_at then
+    return r;
+  end if;
+  s := replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
+  k := encode(sha256(convert_to(s || ':key', 'UTF8')), 'hex');
+  seg := public._st_below(k, 'segment', 0, 54);
+  sp := public._st_spot(seg);
+  -- betting 15 s; the Booster 3 s and the wheel 7 s; a bonus round's stage after 2 s and its intro 2.5 s
+  t := now_ms + 15000;
+  lands := t + 10000;
+  play := lands + 4500;
+  if sp in ('1', '2', '5', '10') then
+    ends := lands;
+  elsif sp = 'coin' then
+    ends := play + 3000;
+  elsif sp = 'peg' then
+    n := public._st_peg_drops(k);
+    ends := play + n * 2400 + (n - 1) * 1600 + 900;
+  elsif sp = 'wall' then
+    picks := play + 10000;
+    ends := picks + 4500;
+  else
+    n := public._st_mega_spins(k, s);
+    picks := play + 8000;
+    ends := picks + 1000 + 6000 + (n - 1) * 6500 + 1200;
+  end if;
+  insert into public.st_round (id, starts_at, lands_at, picks_until, ends_at, next_at, segment, seed, key, hash)
+  values (coalesce(r.id, 0) + 1, t, lands, picks, ends, ends + case when sp in ('1', '2', '5', '10') then 4000 else 5000 end,
+          seg, s, k, encode(sha256(convert_to(s, 'UTF8')), 'hex'))
+  returning * into r;
+  if r.id % 100 = 0 then
+    delete from public.st_round where next_at < now_ms - 259200000;
+    delete from public.st_watch where seen_at < now_ms - 60000;
+  end if;
+  return r;
+end $$;
+
+-- what a player holds in a round, spot by spot ({} for nothing)
+create or replace function public._st_held(p_round bigint, me text) returns jsonb
+language sql stable set search_path = public as $$
+  select coalesce(jsonb_object_agg(spot, amount), '{}'::jsonb) from public.st_bet where round_id = p_round and player = me
+$$;
+
+/* ---------- public functions ---------- */
+
+-- Feed in src/games/showtime/net.ts. p_hist is the newest finished round the browser already has: when nothing has
+-- finished since, the 50-round history is left out (null). p_open lists (as a json array, up to 50) the rounds the
+-- browser has paid into and not settled: those that have finished always come back in past.
+create or replace function public.st_state(p_player text default null, p_hist bigint default null, p_open jsonb default null)
+returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  me text := public._bj_player(p_player);
+  r public.st_round := public._st_current(now_ms);
+  ph text := public._st_phase(r, now_ms);
+  head bigint;
+  asked bigint[] := array(
+    select e::bigint from jsonb_array_elements_text(case when jsonb_typeof(p_open) = 'array' then p_open else '[]'::jsonb end) e
+     where e ~ '^[0-9]{1,15}$' limit 50);
+begin
+  if me is not null then
+    insert into public.st_watch as w (viewer, seen_at) values (me, now_ms)
+    on conflict (viewer) do update set seen_at = excluded.seen_at where w.seen_at < excluded.seen_at - 5000;
+  end if;
+  select id into head from public.st_round where ends_at <= now_ms order by id desc limit 1;
+  return jsonb_build_object(
+    'now', now_ms,
+    'round', jsonb_build_object(
+      'id', r.id, 'phase', ph, 'startsAt', r.starts_at, 'landsAt', r.lands_at, 'picksUntil', r.picks_until,
+      'endsAt', r.ends_at, 'nextAt', r.next_at, 'hash', r.hash,
+      'key', case when ph <> 'betting' then r.key end,
+      'seed', case when now_ms >= coalesce(r.picks_until, r.ends_at) then r.seed end),
+    'spots', (
+      select jsonb_object_agg(x.spot, jsonb_build_object('total', x.total, 'players', x.players))
+        from (select s.spot, coalesce(sum(b.amount), 0) total, count(b.player) players
+                from (values ('1'), ('2'), ('5'), ('10'), ('coin'), ('peg'), ('wall'), ('mega')) s (spot)
+                left join public.st_bet b on b.round_id = r.id and b.spot = s.spot
+               group by s.spot) x),
+    'players', (select count(distinct player) from public.st_bet where round_id = r.id),
+    'mine', (select jsonb_object_agg(spot, amount) from public.st_bet where round_id = r.id and player = me),
+    'pick', (select pick from public.st_pick where round_id = r.id and player = me),
+    'online', (select count(*) from public.st_watch where seen_at > now_ms - 20000),
+    'head', head,
+    'history', case when p_hist is not null and p_hist = head then null else coalesce((
+      select jsonb_agg(jsonb_build_object('id', h.id, 'seed', h.seed) order by h.id desc)
+        from (select id, seed from public.st_round where ends_at <= now_ms order by id desc limit 50) h), '[]'::jsonb) end,
+    -- this player's last 20 finished rounds with a bet, and any of the asked ones, for settling rounds the browser
+    -- missed: an asked round that has finished and is not here held no bet of this player's
+    'past', coalesce((
+      select jsonb_agg(jsonb_build_object('round', p.round_id, 'seed', p.seed, 'pick', p.pick, 'stakes', p.stakes) order by p.round_id desc)
+        from (
+          (select b.round_id, d.seed, (select k.pick from public.st_pick k where k.round_id = b.round_id and k.player = me) pick,
+                  jsonb_object_agg(b.spot, b.amount) stakes
+             from public.st_bet b join public.st_round d on d.id = b.round_id
+            where me is not null and b.player = me and d.ends_at <= now_ms
+            group by b.round_id, d.seed order by b.round_id desc limit 20)
+          union
+          (select b.round_id, d.seed, (select k.pick from public.st_pick k where k.round_id = b.round_id and k.player = me) pick,
+                  jsonb_object_agg(b.spot, b.amount) stakes
+             from public.st_bet b join public.st_round d on d.id = b.round_id
+            where me is not null and b.player = me and d.ends_at <= now_ms and b.round_id = any(asked)
+            group by b.round_id, d.seed)
+        ) p), '[]'::jsonb)
+  );
+end $$;
+
+-- changes this player's stakes in round p_round (null: whichever round is taking bets): p_bets maps spots to amounts
+-- to add, or below zero to take off (a spot never goes below nothing). All or nothing; the reply holds everything the
+-- player has in the round afterwards.
+create or replace function public.st_bet(p_player text, p_name text, p_round bigint, p_bets jsonb, p_avatar int default 0) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  me text := public._bj_player(p_player);
+  r public.st_round;
+  e record;
+  amt numeric;
+  cur numeric;
+  nm text;
+  av smallint;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'error', 'player'); end if;
+  if jsonb_typeof(p_bets) is distinct from 'object' or p_bets = '{}'::jsonb then
+    return jsonb_build_object('ok', false, 'error', 'invalid');
+  end if;
+  for e in select key, value from jsonb_each(p_bets) loop
+    if e.key not in ('1', '2', '5', '10', 'coin', 'peg', 'wall', 'mega') or jsonb_typeof(e.value) <> 'number' then
+      return jsonb_build_object('ok', false, 'error', 'invalid');
+    end if;
+    amt := (e.value #>> '{}')::numeric;
+    if amt = 0 or abs(amt) > 10000 or amt <> round(amt, 2) then
+      return jsonb_build_object('ok', false, 'error', 'invalid');
+    end if;
+  end loop;
+  r := public._st_current(now_ms);
+  if public._st_phase(r, now_ms) <> 'betting' or (p_round is not null and p_round <> r.id) then
+    return jsonb_build_object('ok', false, 'error', 'closed', 'round', r.id);
+  end if;
+  -- one player's changes one at a time, each checked whole before any of it is applied
+  perform pg_advisory_xact_lock(7357, hashtext(me));
+  for e in select key, value from jsonb_each(p_bets) loop
+    select amount into cur from public.st_bet where round_id = r.id and player = me and spot = e.key;
+    if coalesce(cur, 0) + (e.value #>> '{}')::numeric > 10000 then
+      return jsonb_build_object('ok', false, 'error', 'limit');
+    end if;
+  end loop;
+  nm := public._bj_name(p_name);
+  av := public._bj_avatar(p_avatar);
+  for e in select key, value from jsonb_each(p_bets) loop
+    amt := (e.value #>> '{}')::numeric;
+    if amt > 0 then
+      insert into public.st_bet as b (round_id, player, spot, name, avatar, amount, placed_at)
+      values (r.id, me, e.key, nm, av, amt, now_ms)
+      on conflict (round_id, player, spot) do update set amount = b.amount + excluded.amount, name = excluded.name, avatar = excluded.avatar;
+    else
+      update public.st_bet set amount = amount + amt where round_id = r.id and player = me and spot = e.key and amount + amt > 0;
+      if not found then
+        delete from public.st_bet where round_id = r.id and player = me and spot = e.key;
+      end if;
+    end if;
+  end loop;
+  return jsonb_build_object('ok', true, 'round', r.id, 'held', public._st_held(r.id, me));
+end $$;
+
+-- this player's pick in a Prize Wall (a tile, 0 to 59) or a Mega Spin (a flapper, 0 to 2), which can change until the
+-- picks close. Only a player with a stake on the bonus round picks; while betting is open nothing is said about the
+-- round, so a pick can't be used to learn what the wheel will land on.
+create or replace function public.st_pick(p_player text, p_round bigint, p_pick int) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  me text := public._bj_player(p_player);
+  r public.st_round;
+  sp text;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'error', 'player'); end if;
+  select * into r from public.st_round where id = p_round;
+  if not found or now_ms < r.starts_at - 500 then return jsonb_build_object('ok', false, 'error', 'closed'); end if;
+  sp := public._st_spot(r.segment);
+  if sp not in ('wall', 'mega') or p_pick is null or p_pick < 0 or p_pick >= (case when sp = 'wall' then 60 else 3 end) then
+    return jsonb_build_object('ok', false, 'error', 'invalid');
+  end if;
+  if now_ms >= r.picks_until then return jsonb_build_object('ok', false, 'error', 'closed'); end if;
+  if not exists (select 1 from public.st_bet where round_id = r.id and player = me and spot = sp) then
+    return jsonb_build_object('ok', false, 'error', 'none');
+  end if;
+  insert into public.st_pick (round_id, player, pick) values (r.id, me, p_pick)
+  on conflict (round_id, player) do update set pick = excluded.pick;
+  return jsonb_build_object('ok', true, 'round', r.id, 'pick', p_pick);
+end $$;
+
+-- the seed, key and hash of a round that has finished, for checking it was fair
+create or replace function public.st_round_info(p_round bigint) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', id, 'hash', hash, 'key', key, 'seed', seed, 'startsAt', starts_at, 'endsAt', ends_at)
+  from public.st_round where id = p_round and ends_at <= public._now_ms()
+$$;
+
 -- who may call what: the browser gets the public functions, the service key gets the admin ones
 revoke execute on all functions in schema public from public, anon, authenticated;
 grant usage on schema public to anon, authenticated, service_role;
@@ -2096,6 +2444,10 @@ grant execute on function
   public.dbl_state(text, bigint, jsonb),
   public.dbl_bet(text, text, text, numeric, bigint, int),
   public.dbl_round_info(bigint),
+  public.st_state(text, bigint, jsonb),
+  public.st_bet(text, text, bigint, jsonb, int),
+  public.st_pick(text, bigint, int),
+  public.st_round_info(bigint),
   public.username_available(text)
 to anon, authenticated;
 grant execute on function

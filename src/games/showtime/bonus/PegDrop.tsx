@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
-import { animate, motion, useMotionValue } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { motion, useMotionValue } from 'framer-motion'
 import { MAX_WIN, PEG_SLOTS, type PegDrop as PegDropRound } from '../rules'
+import { dropAt } from '../clock'
 import { fmtX } from '../words'
 import { showtimeSfx } from '../sound'
-import { BonusShell, ResultPlate, shownX } from './kit'
+import { BonusShell, ResultPlate, seeded, shownX, useFirstStep, useShow, type BonusTimes } from './kit'
 
 /*
   Peg Drop: a puck falls through fifteen rows of pegs onto sixteen slots, fourteen multipliers and two DOUBLEs. A
   DOUBLE doubles every multiplier on the row and the puck goes back up and drops again. The slot each drop lands in
-  is drawn up front (rules.ts); its path down the pegs is made up to end there: at each row it goes left or right of
-  the peg, as many rights in all as the slot's number.
+  comes with the round (rules.ts); its path down the pegs is made up to end there, the same in every browser (from the
+  round id): at each row it goes left or right of the peg, as many rights in all as the slot's number. Each drop runs
+  to the shared clock (clock.ts: one every DROP_MS + DOUBLE_MS from the end of the intro).
 
   Drawn on a 640 × 760 board: slot k spans x(k) to x(k + 1); the pegs alternate between whole and half slot positions
   row by row, under where the puck can be.
@@ -23,12 +25,16 @@ const rowY = (j: number) => 74 + j * 33
 const SLOT_TOP = 600
 const SLOT_H = 130
 const ROW_MS = 120
+const ENTRY_MS = 250
+/** a drop's puck lands this long after the drop starts */
+const LAND_AT = ENTRY_MS + (ROWS + 2) * ROW_MS
+const easeIn = (p: number) => p * p * p
 
 /** a path down the pegs that ends in slot d: the puck's points, one above each row and then down into the slot */
-function pathTo(d: number) {
+function pathTo(d: number, rnd: () => number) {
   const moves = [...Array(d).fill(1), ...Array(ROWS - d).fill(-1)]
   for (let i = moves.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
+    const j = Math.floor(rnd() * (i + 1))
     ;[moves[i], moves[j]] = [moves[j], moves[i]]
   }
   const xs = [x(8)]
@@ -46,65 +52,70 @@ function pathTo(d: number) {
 
 type Step = 'intro' | 'drop' | 'double' | 'landed' | 'done'
 
-export function PegDropShow({ round, boost, stake, win, onDone }: { round: PegDropRound; boost: number; stake: number; win: number; onDone: () => void }) {
-  const [step, setStep] = useState<Step>('intro')
-  const [doubles, setDoubles] = useState(0)
-  const [lit, setLit] = useState<number | null>(null)
+export function PegDropShow({ clock, t, round, boost, stake, win, id }: { clock: () => number; t: BonusTimes; round: PegDropRound; boost: number; stake: number; win: number; id: number }) {
   const px = useMotionValue(x(8))
   const py = useMotionValue(-30)
+  const [lit, setLit] = useState<number | null>(null)
+  const [doubles, setDoubles] = useState(0)
+  const paths = useMemo(() => round.drops.map((d, k) => pathTo(d, seeded(id, k))), [round, id])
+  const lastRow = useRef(-1)
+  const last = round.drops.length - 1
+
+  // where the show is at `now`: which drop, how far down, which slot is lit, how many DOUBLEs have doubled the row
+  const steps = useMemo(() => {
+    const out: [Step, number][] = [['intro', t.bonusAt]]
+    round.drops.forEach((_, k) => {
+      const at = dropAt(t.playAt, k)
+      out.push(['drop', at])
+      out.push([k < last ? 'double' : 'landed', at + LAND_AT])
+    })
+    out.push(['done', t.endsAt])
+    return out
+  }, [round, t, last])
+  const step = useShow<Step>(clock, steps, (now) => {
+    let k = -1
+    for (let i = 0; i <= last; i++) if (now >= dropAt(t.playAt, i)) k = i
+    if (k < 0) return
+    const tt = now - dropAt(t.playAt, k)
+    const { xs, ys } = paths[k]
+    if (tt < ENTRY_MS) {
+      px.set(xs[0])
+      py.set(-30 + (50 * tt) / ENTRY_MS)
+    } else if (tt < LAND_AT) {
+      const n = xs.length - 1
+      const q = Math.min(n, (tt - ENTRY_MS) / ROW_MS)
+      const j = Math.min(n - 1, Math.floor(q))
+      const f = q - j
+      px.set(xs[j] + (xs[j + 1] - xs[j]) * f)
+      py.set(ys[j] + (ys[j + 1] - ys[j]) * easeIn(f))
+      const row = k * 100 + j
+      if (row !== lastRow.current && j >= 1 && j <= ROWS) {
+        lastRow.current = row
+        if (!document.hidden) showtimeSfx.peg((j - 1) / ROWS)
+      }
+    } else {
+      px.set(xs[xs.length - 1])
+      py.set(ys[ys.length - 1])
+    }
+    setLit(tt >= LAND_AT ? round.drops[k] : null)
+    // a DOUBLE doubles the row 700 ms after the puck lands on it
+    setDoubles(k + (k < last && tt >= LAND_AT + 700 ? 1 : 0))
+  })
+  const first = useFirstStep(step)
+  useEffect(() => {
+    if (step === first && step !== 'intro') return
+    if (step === 'intro') showtimeSfx.bonusIn()
+    else if (step === 'double') showtimeSfx.double()
+    else if (step === 'landed') showtimeSfx.reveal(win)
+    // a sound for each step as it comes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
+
   const pegs = useMemo(() => {
     const out: [number, number][] = []
     for (let j = 0; j < ROWS; j++) for (let p = j % 2 ? 0.5 : 1; p <= (j % 2 ? 15.5 : 15); p += 1) out.push([x(p), rowY(j)])
     return out
   }, [])
-
-  useEffect(() => {
-    let stop = false
-    const timers: number[] = []
-    const wait = (ms: number) => new Promise<void>((r) => timers.push(window.setTimeout(r, ms)))
-    const run = async () => {
-      showtimeSfx.bonusIn()
-      await wait(boost > 1 ? 2200 : 1500)
-      for (let i = 0; i < round.drops.length; i++) {
-        if (stop) return
-        const d = round.drops[i]
-        const { xs, ys } = pathTo(d)
-        setStep('drop')
-        setLit(null)
-        px.set(xs[0])
-        py.set(-30)
-        await Promise.all([animate(py, 20, { duration: 0.25 }), wait(250)])
-        const n = xs.length - 1
-        const times = xs.map((_, k) => k / n)
-        for (let j = 0; j < ROWS; j++) timers.push(window.setTimeout(() => showtimeSfx.peg(j / ROWS), (j + 1) * ROW_MS))
-        await Promise.all([animate(px, xs, { duration: (n * ROW_MS) / 1000, times, ease: 'linear' }), animate(py, ys, { duration: (n * ROW_MS) / 1000, times, ease: 'easeIn' })])
-        if (stop) return
-        setLit(d)
-        if (round.row[d] === 0) {
-          setStep('double')
-          showtimeSfx.double()
-          await wait(700)
-          setDoubles(i + 1)
-          await wait(900)
-        } else {
-          setStep('landed')
-          showtimeSfx.reveal(win)
-          await wait(900)
-          setStep('done')
-          await wait(2000)
-          if (!stop) onDone()
-        }
-      }
-    }
-    void run()
-    return () => {
-      stop = true
-      timers.forEach(clearTimeout)
-    }
-    // the show runs once, on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   const f = 2 ** doubles
   return (
     <BonusShell spot="peg" boost={boost} stake={stake} bg="radial-gradient(ellipse at 50% 20%, #0f4a2c 0%, #0b2018 55%, #07120e 100%)">

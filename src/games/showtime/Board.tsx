@@ -1,13 +1,15 @@
 import { memo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Chip, chipLabel } from '../../art/Chip'
+import { IconUsers } from '../../components/icons'
 import { SPOTS, type Booster, type Spot, type Stakes } from './rules'
 import { SpotBadge } from './art'
 import { LOOK } from './words'
 
 /*
-  The betting board: the eight spots, the four numbers then the four bonus rounds. A tap puts the chip on a spot. The
-  Booster's spot wears its multiplier; at the result the winning spot glows and the rest dim.
+  The betting board: the eight spots, the four numbers then the four bonus rounds. A tap puts the chip on a spot. Each
+  spot shows how many players are on it this round; the Booster's spot wears its multiplier; at the result the winning
+  spot glows and the rest dim.
 */
 
 export const Board = memo(function Board({
@@ -16,12 +18,15 @@ export const Board = memo(function Board({
   open,
   boost,
   winner,
+  totals,
 }: {
   stakes: Stakes
   onBet: (s: Spot) => void
   open: boolean
   boost: Booster | null
   winner: Spot | null
+  /** everyone's chips on each spot this round */
+  totals?: Record<Spot, { total: number; players: number }>
 }) {
   return (
     <div className="grid grid-cols-4 gap-1.5 sm:gap-2 xl:grid-cols-8">
@@ -31,12 +36,14 @@ export const Board = memo(function Board({
         const boosted = boost?.spot === s
         const won = winner === s
         const dim = !!winner && !won
+        const crowd = totals?.[s]
         return (
           <button
             key={s}
             onClick={() => onBet(s)}
             disabled={!open}
             aria-label={`${L.name}: ${L.line}${on ? `, ${on} on it` : ''}`}
+            title={crowd?.players ? `${crowd.players} ${crowd.players === 1 ? 'player' : 'players'}, ${Math.round(crowd.total).toLocaleString('en-US')} on ${L.name}` : undefined}
             className={`group relative flex h-[76px] min-w-0 flex-col justify-between overflow-hidden rounded-xl p-2 text-left transition sm:h-[92px] sm:p-2.5 ${
               open ? 'hover:-translate-y-0.5 active:translate-y-0' : 'cursor-default'
             } ${dim ? 'opacity-45' : ''}`}
@@ -72,6 +79,12 @@ export const Board = memo(function Board({
                   </motion.span>
                 )}
               </AnimatePresence>
+              {!!crowd?.players && !boosted && (
+                <span className="tnum flex items-center gap-0.5 rounded-full bg-black/35 px-1.5 py-px text-[10.5px] font-bold text-white/70">
+                  <IconUsers size={11} />
+                  {crowd.players}
+                </span>
+              )}
               <span className="ml-auto flex items-center">
                 <AnimatePresence mode="popLayout">
                   {on > 0 && (

@@ -79,7 +79,7 @@ const SLIDES: Slide[] = [
         Showtime!
       </>
     ),
-    text: 'Spin the money wheel. The Booster lights a spot every round, and four bonus rounds pay up to 20,000×.',
+    text: 'A live money wheel: everyone bets the same spin. The Booster lights a spot every round, and four bonus rounds pay up to 20,000×.',
     cta: 'Play Showtime',
     to: '/game/showtime',
     bg: 'linear-gradient(110deg,#1f0f3d 0%,#2e1460 55%,#4a1650 100%)',
