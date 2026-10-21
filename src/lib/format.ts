@@ -17,3 +17,12 @@ export function fmtDuration(ms: number) {
   if (m > 0) return `${m}m ${String(sec).padStart(2, '0')}s`
   return `${sec}s`
 }
+
+/** how long ago a moment was, in its largest whole unit: "just now", "5m ago", "3h ago", "2d ago" */
+export function fmtAgo(ms: number) {
+  const m = Math.floor(Math.max(0, ms) / 60_000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`
+}

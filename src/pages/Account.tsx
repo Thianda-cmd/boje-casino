@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { Avatar, AVATAR_COUNT } from '../art/Avatar'
 import { TierBadge } from '../art/TierBadge'
@@ -8,10 +8,16 @@ import { authMessage, changePassword, deleteAccount, logout, save, updateProfile
 import { fmt } from '../lib/format'
 import { navigate } from '../lib/router'
 import { useAuth } from '../store/auth'
-import { levelFromXp, tierOf, TIERS, useWallet } from '../store/wallet'
+import { CHALLENGES, levelFromXp, tierOf, TIERS, useWallet } from '../store/wallet'
 import { BojeLoader } from '../components/Loader'
+import { Toggle } from '../components/ui'
+import { GameCover } from '../components/covers'
+import { gameInfo, type GameId } from '../store/games'
+import { setMuted, useMuted } from '../lib/sound'
+import { ResetButton } from './History'
 
-/* The player's account: profile, avatar, password, sign-out and deletion. Guests get the pitch. */
+/* The player's account: profile, avatar, password, favourite games, settings, sign-out and deletion. Guests get the
+   pitch, what they have built up on this device, and the settings. */
 
 function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`relative overflow-hidden rounded-2xl bg-panel p-5 shadow-[0_24px_60px_-30px_rgba(0,0,0,.8)] sm:p-6 ${className}`}>{children}</div>
@@ -35,8 +41,139 @@ export default function Account() {
         <BojeLoader />
       </div>
     )
-  if (status !== 'user') return <GuestPitch available={available} />
+  if (status !== 'user')
+    return (
+      <div className="mx-auto flex max-w-[980px] flex-col gap-4">
+        <GuestPitch available={available} />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <DeviceProgress />
+          <Settings />
+        </div>
+      </div>
+    )
   return <Profile />
+}
+
+/** a level badge with the bar to the next level */
+function LevelBar() {
+  const xp = useWallet((s) => s.xp)
+  const lv = levelFromXp(xp)
+  const tier = tierOf(lv.level)
+  const rank = TIERS.findIndex((t) => t.name === tier.name)
+  return (
+    <button onClick={() => navigate('/rewards')} className="flex w-full items-center gap-3 rounded-xl bg-stage/60 p-3 text-left transition hover:bg-stage">
+      <TierBadge color={tier.color} rank={rank} size={44} />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="text-[15px] font-extrabold" style={{ color: tier.color }}>
+            {tier.name} · Level {lv.level}
+          </span>
+          <span className="tnum text-[12px] font-semibold text-dim">
+            {fmt(lv.into, 0)} / {fmt(lv.need, 0)} XP
+          </span>
+        </span>
+        <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-black/30">
+          <span className="block h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, (lv.into / lv.need) * 100))}%`, background: tier.color }} />
+        </span>
+      </span>
+    </button>
+  )
+}
+
+/** what a guest has built up in this browser: what an account would keep */
+function DeviceProgress() {
+  const balance = useWallet((s) => s.balance)
+  const rounds = useWallet((s) => s.rounds ?? 0)
+  const biggest = useWallet((s) => s.biggestWin)
+  const streak = useWallet((s) => s.dailyStreak)
+  const challenges = useWallet((s) => s.challenges)
+  const done = CHALLENGES.filter((c) => challenges[c.id]?.claimed).length
+  const tiles: [string, ReactNode][] = [
+    ['Balance', <span className="flex items-center gap-1.5">{fmt(balance)} <Coin size={14} /></span>],
+    ['Rounds played', fmt(rounds, 0)],
+    ['Biggest win', fmt(biggest)],
+    ['Daily streak', `${streak} ${streak === 1 ? 'day' : 'days'}`],
+    ['Challenges', `${done} of ${CHALLENGES.length}`],
+    ['Saved in', 'This browser'],
+  ]
+  return (
+    <Panel>
+      <H sub="An account keeps all of this, on every device.">Your progress so far</H>
+      <LevelBar />
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {tiles.map(([k, v]) => (
+          <div key={k} className="rounded-xl bg-stage/60 px-3 py-2.5">
+            <div className="text-[11.5px] font-semibold text-dim">{k}</div>
+            <div className="tnum mt-0.5 truncate text-[15px] font-extrabold">{v}</div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  )
+}
+
+/** sound, the game finder's shortcut, and starting over */
+function Settings() {
+  const muted = useMuted()
+  const row = (title: string, text: string, control: ReactNode) => (
+    <div className="flex items-center gap-4 border-t border-line py-3.5 first:border-t-0 first:pt-0 last:pb-0">
+      <div className="min-w-0 flex-1">
+        <div className="text-[14px] font-bold">{title}</div>
+        <div className="mt-0.5 text-[12.5px] text-muted">{text}</div>
+      </div>
+      {control}
+    </div>
+  )
+  return (
+    <Panel>
+      <H sub="Kept on this device.">Settings</H>
+      <div>
+        {row('Sound effects', 'Spins, cards, wins and the sounds of the tables.', <Toggle on={!muted} onChange={(on) => setMuted(!on)} label="Sound effects" />)}
+        {row(
+          'Find a game fast',
+          'Press these anywhere on a computer to open the game finder.',
+          <span className="flex shrink-0 gap-1 text-[12px] font-bold text-muted">
+            <kbd className="rounded-md border border-line bg-stage px-2 py-1">Ctrl</kbd>
+            <kbd className="rounded-md border border-line bg-stage px-2 py-1">K</kbd>
+          </span>,
+        )}
+        {row('Start over', 'Wipes your coins, level, history and rewards, and gives you a fresh 1,000.', <ResetButton className="bg-stage" />)}
+      </div>
+    </Panel>
+  )
+}
+
+/** the games played most: the bets of 25 or more counted for challenges, or the rounds kept, whichever is more */
+function FavouriteGames() {
+  const played = useWallet((s) => s.gamesPlayed)
+  const bets = useWallet((s) => s.bets)
+  const top = useMemo(() => {
+    const n = new Map<string, number>(Object.entries(played).map(([k, v]) => [k, v ?? 0]))
+    const recent = new Map<string, number>()
+    for (const b of bets) recent.set(b.game, (recent.get(b.game) ?? 0) + 1)
+    for (const [k, v] of recent) n.set(k, Math.max(n.get(k) ?? 0, v))
+    return [...n.entries()].filter(([id, v]) => v > 0 && !gameInfo(id).retired).sort((a, b) => b[1] - a[1]).slice(0, 4)
+  }, [played, bets])
+  return (
+    <Panel>
+      <H sub="The games you play most.">Favourite games</H>
+      {top.length ? (
+        <div className="grid grid-cols-4 gap-2.5">
+          {top.map(([id, n]) => (
+            <button key={id} onClick={() => navigate(`/game/${id}`)} className="group min-w-0 text-left">
+              <div className="aspect-[4/5] overflow-hidden rounded-lg ring-1 ring-white/5 transition group-hover:-translate-y-0.5">
+                <GameCover id={id as GameId} />
+              </div>
+              <div className="mt-1.5 truncate text-[12.5px] font-bold">{gameInfo(id).name}</div>
+              <div className="tnum text-[11.5px] text-dim">{fmt(n, 0)} rounds</div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-xl bg-stage/60 p-4 text-[13px] text-muted">Play a few rounds and the games you come back to will show up here.</p>
+      )}
+    </Panel>
+  )
 }
 
 function GuestPitch({ available }: { available: boolean }) {
@@ -48,7 +185,7 @@ function GuestPitch({ available }: { available: boolean }) {
     ['Your name on the board', 'Crash shows your username to everyone in the round.'],
   ]
   return (
-    <Panel className="mx-auto max-w-[760px] !p-0">
+    <Panel className="!p-0">
       <div className="relative overflow-hidden bg-[radial-gradient(ellipse_at_20%_0%,rgba(34,211,111,.22),transparent_60%),radial-gradient(ellipse_at_90%_100%,rgba(155,123,255,.25),transparent_60%)] p-6 sm:p-10">
         <div className="flex -space-x-3">
           {[0, 9, 4, 14, 3].map((i, k) => (
@@ -145,6 +282,11 @@ function Profile() {
       <div className="grid gap-4 lg:grid-cols-2">
         <ProfileForm />
         <PasswordForm />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <FavouriteGames />
+        <Settings />
       </div>
 
       <Panel>

@@ -17,8 +17,10 @@ import { hasShared as hasBattleStakes, isNew as isNewBattle, migrateGuest as mig
 import type { BattleServer } from './games/battles/types'
 import { GameIcon } from './components/GameIcon'
 import { GameCover } from './components/covers'
+import { MoreGames } from './components/GameRows'
+import { Footer } from './components/Footer'
 import { Toasts } from './components/Toasts'
-import { isMuted, setMuted } from './lib/sound'
+import { setMuted, useMuted } from './lib/sound'
 import { BootDone } from './lib/boot'
 import { TycoonIcon } from './games/tycoon/icon'
 import { useTycoonBadge, useTycoonStatus } from './games/tycoon/status'
@@ -47,6 +49,7 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   sicbo: lazy(() => import('./games/sicbo/SicBo')),
   craps: lazy(() => import('./games/craps/Craps')),
   holdem: lazy(() => import('./games/holdem/Holdem')),
+  showtime: lazy(() => import('./games/showtime/Showtime')),
   lines: lazy(() => import('./games/lines/LuckyLines')),
   penalty: lazy(() => import('./games/penalty/Penalty')),
   scratch: lazy(() => import('./games/scratch/Scratch')),
@@ -100,6 +103,7 @@ export default function App() {
     page = (
       <Suspense fallback={pageFallback}>
         <Game />
+        <MoreGames id={m[1] as GameId} />
         <BootDone />
       </Suspense>
     )
@@ -143,6 +147,7 @@ export default function App() {
                 transition={{ duration: 0.18, ease: 'easeOut' }}
               >
                 {page}
+                <Footer />
               </motion.div>
             </AnimatePresence>
           </div>
@@ -304,7 +309,7 @@ function TopBar({ onToggle, onSearch }: { onToggle: () => void; onSearch: () => 
   const lv = levelFromXp(xp)
   const tier = tierOf(lv.level)
   const claimable = useClaimableCount()
-  const [muted, setM] = useState(isMuted())
+  const muted = useMuted()
   const pct = Math.min(1, lv.into / lv.need)
 
   return (
@@ -373,16 +378,13 @@ function TopBar({ onToggle, onSearch }: { onToggle: () => void; onSearch: () => 
           </div>
         </button>
         <button
-          onClick={() => {
-            setMuted(!muted)
-            setM(!muted)
-          }}
+          onClick={() => setMuted(!muted)}
           className="hidden h-10 w-10 items-center justify-center rounded-lg text-muted transition hover:bg-panel2 hover:text-ink sm:flex"
           title={muted ? 'Unmute' : 'Mute'}
         >
           {muted ? <IconMute /> : <IconVolume />}
         </button>
-        <UserMenu muted={muted} onMute={() => (setMuted(!muted), setM(!muted))} />
+        <UserMenu muted={muted} onMute={() => setMuted(!muted)} />
       </div>
     </header>
   )

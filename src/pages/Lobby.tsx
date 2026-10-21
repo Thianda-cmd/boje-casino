@@ -1,51 +1,51 @@
-import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CATEGORIES, GAMES, type Category, type GameId } from '../store/games'
+import { GAMES, gameInfo, type Category, type GameId, type GameInfo } from '../store/games'
 import { navigate } from '../lib/router'
 import { GameCover, HeroRoad } from '../components/covers'
-import { DAILY_COOLDOWN, dailyReward, levelFromXp, missionsToday, tierOf, useWallet } from '../store/wallet'
+import { GameGridView, GameRow, RowTitle } from '../components/GameRows'
+import {
+  DAILY_COOLDOWN,
+  HEIST_MAX_PICKS,
+  dailyReward,
+  heistPicks,
+  levelFromXp,
+  missionsToday,
+  rakebackRate,
+  tierOf,
+  TIERS,
+  useClaimableCount,
+  useWallet,
+} from '../store/wallet'
 import { dayKey, missionTarget, missionsFor } from '../store/rewards'
 import { dailyState } from './rewards/daily'
-import { Coin, IconChart, IconChevron, IconFire, IconGift, IconStar, IconTrophy } from '../components/icons'
-import { fmt, fmtDuration } from '../lib/format'
+import { Coin, IconBolt, IconCards, IconChart, IconChevron, IconGift, IconHistory, IconHome, IconSearch, IconStar, IconTrophy, IconX } from '../components/icons'
+import { fmt, fmtAgo, fmtDuration } from '../lib/format'
 import { BetsTable } from './History'
 import { useNow } from '../lib/useNow'
 import { useUid } from '../art/ids'
 import { Rocket } from '../art/Rocket'
 import { useAuth } from '../store/auth'
-import { VaultDoor } from '../art/Vault'
+import { Lockpick, VaultDoor } from '../art/Vault'
 import { Avatar } from '../art/Avatar'
 import { CardBack, CardFace } from '../art/Card'
 import { Chip } from '../art/Chip'
 import type { Suit } from '../art/suits'
 import { CrateArt, ItemArt } from '../games/cases/art'
+import { TierBadge } from '../art/TierBadge'
+import { TycoonIcon } from '../games/tycoon/icon'
+import { useTycoonStatus } from '../games/tycoon/status'
 
 export default function Lobby() {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-7">
       <div className="grid gap-3 xl:grid-cols-[1fr_340px]">
         <Hero />
         <DailyCard />
       </div>
       <GuestStrip />
-      <GameGrid />
-      <StatsStrip />
-      <section>
-        <SectionTitle icon={<IconChart size={18} />}>Your recent bets</SectionTitle>
-        <BetsTable limit={8} />
-      </section>
-    </div>
-  )
-}
-
-function SectionTitle({ children, icon, right }: { children: ReactNode; icon?: ReactNode; right?: ReactNode }) {
-  return (
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="flex items-center gap-2 text-[17px] font-extrabold tracking-tight">
-        {icon && <span className="text-muted">{icon}</span>}
-        {children}
-      </h2>
-      {right}
+      <Games />
+      <Activity />
     </div>
   )
 }
@@ -68,6 +68,23 @@ interface Slide {
 const TycoonHero = lazy(() => import('../games/tycoon/hero').then((m) => ({ default: m.TycoonHero })))
 
 const SLIDES: Slide[] = [
+  {
+    key: 'showtime',
+    eyebrow: 'New game show',
+    tone: 'text-[#ff8c9a] bg-[#ff4d61]/15',
+    title: (
+      <>
+        It's
+        <br />
+        Showtime!
+      </>
+    ),
+    text: 'Spin the money wheel. The Booster lights a spot every round, and four bonus rounds pay up to 20,000×.',
+    cta: 'Play Showtime',
+    to: '/game/showtime',
+    bg: 'linear-gradient(110deg,#1f0f3d 0%,#2e1460 55%,#4a1650 100%)',
+    art: <HeroFan ids={['coinflip', 'lines', 'showtime', 'popparty', 'reef']} />,
+  },
   {
     key: 'chicken',
     eyebrow: 'Featured',
@@ -800,79 +817,261 @@ function HeroFan({ ids =['blackjack', 'videopoker', 'popparty', 'roulette', 'min
   )
 }
 
-/* ------------------------------ grid ------------------------------ */
+/* ------------------------------ games ------------------------------ */
 
-function GameGrid() {
-  const [cat, setCat] = useState<Category | 'all'>('all')
-  const list = GAMES.filter((g) => cat === 'all' || g.category === cat)
-  const tabs: { id: Category | 'all'; name: string }[] = [{ id: 'all', name: 'All games' }, ...CATEGORIES]
+/* The games, two ways. The Lobby view is a page of rows (what you played last, the live tables, slots, originals,
+   the free-coin games and the table games), each scrolling sideways; every other view, and any search, is one grid
+   of the games that match. The view you picked stays for the visit, so coming back from a game lands where you were. */
+
+type View = 'lobby' | Category | 'live' | 'new'
+let lastView: View = 'lobby'
+
+const LiveDot = () => (
+  <span className="relative flex h-2 w-2">
+    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-70" />
+    <span className="relative inline-flex h-2 w-2 rounded-full bg-danger" />
+  </span>
+)
+const SlotIcon = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="3" y="4" width="18" height="16" rx="3" />
+    <path d="M9 4v16M15 4v16" />
+  </svg>
+)
+
+const VIEWS: { id: View; name: string; icon: ReactNode }[] = [
+  { id: 'lobby', name: 'Lobby', icon: <IconHome size={15} /> },
+  { id: 'originals', name: 'Originals', icon: <IconStar size={15} /> },
+  { id: 'slots', name: 'Slots', icon: <SlotIcon /> },
+  { id: 'table', name: 'Table games', icon: <IconCards size={15} /> },
+  { id: 'live', name: 'Live', icon: <LiveDot /> },
+  { id: 'new', name: 'New', icon: <IconBolt size={15} /> },
+]
+const inView = (v: View, g: GameInfo) => v === 'lobby' || (v === 'live' ? g.tag === 'live' : v === 'new' ? g.tag === 'new' : g.category === v)
+const ofCategory = (c: Category) => GAMES.filter((g) => g.category === c)
+
+function Games() {
+  const [view, setViewState] = useState<View>(lastView)
+  const [q, setQ] = useState('')
+  const top = useRef<HTMLDivElement>(null)
+  const t = q.trim().toLowerCase()
+  const list = GAMES.filter((g) => inView(view, g) && (!t || g.name.toLowerCase().includes(t) || g.tagline.toLowerCase().includes(t)))
+  const setView = (v: View, scroll = false) => {
+    lastView = v
+    setViewState(v)
+    if (scroll) requestAnimationFrame(() => top.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+  const name = VIEWS.find((v) => v.id === view)!.name
   return (
-    <section>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="no-scrollbar flex gap-1.5 overflow-x-auto rounded-full bg-panel p-1">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setCat(t.id)}
-              className={`relative whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${cat === t.id ? 'text-ink' : 'text-muted hover:text-ink'}`}
-            >
-              {cat === t.id && <motion.span layoutId="lobby-tab" className="absolute inset-0 -z-0 rounded-full bg-raised" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
-              <span className="relative">{t.name}</span>
-            </button>
-          ))}
+    <section className="flex flex-col gap-7">
+      <div ref={top} className="-mb-2 flex scroll-mt-3 flex-wrap items-center justify-between gap-3">
+        <div className="no-scrollbar -mx-3 flex max-w-[calc(100%+24px)] overflow-x-auto px-3 sm:mx-0 sm:max-w-full sm:px-0">
+          <div className="flex gap-1 rounded-full bg-panel p-1">
+            {VIEWS.map((v) => (
+              <button
+                key={v.id}
+                onClick={() => setView(v.id)}
+                className={`relative flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-bold transition-colors ${view === v.id ? 'text-ink' : 'text-muted hover:text-ink'}`}
+              >
+                {view === v.id && <motion.span layoutId="lobby-tab" className="absolute inset-0 rounded-full bg-raised" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+                <span className="relative flex items-center">{v.icon}</span>
+                <span className="relative">{v.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
-        <span className="text-[13px] font-semibold text-dim">{list.length} games</span>
+        <label className="flex h-10 w-full items-center gap-2 rounded-full bg-panel px-3.5 text-dim ring-1 ring-transparent transition focus-within:ring-raised sm:w-[240px]">
+          <IconSearch size={16} />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={view === 'lobby' ? 'Find a game' : `Find in ${name}`}
+            className="min-w-0 flex-1 bg-transparent text-[13.5px] font-semibold text-ink outline-none placeholder:text-dim"
+          />
+          {q && (
+            <button onClick={() => setQ('')} aria-label="Clear" className="-mr-1 flex h-7 w-7 items-center justify-center rounded-full hover:bg-raised hover:text-ink">
+              <IconX size={14} />
+            </button>
+          )}
+        </label>
       </div>
-      <motion.div layout className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-        <AnimatePresence mode="popLayout">
-          {list.map((g, i) => (
-            <motion.button
-              key={g.id}
-              layout
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 24 }}
-              onClick={() => navigate(`/game/${g.id}`)}
-              className="card-in group text-left"
-              style={{ animationDelay: `${0.03 * i}s` }}
-            >
-              <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-panel2 shadow-[0_14px_30px_-16px_rgba(0,0,0,.9)] ring-1 ring-white/5 transition-transform duration-200 will-change-transform group-hover:-translate-y-1.5 group-active:translate-y-0 group-active:scale-[.98]">
-                <GameCover id={g.id} />
-                {g.tag && <Tag tag={g.tag} />}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent p-3 pt-14">
-                  <div className="text-[17px] font-black leading-tight tracking-tight text-white drop-shadow sm:text-[18px]">{g.name}</div>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 transition-opacity will-change-[opacity] group-hover:opacity-100">
-                  <span className="rounded-full bg-white px-5 py-2.5 text-[14px] font-extrabold text-[#0b1520] shadow-lg">Play</span>
-                </div>
-              </div>
-            </motion.button>
-          ))}
-        </AnimatePresence>
-      </motion.div>
+
+      {view === 'lobby' && !t ? (
+        <>
+          <ContinueRow />
+          <GameRow
+            title="Live & multiplayer"
+            icon={
+              <span className="flex w-[18px] justify-center">
+                <LiveDot />
+              </span>
+            }
+            games={GAMES.filter((g) => g.tag === 'live')}
+            onAll={() => setView('live', true)}
+          />
+          <GameRow title="Slots" icon={<SlotIcon size={18} />} games={ofCategory('slots')} onAll={() => setView('slots', true)} />
+          <GameRow title="Boje Originals" icon={<IconStar size={18} />} games={ofCategory('originals')} onAll={() => setView('originals', true)} />
+          <FreeCoins />
+          <GameRow title="Table games" icon={<IconCards size={18} />} games={ofCategory('table')} onAll={() => setView('table', true)} />
+        </>
+      ) : (
+        <div>
+          <RowTitle count={list.length} right={t ? <span className="truncate text-[13px] font-semibold text-dim">matching “{q.trim()}”</span> : undefined}>
+            {view === 'lobby' ? 'All games' : name}
+          </RowTitle>
+          {list.length ? (
+            <GameGridView games={list} />
+          ) : (
+            <div className="rounded-2xl border border-dashed border-line bg-panel/50 p-10 text-center text-[14px] text-muted">
+              No games match “{q.trim()}”.{' '}
+              <button onClick={() => setQ('')} className="font-bold text-accent hover:underline">
+                Clear the search
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }
 
-function Tag({ tag }: { tag: 'new' | 'live' | 'hot' }) {
-  if (tag === 'live')
-    return (
-      <span className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-white">
-        <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-70" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-danger" />
-        </span>
-        Live
-      </span>
-    )
+/** the games you played last, newest first, with how your last round there went */
+function ContinueRow() {
+  const bets = useWallet((s) => s.bets)
+  const now = useNow(30_000)
+  const recent = useMemo(() => {
+    const seen = new Map<string, { game: GameId; net: number; time: number }>()
+    for (const b of bets) if (!seen.has(b.game) && !gameInfo(b.game).retired) seen.set(b.game, { game: b.game, net: b.payout - b.bet, time: b.time })
+    return [...seen.values()].slice(0, 10)
+  }, [bets])
+  if (!recent.length) return null
+  const by = new Map(recent.map((r) => [r.game, r]))
   return (
-    <span
-      className={`absolute left-2.5 top-2.5 flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${
-        tag === 'new' ? 'bg-accent text-[#032412]' : 'bg-gold text-[#2a1c00]'
-      }`}
+    <GameRow
+      title="Continue playing"
+      icon={<IconHistory size={18} />}
+      games={recent.map((r) => r.game)}
+      below={(g) => {
+        const r = by.get(g.id)!
+        return (
+          <div className="tnum mt-1.5 flex items-center justify-between gap-2 px-0.5 text-[12px] font-bold">
+            <span className="truncate text-dim">{fmtAgo(now - r.time)}</span>
+            <span className={r.net > 0 ? 'text-accent' : 'text-dim'}>
+              {r.net > 0 ? '+' : ''}
+              {fmt(r.net)}
+            </span>
+          </div>
+        )
+      }}
+    />
+  )
+}
+
+/* ------------------------------ free coins ------------------------------ */
+
+/** the ways to free coins, as a row of three: Vault Heist, Casino Tycoon and what's waiting on the Rewards page */
+function FreeCoins() {
+  const now = useNow(1000)
+  const heist = useWallet((s) => s.heist)
+  const { picks, next } = heistPicks(heist, now)
+  const st = useTycoonStatus(5000)
+  const claimable = useClaimableCount()
+  const rakeback = useWallet((s) => s.rakeback ?? 0)
+  const xp = useWallet((s) => s.xp)
+  const rate = rakebackRate(levelFromXp(xp).level)
+  return (
+    <section>
+      <RowTitle icon={<Coin size={18} />}>Free coins</RowTitle>
+      <div className="grid gap-3 md:grid-cols-3">
+        <FreeCard
+          to="/heist"
+          bg="linear-gradient(120deg,#2d2611 0%,#1f1d12 60%,#191a14 100%)"
+          glow="#f7c548"
+          eyebrow="Vault Heist"
+          title="Crack the vault"
+          line={next ? `Next lockpick in ${fmtDuration(next)}` : `${picks} of ${HEIST_MAX_PICKS} lockpicks ready`}
+          extra={
+            <span className="flex gap-0.5">
+              {Array.from({ length: HEIST_MAX_PICKS }, (_, i) => (
+                <Lockpick key={i} on={i < picks} size={20} />
+              ))}
+            </span>
+          }
+          art={<VaultDoor size={84} />}
+          cta={picks ? 'Play' : 'Practice'}
+          tone="bg-gold text-[#2a1c00]"
+        />
+        <FreeCard
+          to="/tycoon"
+          bg="linear-gradient(120deg,#3a1d3e 0%,#231640 60%,#171230 100%)"
+          glow="#f5b83d"
+          eyebrow="Casino Tycoon"
+          title={!st ? 'Build a casino' : st.fullIn === 0 ? 'Your vault is full' : 'Your vault is filling'}
+          line={
+            !st
+              ? 'An idle game that pays coins every hour'
+              : st.due
+                ? `${st.due} ${st.due === 1 ? 'milestone' : 'milestones'} to claim`
+                : `${fmt(st.vault, 0)} of ${fmt(st.cap, 0)} coins · +${fmt(st.rate, 1)}/h`
+          }
+          extra={
+            st && (
+              <span className="block h-1.5 w-24 overflow-hidden rounded-full bg-black/30">
+                <span className="block h-full rounded-full bg-[#ffcf4a]" style={{ width: `${Math.min(100, (st.vault / st.cap) * 100)}%` }} />
+              </span>
+            )
+          }
+          art={
+            <span className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-gradient-to-b from-[#ffe08a] to-[#f2a93b] text-[#3a2400] shadow-[inset_0_-4px_0_rgba(0,0,0,.18)]">
+              <TycoonIcon width={40} height={40} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </span>
+          }
+          cta={!st ? 'Open' : 'Collect'}
+          tone="bg-[#ffcf4a] text-[#2a1c00]"
+        />
+        <FreeCard
+          to="/rewards"
+          bg="linear-gradient(120deg,#0f3324 0%,#10261d 60%,#0e1d18 100%)"
+          glow="#22d36f"
+          eyebrow="Rewards"
+          title={claimable ? `${claimable} ${claimable === 1 ? 'reward' : 'rewards'} to claim` : 'Missions, wheel and more'}
+          line={rakeback >= 0.01 ? `${fmt(rakeback)} rakeback set aside` : `${+(rate * 100).toFixed(2)}% of every bet comes back`}
+          art={
+            <span className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-gradient-to-b from-[#5cf09a] to-[#14a957] text-[#032412] shadow-[inset_0_-4px_0_rgba(0,0,0,.18)]">
+              <IconGift size={38} />
+            </span>
+          }
+          cta="Open"
+          tone="bg-accent text-[#032412]"
+        />
+      </div>
+    </section>
+  )
+}
+
+function FreeCard(p: { to: string; bg: string; glow: string; eyebrow: string; title: string; line: string; extra?: ReactNode; art: ReactNode; cta: string; tone: string }) {
+  return (
+    <button
+      onClick={() => navigate(p.to)}
+      className="group relative flex min-h-[132px] items-center gap-4 overflow-hidden rounded-2xl p-4 text-left ring-1 ring-white/[.05] transition hover:-translate-y-0.5"
+      style={{ background: p.bg }}
     >
-      {tag === 'hot' && <IconFire size={11} strokeWidth={3} />}
-      {tag}
-    </span>
+      <span className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full blur-3xl" style={{ background: p.glow, opacity: 0.16 }} />
+      <span className="relative min-w-0 flex-1">
+        <span className="block text-[11px] font-extrabold uppercase tracking-wider" style={{ color: p.glow }}>
+          {p.eyebrow}
+        </span>
+        <span className="mt-0.5 block truncate text-[18px] font-black tracking-tight text-white">{p.title}</span>
+        <span className="tnum mt-0.5 block truncate text-[12.5px] font-semibold text-white/60">{p.line}</span>
+        <span className="mt-2.5 flex items-center gap-3">
+          <span className={`inline-flex h-8 items-center gap-1 rounded-lg px-3.5 text-[13px] font-extrabold shadow-[inset_0_-2px_0_rgba(0,0,0,.16)] ${p.tone}`}>
+            {p.cta} <IconChevron size={14} className="transition-transform group-hover:translate-x-0.5" />
+          </span>
+          {p.extra}
+        </span>
+      </span>
+      <span className="relative shrink-0 drop-shadow-[0_12px_24px_rgba(0,0,0,.55)] transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">{p.art}</span>
+    </button>
   )
 }
 
@@ -972,32 +1171,90 @@ function DailyCard() {
   )
 }
 
-function StatsStrip() {
-  const s = useWallet()
-  const lv = levelFromXp(s.xp)
+/* ------------------------------ activity ------------------------------ */
+
+/** your last few rounds, beside your VIP level and totals */
+function Activity() {
+  const any = useWallet((s) => s.bets.length > 0)
+  return (
+    <section className="grid gap-x-3 gap-y-7 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="flex min-w-0 flex-col">
+        <RowTitle
+          icon={<IconChart size={18} />}
+          right={
+            any && (
+              <button onClick={() => navigate('/history')} className="flex h-8 items-center gap-1 rounded-lg px-2.5 text-[13px] font-bold text-muted transition hover:bg-panel hover:text-ink">
+                All bets <IconChevron size={14} />
+              </button>
+            )
+          }
+        >
+          Your recent bets
+        </RowTitle>
+        <div className="flex-1">
+          <BetsTable limit={6} />
+        </div>
+      </div>
+      <div>
+        <RowTitle icon={<IconTrophy size={18} />}>Your level</RowTitle>
+        <LevelCard />
+      </div>
+    </section>
+  )
+}
+
+function LevelCard() {
+  const xp = useWallet((s) => s.xp)
+  const rounds = useWallet((s) => s.rounds ?? 0)
+  const wagered = useWallet((s) => s.totalWagered)
+  const biggest = useWallet((s) => s.biggestWin)
+  const lv = levelFromXp(xp)
   const tier = tierOf(lv.level)
-  const items: [string, ReactNode, ReactNode][] = [
-    ['Rounds played', fmt(s.rounds ?? 0, 0), <IconChart size={16} />],
-    ['Total wagered', fmt(s.totalWagered), <Coin size={16} />],
-    ['Biggest win', fmt(s.biggestWin), <IconTrophy size={16} />],
-    [
-      'VIP level',
-      <span>
-        {lv.level} <span style={{ color: tier.color }}>{tier.name}</span>
-      </span>,
-      <IconStar size={16} />,
-    ],
+  const rank = TIERS.findIndex((t) => t.name === tier.name)
+  const nextTier = TIERS[rank + 1]
+  const stats: [string, ReactNode][] = [
+    ['Rounds played', fmt(rounds, 0)],
+    ['Total wagered', fmt(wagered)],
+    ['Biggest win', <span className={biggest > 0 ? 'text-gold' : ''}>{fmt(biggest)}</span>],
+    ['Rakeback', `${+(rakebackRate(lv.level) * 100).toFixed(2)}%`],
   ]
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {items.map(([k, v, icon]) => (
-        <div key={k} className="rounded-xl bg-panel px-4 py-3">
-          <div className="flex items-center gap-1.5 text-[12px] font-semibold text-dim">
-            {icon} {k}
-          </div>
-          <div className="tnum mt-1 text-[20px] font-extrabold tracking-tight">{v}</div>
+    <div className="relative overflow-hidden rounded-2xl bg-panel p-5">
+      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full blur-3xl" style={{ background: tier.color, opacity: 0.13 }} />
+      <button onClick={() => navigate('/rewards')} className="group relative flex w-full items-center gap-4 text-left">
+        <TierBadge color={tier.color} rank={rank} size={56} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[12px] font-semibold text-dim">VIP level {lv.level}</span>
+          <span className="block text-[21px] font-black tracking-tight" style={{ color: tier.color }}>
+            {tier.name}
+          </span>
+        </span>
+        <span className="flex items-center gap-1 rounded-lg bg-stage/70 px-2.5 py-1.5 text-[12px] font-bold text-muted transition group-hover:text-ink">
+          Perks <IconChevron size={13} />
+        </span>
+      </button>
+      <div className="relative mt-4">
+        <div className="flex justify-between text-[12px] font-semibold text-dim">
+          <span>To level {lv.level + 1}</span>
+          <span className="tnum">
+            {fmt(lv.into, 0)} / {fmt(lv.need, 0)} XP
+          </span>
         </div>
-      ))}
+        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-stage">
+          <motion.div className="h-full rounded-full" style={{ background: tier.color }} initial={false} animate={{ width: `${Math.max(2, Math.min(100, (lv.into / lv.need) * 100))}%` }} transition={{ duration: 0.6 }} />
+        </div>
+        <div className="mt-1.5 text-[12px] text-dim">
+          {nextTier ? `${nextTier.name} at level ${nextTier.min}.` : 'You are at the top tier.'} Every coin you bet is 1 XP.
+        </div>
+      </div>
+      <div className="relative mt-4 grid grid-cols-2 gap-2">
+        {stats.map(([k, v]) => (
+          <div key={k} className="rounded-xl bg-stage/60 px-3 py-2.5">
+            <div className="text-[11.5px] font-semibold text-dim">{k}</div>
+            <div className="tnum mt-0.5 text-[16px] font-extrabold tracking-tight">{v}</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

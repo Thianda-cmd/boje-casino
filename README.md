@@ -1,9 +1,9 @@
 # Boje Casino (play money)
 
-A Stake-style casino with thirty-one games. Originals: Chicken Road, Crash, Double, Coin Flip, Reef Raid, Lucky Lines,
-Mines, Plinko, Dice, Limbo, Keno, Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and
-Scratch & Win. Table and machine games: Blackjack, Live Blackjack, Baccarat, Sic Bo, Craps, Hold'em Showdown, Roulette,
-Video Poker, Chompers, Pop Party, Robo Riot and Plunder Bay.
+A Stake-style casino with thirty-two games. Originals: Showtime (a game-show money wheel), Chicken Road, Crash, Double,
+Coin Flip, Reef Raid, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw,
+Penalty Shootout and Scratch & Win. Slots: Lucky Lines, Plunder Bay, Chompers, Pop Party and Robo Riot. Table games:
+Blackjack, Live Blackjack, Baccarat, Sic Bo, Craps, Hold'em Showdown, Roulette and Video Poker.
 Vault Heist (a skill game) and Casino Tycoon (an idle game) are free and pay coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
 
@@ -321,6 +321,18 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   that can still come) it returns about 99.3% of everything wagered (`tools/holdem-test.ts` checks the evaluator on
   all 2,598,960 five-card hands and the known seven-card frequencies, every settlement rule, and the returns).
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
+- Showtime (src/games/showtime/rules.ts): a 54-segment money wheel, 21 × 1, 13 × 2, 7 × 5, 4 × 10 (paying their value
+  to 1) and four bonus rounds: Coin Toss (4 segments; a multiplier on each face of a tossed coin), Peg Drop (2; a puck
+  drops onto 16 slots, two of them DOUBLEs that double the row and drop again), Prize Wall (2; the player picks one of
+  60 hidden prizes) and Mega Spin (1; a 64-segment wheel with 4 DOUBLEs and 2 TRIPLEs that multiply the wheel and spin
+  it again; the player picks one of three flappers). Bonus wins are capped at 20,000×. Before every spin the Booster
+  lights one spot with ×2 to ×50 (or misses, 32.5% of the time); a boosted spot's win, or every multiplier of a
+  boosted bonus round, is multiplied. The Booster's chance for each spot is solved from the exact (capped) bonus
+  distributions so every spot returns exactly 96%. The whole round, bonus included, is drawn at Spin; the tile or
+  flapper the player picks is shown the drawn result, which is equivalent since all are alike until revealed
+  (`tools/showtime-test.ts` checks the exact returns, the shape of drawn rounds and a 3-million-round sample;
+  `tools/showtime-money.mjs` checks every round is paid once when the show ends, the page is left or reloaded
+  mid-show, or a page died).
 - Sic Bo: three dice, 52 spots: Small / Big and Odd / Even (1 to 1, lose on any triple), the totals 4 to 17 (50, 25,
   15, 10, 7, 6, 5 to 1 from the ends inwards), doubles (8 to 1), triples (160 to 1), any triple (24 to 1), the 15
   two-dice combinations (5 to 1) and the singles (1, 2 or 14 to 1 as the number shows on one, two or three dice).

@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import { safeStorage } from './storage'
 
 // Tiny WebAudio synth: no audio files, so the bundle stays small and mobile-friendly.
@@ -5,9 +6,15 @@ let ctx: AudioContext | null = null
 let muted = safeStorage.getItem('lumen.muted') === '1'
 
 export const isMuted = () => muted
+const muteWatchers = new Set<() => void>()
 export function setMuted(m: boolean) {
   muted = m
   safeStorage.setItem('lumen.muted', m ? '1' : '0')
+  muteWatchers.forEach((f) => f())
+}
+/** whether sound is off, kept current wherever it is switched (the top bar, the account menu, the Account page) */
+export function useMuted() {
+  return useSyncExternalStore((f) => (muteWatchers.add(f), () => muteWatchers.delete(f)), isMuted)
 }
 
 export function ac(): AudioContext | null {

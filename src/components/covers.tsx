@@ -23,6 +23,7 @@ import { SicBoCover } from '../games/sicbo/cover'
 import { CrapsCover } from '../games/craps/cover'
 import { LinesCover } from '../games/lines/cover'
 import { HoldemCover } from '../games/holdem/cover'
+import { ShowtimeCover } from '../games/showtime/cover'
 
 /* Lobby art. Chicken Road keeps its pixel look; everything else is clean vector art on a bold gradient. */
 
@@ -83,6 +84,8 @@ export function GameCover({ id }: { id: GameId }) {
       return <CrapsCover />
     case 'lines':
       return <LinesCover />
+    case 'showtime':
+      return <ShowtimeCover />
     case 'holdem':
       return <HoldemCover />
     case 'cases':
