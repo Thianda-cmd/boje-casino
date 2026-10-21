@@ -4,7 +4,8 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { PacedQuality, Sparks, easeInOut, glowTexture, ringTexture, rnd } from '../../lib/three/fx'
-import { isMuted, sfx } from '../../lib/sound'
+import { isMuted } from '../../lib/sound'
+import { coinflipSfx } from './sound'
 import { HALF, RADIUS, RATE, flatten, makeFlight, qmul, readableAt, restQuat, showTurn, yaw, type Flight, type Q } from './physics'
 import { SMALL_HALF, chipStack, coinBodyGeometry, coinFaceGeometry, coinHullGeometry, coinMaterial, coinUniforms, faceSize, inkMaterial, releaseModels, smallCoinGeometry, tableRail } from './models'
 import type { Side } from './rules'
@@ -587,16 +588,16 @@ export class CoinScene {
   private star!: THREE.Sprite
   private starMat!: THREE.SpriteMaterial
   private starK = 0
-  private fireOn: ReturnType<typeof sfx.coinflip.fire> = null
-  private whirr: ReturnType<typeof sfx.coinflip.whirr> = null
-  private spinSnd: ReturnType<typeof sfx.coinflip.spin> = null
+  private fireOn: ReturnType<typeof coinflipSfx.fire> = null
+  private whirr: ReturnType<typeof coinflipSfx.whirr> = null
+  private spinSnd: ReturnType<typeof coinflipSfx.spin> = null
   private readonly tmpQ = new THREE.Quaternion()
   private readonly prevPos = V3()
   private readonly vel = V3()
   private readonly onMove: (e: PointerEvent) => void
   private readonly onLeave: () => void
   /** the coin's sounds, silent once the scene is gone */
-  private readonly sound = new Proxy(sfx.coinflip, {
+  private readonly sound = new Proxy(coinflipSfx, {
     get: (t, k) => (this.disposed ? () => null : t[k as keyof typeof t]),
   })
 

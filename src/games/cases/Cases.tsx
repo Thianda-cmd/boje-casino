@@ -7,6 +7,7 @@ import { Coin } from '../../components/icons'
 import { fmt, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { casesSfx } from './sound'
 import { useSize } from '../../lib/useSize'
 import { useWallet, type BetEvent } from '../../store/wallet'
 import { CRATE_ACCENT, CrateArt, ItemArt } from './art'
@@ -146,7 +147,7 @@ export default function Cases() {
     setResults(null)
     clearTimeout(lidTimer.current)
     setLidOpen(true)
-    sfx.cases.open(TIERS.indexOf(crate.tier))
+    casesSfx.open(TIERS.indexOf(crate.tier))
 
     const fast = turboRef.current
     // one main phase for the stack, each reel a beat later than the one above it, so they settle top to bottom
@@ -159,7 +160,7 @@ export default function Cases() {
         const res: Result[] = winners.map((w, i) => ({ id: resultId.current++, tier: crate.tier, item: w, mult: items[i].mult, rarity: items[i].rarity, bet: b, payout: round2(b * items[i].mult) }))
         setResults(res)
         setHistory((h) => [...[...res].reverse(), ...h].slice(0, 14))
-        if (n === 1 || best.rarity !== 'common') sfx.cases.land(RARITIES.indexOf(best.rarity))
+        if (n === 1 || best.rarity !== 'common') casesSfx.land(RARITIES.indexOf(best.rarity))
         busyRef.current = false
         setBusy(false)
         setCanSkip(false)
@@ -177,7 +178,7 @@ export default function Cases() {
       for (let i = 0; i < n; i++) {
         const reel = reels.current[i]
         const onLand = () => {
-          if (n > 1) sfx.cases.stop(RARITIES.indexOf(items[i].rarity), i)
+          if (n > 1) casesSfx.stop(RARITIES.indexOf(items[i].rarity), i)
           if (--left === 0) land()
         }
         if (reel) reel.spin({ crate, winner: winners[i], fast, main, delay: i * (fast ? 40 : 70), extra: i * (fast ? 0.07 : 0.16), onLand })
@@ -198,7 +199,7 @@ export default function Cases() {
     if (t === tierRef.current || busyRef.current || auto.running) return
     setTier(t)
     tierRef.current = t
-    sfx.cases.pick(TIERS.indexOf(t))
+    casesSfx.pick(TIERS.indexOf(t))
     setResults(null)
     clearTimeout(lidTimer.current)
     setLidOpen(false)

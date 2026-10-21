@@ -7,7 +7,8 @@ import { Coin } from '../../components/icons'
 import { BojeLoader } from '../../components/Loader'
 import { fmt, fmtCompact, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
-import { isMuted, sfx, type PlunderBed } from '../../lib/sound'
+import { isMuted, sfx } from '../../lib/sound'
+import { plunderSfx, type PlunderBed } from './sound'
 import { safeStorage } from '../../lib/storage'
 import { useAuth } from '../../store/auth'
 import { CHALLENGE_MIN_BET, useWallet } from '../../store/wallet'
@@ -247,20 +248,20 @@ export default function Plunder() {
         sc.setTurbo(turboRef.current)
         sc.onProgress = (p) => alive.current && setProgress(0.12 + p * 0.88)
         sc.onCoin = () => sfx.coin()
-        sc.onLanterns = () => sfx.plunder.lanterns()
-        sc.onWays = (n) => sfx.plunder.ways(n)
+        sc.onLanterns = () => plunderSfx.lanterns()
+        sc.onWays = (n) => plunderSfx.ways(n)
         sc.onLand = (reel) => {
-          sfx.plunder.land(reel)
+          plunderSfx.land(reel)
           // a chirp, a step higher each reel, only while a crew member's run from reel 1 is still alive (wilds stand
           // in from reel 2), so it means a crew win may be coming
           const b = dropBoard.current
-          if (b && reel >= 1 && CREW.some((s) => b.slice(0, reel + 1).every((cells, r) => cells.some((c) => c.sym === s || (r > 0 && c.sym === 'flag'))))) sfx.plunder.crew(reel)
+          if (b && reel >= 1 && CREW.some((s) => b.slice(0, reel + 1).every((cells, r) => cells.some((c) => c.sym === s || (r > 0 && c.sym === 'flag'))))) plunderSfx.crew(reel)
         }
         sc.onMapLand = () => {
           const n = ++mapsN.current
           setHud((h) => ({ ...h, maps: n }))
-          sfx.plunder.map(n - 1)
-          if (n === needRef.current) sfx.plunder.mapsReady()
+          plunderSfx.map(n - 1)
+          if (n === needRef.current) plunderSfx.mapsReady()
         }
         // the caption needs a line under the frame; the counters go on the deck under it when there is room (a phone),
         // else over the frame's bottom beam, so the reels can take the height (a desktop)
@@ -315,7 +316,7 @@ export default function Plunder() {
   // happens while the button is still down, not in the first frame of the first spin
   useEffect(() => {
     const wake = () => {
-      sfx.plunder.wake()
+      plunderSfx.wake()
       window.removeEventListener('pointerdown', wake, true)
       window.removeEventListener('keydown', wake, true)
     }
@@ -377,7 +378,7 @@ export default function Plunder() {
     sceneRef.current?.host(action, line)
     if (line === null) return
     spokeAt.current = now
-    sfx.plunder.squawk(action === 'gasp' ? 1 : 0)
+    plunderSfx.squawk(action === 'gasp' ? 1 : 0)
   }
 
   /** shows a banner for `ms`; one with a count-up of `count` seconds jumps to its end on the first tap */
@@ -390,11 +391,11 @@ export default function Plunder() {
       bed.current?.duck(Math.min(ms, Math.max(1600, count * 1000 + 600)) / 1000)
       const sc = sceneRef.current
       if (b.kind === 'intro') {
-        sfx.plunder.intro()
+        plunderSfx.intro()
         sc?.confettiBurst(60)
       } else if (b.kind === 'retrigger') sc?.confettiBurst(40)
       else if (b.kind === 'max') {
-        sfx.plunder.fanfare()
+        plunderSfx.fanfare()
         sc?.coinShower(3.6)
       }
       const close = () => {
@@ -425,14 +426,14 @@ export default function Plunder() {
     const ms = Math.max(b.kind === 'end' ? hold(3200) : 0, count * 1000 + hold(1200))
     if (b.kind === 'big' || amount >= unit * 20) sceneRef.current?.coinShower(ms / 1000)
     // the tiers bring their own fanfare; a smaller total gets the plain one
-    if (tierIndex(amount / unit) < 0) sfx.plunder.win(2)
+    if (tierIndex(amount / unit) < 0) plunderSfx.win(2)
     return showBanner({ ...b, amount, unit, count }, ms, count)
   }
 
   /** a win banner's count passed a tier: a brass stab and a cannon, fireworks, confetti cannons, and Polly cheers */
   const tierUp = (k: number) => {
     const sc = sceneRef.current
-    sfx.plunder.tierUp(k)
+    plunderSfx.tierUp(k)
     bed.current?.duck(1.2, -14)
     sc?.fireworks(ROCKETS[k])
     sc?.confettiCannons()
@@ -494,9 +495,9 @@ export default function Plunder() {
     const tease = teaseReel(first, need)
     if (tease >= 0) {
       const secs = ((REELS - tease) * 0.55) / (turboRef.current ? 1.75 : 1)
-      void sc.wait(0.2 + 0.085 * tease).then(() => alive.current && !sc.hurried && sfx.plunder.tease(secs))
+      void sc.wait(0.2 + 0.085 * tease).then(() => alive.current && !sc.hurried && plunderSfx.tease(secs))
     }
-    sfx.plunder.spin()
+    plunderSfx.spin()
     dropBoard.current = first
     if (quick) sc.setChain(1.2)
     await sc.drop(first, tease)
@@ -506,7 +507,7 @@ export default function Plunder() {
     const ways = waysOf(spin.heights)
     if (ways >= 20000) {
       say(`${fmt(ways, 0)} ways!`)
-      sfx.plunder.bell()
+      plunderSfx.bell()
     }
 
     for (let i = 0; i < spin.steps.length; i++) {
@@ -518,7 +519,7 @@ export default function Plunder() {
       sc.setChain(i >= 4 ? Math.min(2, 1.3 ** (i - 3)) : 1)
       sc.setCombo(i + 1)
       if (i >= 1) setHud((h) => ({ ...h, cascade: i + 1 }))
-      sfx.plunder.glow(i)
+      plunderSfx.glow(i)
       await sc.highlight(step.wins)
       if (!alive.current) return null
 
@@ -538,16 +539,16 @@ export default function Plunder() {
       }
       const size = step.win >= 5 ? 2 : step.win >= 1 ? 1 : 0
       if (mult > 1 && !capping) {
-        sfx.plunder.chip(mult)
+        plunderSfx.chip(mult)
         await sc.wait(0.22)
         if (!alive.current) return null
         setPops(labels.map((p) => ({ ...p, pay: round2(p.base * mult), big: p.base * mult >= coins(5) })))
-        sfx.plunder.slam(mult)
+        plunderSfx.slam(mult)
       }
       add(step.win)
-      sfx.plunder.win(size)
+      plunderSfx.win(size)
       if (step.win >= HUGE_STEP[free ? 'free' : 'base']) {
-        sfx.plunder.cannon()
+        plunderSfx.cannon()
         polly('gasp', pick(['Blimey!', 'Great barnacles!', 'Sink me!']))
         await sc.bigWin(ids)
         if (!alive.current) return null
@@ -563,8 +564,8 @@ export default function Plunder() {
         // a coin flies from the winners to the medallion, which stamps up to the next multiplier
         const n = step.mult + 1
         const flies = !sc.hurried
-        sfx.plunder.coinFly()
-        void sc.wait(flies ? 0.28 : 0).then(() => alive.current && sfx.plunder.stamp(n))
+        plunderSfx.coinFly()
+        void sc.wait(flies ? 0.28 : 0).then(() => alive.current && plunderSfx.stamp(n))
         await sc.stampMult(n, ids)
         if (!alive.current) return null
         setHud((h) => ({ ...h, mult: n }))
@@ -573,15 +574,15 @@ export default function Plunder() {
           // "Sea legs!" only where the Sea Legs challenge counts the round
           const legs = n === 10 && (pending.current?.bet ?? 0) >= CHALLENGE_MIN_BET
           setStamp({ id: seq.current++, n, legs })
-          sfx.plunder.milestone(n)
+          plunderSfx.milestone(n)
           polly('cheer', legs ? 'Sea legs! ×10!' : `×${n}! Shiver me timbers!`)
         } else if (n % 5 === 0) say(`Multiplier ×${n}!`)
       }
 
       setPops([])
-      await sc.blast(ids, (j) => sfx.plunder.blast(i + j))
+      await sc.blast(ids, (j) => plunderSfx.blast(i + j))
       if (!alive.current) return null
-      sfx.plunder.cascade()
+      plunderSfx.cascade()
       await sc.cascade(next.board)
       if (!alive.current) return null
     }
@@ -598,32 +599,32 @@ export default function Plunder() {
       const pay = Math.min(coins(spin.scatterPay), round2(cap - run))
       setPops([{ id: seq.current++, x: Math.min(widthRef.current - 56, Math.max(56, at.x)), y: at.y, base: pay, mult: 1, pay, color: '#ffd36a', big: true }])
       add(spin.scatterPay)
-      sfx.plunder.treasure()
+      plunderSfx.treasure()
       say(spin.award ? `${spin.maps} treasure maps · ${spin.award} free spins!` : `${spin.maps} treasure maps · ${fmt(coins(spin.scatterPay))}`)
       if (spin.award) {
         // a tap during the drop must not rush the rarest moment; a tap during it still speeds it up
         sc.calm()
         await sc.trigger(spin.mapIds, (beat) => {
           if (!alive.current) return
-          if (beat === 'fly') sfx.plunder.coinFly()
+          if (beat === 'fly') plunderSfx.coinFly()
           else if (beat === 'unroll') {
             // the map pay has had its moment; the big map takes the middle of the stage
             setPops([])
-            sfx.plunder.unfurl()
+            plunderSfx.unfurl()
           } else if (beat === 'boom') {
-            sfx.plunder.xMarks()
-            void sc.wait(0.14).then(() => alive.current && sfx.plunder.dig())
+            plunderSfx.xMarks()
+            void sc.wait(0.14).then(() => alive.current && plunderSfx.dig())
           }
         })
       } else {
-        void sc.wait(0.3).then(() => alive.current && sfx.plunder.dig())
+        void sc.wait(0.3).then(() => alive.current && plunderSfx.dig())
         await sc.maps(spin.mapIds, 'pay')
       }
       if (!alive.current) return null
       setPops([])
     } else if (!free && spin.maps === SCATTER_MIN - 1) {
       say('So close! One more map starts Treasure Hunt')
-      sfx.plunder.nearMiss()
+      plunderSfx.nearMiss()
       polly('gasp', pick(['So close!', 'One map short!', 'Blast it!']))
     } else if (free && spin.maps >= RETRIGGER_MIN && !spin.award) say(`Treasure Hunt is full · ${MAX_FREE_SPINS} spins`)
     return run
@@ -638,7 +639,7 @@ export default function Plunder() {
     if (!alive.current) return false
     setPops([])
     say(null)
-    sfx.plunder.night()
+    plunderSfx.night()
     bed.current?.mode('night')
     let left = round.startSpins
     let played = 0
@@ -659,7 +660,7 @@ export default function Plunder() {
       if (left === 0) {
         say('Last spin!')
         if (!turboRef.current) {
-          sfx.plunder.heartbeat()
+          plunderSfx.heartbeat()
           polly('spyglass', 'Last spin, mateys…')
           await sc.wait(0.45)
           if (!alive.current) return false
@@ -672,14 +673,14 @@ export default function Plunder() {
       else if (++dead % 3 === 0) {
         // a dry run: Polly keeps the crew going and the medallion glints, waiting
         sc.glintMedal()
-        sfx.plunder.glint()
+        plunderSfx.glint()
         polly('squawk', pick(['Keep digging!', 'Steady, crew…', 'Arr, nothing yet…', 'The gold is down there!']), true)
       }
       if (fs.award > 0) {
         left += fs.award
         added += fs.award
         setHud((h) => ({ ...h, free: { left, played, added, addId: seq.current++ } }))
-        sfx.plunder.retrigger()
+        plunderSfx.retrigger()
         say(`${fs.maps} treasure maps · +${fs.award} spins`)
         await sc.maps(fs.mapIds, 'retrigger')
         if (!alive.current) return false
@@ -698,7 +699,7 @@ export default function Plunder() {
     }
     if (!alive.current) return false
     say(null)
-    sfx.plunder.dawn()
+    plunderSfx.dawn()
     bed.current?.mode('day')
     bed.current?.fast(false)
     setHud((h) => ({ ...h, free: null, maps: 0, need: SCATTER_MIN, win: payout, mult: 1 }))
@@ -719,7 +720,7 @@ export default function Plunder() {
     say(null)
     setHud(EMPTY_HUD)
     sfx.spinStart()
-    if (!bed.current && !isMuted()) bed.current = sfx.plunder.bed()
+    if (!bed.current && !isMuted()) bed.current = plunderSfx.bed()
 
     let round = playRound(rand, opts)
     if (import.meta.env.DEV) {

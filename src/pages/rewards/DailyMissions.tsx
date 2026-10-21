@@ -17,7 +17,7 @@ import { GameIcon } from '../../components/GameIcon'
 import { Coin, IconBolt, IconCheck, IconChevron, IconTrophy } from '../../components/icons'
 import { fmt, fmtDuration } from '../../lib/format'
 import { navigate } from '../../lib/router'
-import { sfx } from '../../lib/sound'
+import { rewardsSfx } from './sound'
 import { useNow } from '../../lib/useNow'
 import { Bar, ClaimButton, EASE, Eyebrow, Glow, IconLayers, IconPlay, IconStack, IconTarget, IconWheel, KindTile, Panel, Popover, nb, useLater } from './kit'
 import { WheelCard } from './WheelCard'
@@ -69,10 +69,10 @@ export function DailyMissions() {
     const before = missionsToday(useWallet.getState().missions).wheel
     const got = useWallet.getState().claimMission(i)
     if (!got) return
-    sfx.rewards.mission()
+    rewardsSfx.mission()
     pushToast({ kind: 'reward', title: 'Mission reward claimed', amount: got })
     if (before === 'locked' && missionsToday(useWallet.getState().missions).wheel === 'ready') {
-      later(() => sfx.rewards.unlock(), 380)
+      later(() => rewardsSfx.unlock(), 380)
       pushToast({ kind: 'reward', title: 'Lucky Wheel unlocked: your spin is ready' })
     }
   }

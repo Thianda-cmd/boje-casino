@@ -8,6 +8,7 @@ import { BojeLoader } from '../../components/Loader'
 import { fmt, fmtCompact, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { partySfx } from './sound'
 import { safeStorage } from '../../lib/storage'
 import { useAuth } from '../../store/auth'
 import { useWallet } from '../../store/wallet'
@@ -216,17 +217,17 @@ export default function PopParty() {
         sc.setTurbo(turboRef.current)
         sc.onProgress = (p) => alive.current && setProgress(0.12 + p * 0.88)
         sc.onCoin = () => sfx.coin()
-        sc.onRefill = () => sfx.party.inflate()
+        sc.onRefill = () => partySfx.inflate()
         sc.onLand = (col, syms) => {
-          sfx.party.boop(col)
-          if (syms.some((s) => ANIMALS.includes(s))) sfx.party.squeak()
+          partySfx.boop(col)
+          if (syms.some((s) => ANIMALS.includes(s))) partySfx.squeak()
         }
         sc.onDiscoLand = () => {
           const n = ++discoN.current
           setHud((h) => ({ ...h, discos: n }))
-          sfx.party.disco(n - 1)
+          partySfx.disco(n - 1)
           if (n === SCATTER_MIN) {
-            sfx.party.airhorn()
+            partySfx.airhorn()
             sc!.flareDiscos()
           }
         }
@@ -366,9 +367,9 @@ export default function PopParty() {
 
   /** a win banner's count passed a tier: horns, fireworks and confetti cannons, and DJ Bop jumps */
   const tierUp = (k: number) => {
-    sfx.party.tierUp(k)
-    sfx.party.partyHorn()
-    sfx.party.confettiCannon()
+    partySfx.tierUp(k)
+    partySfx.partyHorn()
+    partySfx.confettiCannon()
     sceneRef.current?.fireworks(ROCKETS[k])
     sceneRef.current?.confettiCannons()
   }
@@ -382,7 +383,7 @@ export default function PopParty() {
     sc?.flash('#ffd23f')
     sc?.confettiCannons()
     sc?.confettiBurst(160)
-    sfx.party.confettiCannon()
+    partySfx.confettiCannon()
     const banner = showBanner({ kind: 'max', amount, unit }, hold(3400))
     const last = round.free.length ? round.free[round.free.length - 1] : round.base
     if (!sc || !last || !cutShort(last)) return banner
@@ -409,8 +410,8 @@ export default function PopParty() {
     /** tiles go up under a step's pops; a tile reaching ×128 gets its fanfare once */
     const lift = async (ups: TileUp[]) => {
       await sc.tileUps(ups, (u) => {
-        if (u.to === 1) sfx.party.tileLit()
-        else sfx.party.tileUp(u.to)
+        if (u.to === 1) partySfx.tileLit()
+        else partySfx.tileUp(u.to)
         tiles[u.pos] = u.to
         if (free) setHud((h) => ({ ...h, floor: floorOf(tiles) }))
       })
@@ -418,7 +419,7 @@ export default function PopParty() {
         if (!alive.current) return false
         if (u.to < MAX_LEVEL || x128Seen.current.has(u.pos)) continue
         x128Seen.current.add(u.pos)
-        sfx.party.airhorn()
+        partySfx.airhorn()
         say('×128! That tile is maxed')
         await sc.tileFanfare(u.pos)
       }
@@ -429,7 +430,7 @@ export default function PopParty() {
     const tease = teaseColumn(spin.drop)
     discoN.current = 0
     setHud((h) => ({ ...h, discos: 0 }))
-    if (tease >= 0) void sc.wait((free ? 0.3 : 0.15) + 0.06 * tease).then(() => alive.current && !sc.hurried && sfx.party.tease())
+    if (tease >= 0) void sc.wait((free ? 0.3 : 0.15) + 0.06 * tease).then(() => alive.current && !sc.hurried && partySfx.tease())
     await sc.drop(spin.drop, tease)
     if (!alive.current) return null
 
@@ -438,8 +439,8 @@ export default function PopParty() {
       await sc.wait(0.25)
       if (!alive.current) return null
       say(`Pump It! DJ Bop pumps up ${changes.length} more ${changes.length === 1 ? one(sym) : SYMBOL_PLURAL[sym]}`)
-      for (let i = 0; i < 3; i++) void sc.wait(i * 0.18).then(() => alive.current && sfx.party.pumpBreath(i))
-      await sc.pump(group, changes.map((c) => ({ pos: c.pos, fromId: c.from.id, to: c.to })), () => sfx.party.squeak())
+      for (let i = 0; i < 3; i++) void sc.wait(i * 0.18).then(() => alive.current && partySfx.pumpBreath(i))
+      await sc.pump(group, changes.map((c) => ({ pos: c.pos, fromId: c.from.id, to: c.to })), () => partySfx.squeak())
       if (!alive.current) return null
     }
 
@@ -453,15 +454,15 @@ export default function PopParty() {
         if (i >= 1) {
           setHud((h) => ({ ...h, combo: i + 1 }))
           sc.host('scratch')
-          sfx.party.scratch()
+          partySfx.scratch()
         }
         if (i >= 3) sc.host('shades')
-        sfx.party.stretch()
+        partySfx.stretch()
         await sc.highlight(step.clusters)
         if (!alive.current) return null
         if (step.win >= 2) {
           sc.host('cheer')
-          sfx.party.cheer()
+          partySfx.cheer()
         }
 
         // an amount over each cluster; on multiplied ones the tiles' orbs fly in and the label counts the ×
@@ -474,28 +475,28 @@ export default function PopParty() {
             return sc.gather(c, labels[k], (j, m) => {
               const s = (sum += m)
               setPops((ps) => ps.map((p) => (p.id === labels[k].id ? { ...p, mult: s } : p)))
-              sfx.party.orb(j)
+              partySfx.orb(j)
             })
           }),
         )
         if (!alive.current) return null
         const huge = step.clusters.filter((c) => c.mult >= 50)
         if (huge.length) {
-          sfx.party.superPop()
+          partySfx.superPop()
           await sc.superPop(huge.reduce((a, b) => (b.pay > a.pay ? b : a)).ids)
           if (!alive.current) return null
         }
         setPops(labels.map((p, k) => ({ ...p, mult: step.clusters[k].sum, pay: coins(step.clusters[k].pay), big: step.clusters[k].pay >= 5 })))
         add(step.win)
         const multiplied = step.clusters.some((c) => c.mult > 1)
-        if (multiplied) sfx.party.slam()
+        if (multiplied) partySfx.slam()
         if (step.win >= 5) sfx.bigWin()
         else if (!multiplied) sfx.win()
         say(stepCaption(step, coins))
 
         await sc.pop(
           step.clusters.map((c) => c.ids),
-          (j) => sfx.party.pop(i + j),
+          (j) => partySfx.pop(i + j),
         )
         if (!alive.current) return null
         setPops([])
@@ -509,8 +510,8 @@ export default function PopParty() {
         const { sym, ids } = step.pin
         say(`Pin Drop! Every ${one(sym)} pops`)
         // DJ Bop pulls the pins for 0.25 s, then throws
-        void sc.wait(0.25).then(() => alive.current && sfx.party.pinThrow())
-        await sc.pin(sym, ids, (j) => sfx.party.pinHit(j))
+        void sc.wait(0.25).then(() => alive.current && partySfx.pinThrow())
+        await sc.pin(sym, ids, (j) => partySfx.pinHit(j))
         if (!alive.current) return null
         if (!(await lift(step.ups))) return null
         if (step.ups.length) say(`${step.ups.length} tiles light up`)
@@ -528,7 +529,7 @@ export default function PopParty() {
     if (!free && spin.discos >= SCATTER_MIN) {
       setPops([{ ...popAt(spin.discoIds, coins(spin.scatterPay), '#ff4fd8'), pay: coins(spin.scatterPay), big: spin.scatterPay >= 5 }])
       add(spin.scatterPay)
-      sfx.party.beatDrop()
+      partySfx.beatDrop()
       await sc.discos(spin.discoIds, 'trigger')
       if (!alive.current) return null
       say(spin.award ? `${spin.discos} disco balls · Disco Night!` : `${spin.discos} disco balls`)
@@ -540,7 +541,7 @@ export default function PopParty() {
       bigPopDone.current = true
       await sc.bigPop(() => {
         setSplat(seq.current++)
-        sfx.party.glassPop()
+        partySfx.glassPop()
       })
       if (!alive.current) return null
     }
@@ -554,8 +555,8 @@ export default function PopParty() {
     if (!alive.current) return false
     await sc.setFree(true)
     if (!alive.current) return false
-    sfx.party.beatDrop()
-    sc.onBeat = (_n, half) => (half ? sfx.party.hat() : sfx.party.kick())
+    partySfx.beatDrop()
+    sc.onBeat = (_n, half) => (half ? partySfx.hat() : partySfx.kick())
     x128Seen.current.clear()
     let left = round.startSpins
     let played = 0
@@ -565,7 +566,7 @@ export default function PopParty() {
       // every tile stamps in at ×2 from the middle out, and the floor counter climbs with them
       const full = floorOf(start)
       await sc.setTiles(start, 'spiral', (i) => {
-        sfx.party.inflate()
+        partySfx.inflate()
         setHud((h) => ({ ...h, floor: { sum: Math.round((full.sum * (i + 1)) / CELLS), hot: full.hot } }))
       })
       if (!alive.current) return false
@@ -577,7 +578,7 @@ export default function PopParty() {
       setHud((h) => ({ ...h, free: { left, played } }))
       if (left === 0 && !turboRef.current) {
         say('Last spin!')
-        sfx.party.heartbeat()
+        partySfx.heartbeat()
         sc.host('cross')
         await sc.wait(0.4)
       }
@@ -601,7 +602,7 @@ export default function PopParty() {
     if (round.capped) await maxWin(round, payout, unit)
     else await showWin('end', payout, unit, played)
     if (!alive.current) return false
-    await sc.setTiles(ZEROS, 'waveOff', (r) => sfx.party.lightsOff(r))
+    await sc.setTiles(ZEROS, 'waveOff', (r) => partySfx.lightsOff(r))
     await sc.setFree(false)
     if (!alive.current) return false
     setHud((h) => ({ ...h, free: null, floor: null, win: payout }))
@@ -625,7 +626,7 @@ export default function PopParty() {
     bigPopDone.current = false
     sfx.spinStart()
     sc.host('slap')
-    sfx.party.scratch()
+    partySfx.scratch()
 
     let round = playRound(rand, opts)
     if (import.meta.env.DEV) round = forced(round, opts)
@@ -644,7 +645,7 @@ export default function PopParty() {
       if (round.base.win === 0) {
         if (++deadRun.current % 8 === 0) {
           sc.host('yawn')
-          sfx.party.yawn()
+          partySfx.yawn()
         }
       } else deadRun.current = 0
     }

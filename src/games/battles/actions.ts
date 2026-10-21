@@ -1,5 +1,5 @@
 import { round2 } from '../../lib/format'
-import { sfx } from '../../lib/sound'
+import { battlesSfx } from './sound'
 import { useWallet } from '../../store/wallet'
 import type { Tier } from '../cases/rules'
 import { costOf } from './engine'
@@ -45,7 +45,7 @@ export async function joinBattle(server: BattleServer, who: string, b: BattleVie
   if (r.ok) {
     const s = mySeat(r.battle)
     if (s) noteSeat(who, key, s)
-    sfx.battles.join()
+    battlesSfx.join()
     return r.battle
   }
   if (r.error !== 'network') await refundPart(who, key, b.cost)
@@ -79,7 +79,7 @@ export async function createBattle(server: BattleServer, who: string, a: Setup, 
   if (!bots) return r.battle
   const f = await server.bots(r.battle.id)
   if (f.ok) {
-    sfx.battles.bots()
+    battlesSfx.bots()
     return f.battle
   }
   return r.battle
@@ -89,7 +89,7 @@ export async function createBattle(server: BattleServer, who: string, a: Setup, 
 export async function callBots(server: BattleServer, id: number): Promise<BattleView | null> {
   const r = await server.bots(id)
   if (r.ok) {
-    sfx.battles.bots()
+    battlesSfx.bots()
     return r.battle
   }
   toast(ERROR_TEXT[r.error])
@@ -104,7 +104,7 @@ export async function leaveBattle(server: BattleServer, who: string, id: number)
     return false
   }
   await refundAll(who, keyOf(srcOfServer(server), id))
-  sfx.battles.leave()
+  battlesSfx.leave()
   toast(r.cancelled ? 'Battle called off. Your stake is back.' : 'You left the battle. Your stake is back.')
   return true
 }

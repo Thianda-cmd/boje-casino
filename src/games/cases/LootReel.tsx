@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, use
 import { AnimatePresence, motion } from 'framer-motion'
 import { useUid } from '../../art/ids'
 import { rand, randInt } from '../../lib/rng'
-import { sfx } from '../../lib/sound'
+import { casesSfx } from './sound'
 import { twinkle } from './art'
 import { clamp01, delayed, glideCurve, keyframes, smooth, spinCurve, type Curve } from './reel'
 import { CRATES, RARITY, buildStrip, fillers, type Crate, type Rarity, type Tier, type Tile } from './rules'
@@ -162,7 +162,7 @@ export function LootReel({
     const idx = Math.floor(p + 0.5)
     if (idx !== lastIdx.current) {
       lastIdx.current = idx
-      if (ticksRef.current) sfx.cases.tick(Math.min(1, speed / 22))
+      if (ticksRef.current) casesSfx.tick(Math.min(1, speed / 22))
     }
     if (speed > 1) m.moved = true
     if (m.moved) lens(p, speed)

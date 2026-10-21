@@ -7,6 +7,7 @@ import { fmt, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { navigate } from '../../lib/router'
 import { sfx } from '../../lib/sound'
+import { scratchSfx } from './sound'
 import { safeStorage } from '../../lib/storage'
 import { useSize } from '../../lib/useSize'
 import { useAuth } from '../../store/auth'
@@ -367,7 +368,7 @@ export default function Scratch() {
     const total = round2(price * n)
     if (total > useWallet.getState().balance) {
       setDenied((d) => d + 1)
-      sfx.scratch.denied()
+      scratchSfx.denied()
       return null
     }
     if (!stake(total)) return null
@@ -387,9 +388,9 @@ export default function Scratch() {
 
   /** puts a bought card on the stage */
   const deal = (t: TicketData) => {
-    if (ticketRef.current) sfx.scratch.toss()
+    if (ticketRef.current) scratchSfx.toss()
     setMove({ kind: 'buy', dir: 1 })
-    sfx.scratch.buy()
+    scratchSfx.buy()
     revealedCells.current = []
     bonusOut.current = false
     roll.current?.()
@@ -419,7 +420,7 @@ export default function Scratch() {
     if (area === BONUS_AREA) {
       bonusOut.current = true
       setHintBonus(false)
-      sfx.scratch.bonus(t.outcome.bonus)
+      scratchSfx.bonus(t.outcome.bonus)
       return
     }
     // the deciding cell is out: the roll stops on it
@@ -429,15 +430,15 @@ export default function Scratch() {
     revealedCells.current.push(area)
     const same = revealedCells.current.filter((i) => t.outcome.board[i] === s).length
     const n = revealedCells.current.length
-    if (same === 3) sfx.scratch.match(t.id)
+    if (same === 3) scratchSfx.match(t.id)
     else if (same === 2 && isHot(c, s)) {
-      sfx.scratch.reveal(n, s === c.prizes.length - 1 ? 'top' : 'hot')
+      scratchSfx.reveal(n, s === c.prizes.length - 1 ? 'top' : 'hot')
       // a hot pair with its third still covered: a shimmer of suspense (nothing after a loss)
-      if (n < 9) sfx.scratch.tease()
+      if (n < 9) scratchSfx.tease()
     } else if (same === 2) {
-      sfx.scratch.reveal(n, isPrize(c, s) ? 'prize' : 'blank')
-      sfx.scratch.pair(n)
-    } else sfx.scratch.reveal(n, !isPrize(c, s) ? 'blank' : s === c.prizes.length - 1 ? 'top' : isHot(c, s) ? 'hot' : 'prize')
+      scratchSfx.reveal(n, isPrize(c, s) ? 'prize' : 'blank')
+      scratchSfx.pair(n)
+    } else scratchSfx.reveal(n, !isPrize(c, s) ? 'blank' : s === c.prizes.length - 1 ? 'top' : isHot(c, s) ? 'hot' : 'prize')
     if (!sweepingRef.current) buzz(same === 3 ? [12, 40, 12] : 8)
     // the grid is out and the Frenzy spot isn't: on a win it waits to be scratched; on a loss it can't matter, so it
     // comes off by itself
@@ -449,7 +450,7 @@ export default function Scratch() {
 
   const onDeciding = () => {
     roll.current?.()
-    roll.current = sfx.scratch.drumroll(speedRef.current === 'turbo' ? 0.85 : 1.5)
+    roll.current = scratchSfx.drumroll(speedRef.current === 'turbo' ? 0.85 : 1.5)
   }
 
   /** resolves the autoplay round once the result has had its moment */
@@ -490,7 +491,7 @@ export default function Scratch() {
       return
     }
     settlePending()
-    if (o.prize < 0) sfx.scratch.lose()
+    if (o.prize < 0) scratchSfx.lose()
     // a win has just been circled: the stamp waits for the copies to land in the table
     later(o.prize < 0 ? 120 : speedRef.current === 'instant' ? 300 : 650, () => alive.current && ticketRef.current === t && setStampOn(true))
     const tier = winTier(o.mult)
@@ -506,10 +507,10 @@ export default function Scratch() {
     const o = t.outcome
     const won = o.prize >= 0
     const tier = winTier(o.mult)
-    sfx.scratch.stamp(!won ? 'lose' : tier <= 1 ? 'back' : 'win')
+    scratchSfx.stamp(!won ? 'lose' : tier <= 1 ? 'back' : 'win')
     card.jolt(!won ? 0.5 : tier <= 1 ? 0.4 : Math.min(2.2, 0.8 + tier * 0.3))
     if (!won || t.away || celebrates(o)) return
-    sfx.scratch.win(tier, t.id)
+    scratchSfx.win(tier, t.id)
     buzz(tier >= 4 ? [30, 50, 60] : 22)
     const mid = card.client(GRID_X + (CELL * 3 + GAP * 2) / 2, GRID_Y + (CELL * 3 + GAP * 2) / 2)
     if (fx) {
@@ -517,7 +518,7 @@ export default function Scratch() {
       const coins = tier >= 4 ? 30 : tier >= 3 ? 16 : tier >= 2 ? 7 : 0
       if (coins) {
         fx.coins(mid.x, mid.y, coins, tier >= 4 ? 1.15 : 1)
-        for (let i = 0; i < Math.min(8, coins); i++) later(40 + i * 70, () => sfx.scratch.coin())
+        for (let i = 0; i < Math.min(8, coins); i++) later(40 + i * 70, () => scratchSfx.coin())
       }
       for (const i of o.line) {
         const c = cellCenter(i)
@@ -603,7 +604,7 @@ export default function Scratch() {
 
   const pick = (id: CardId) => {
     if (id === cardIdRef.current || phaseRef.current === 'play' || autoRef.current || partyRef.current || dueRef.current || stackRef.current.length) return
-    sfx.scratch.pick(id)
+    scratchSfx.pick(id)
     setMove({ kind: 'pick', dir: CARD_IDS.indexOf(id) > CARD_IDS.indexOf(cardIdRef.current) ? 1 : -1 })
     setCardId(id)
     cardIdRef.current = id
@@ -633,7 +634,7 @@ export default function Scratch() {
         else if (phaseRef.current !== 'play' && bet <= balance) startAuto()
         else if (bet > balance) {
           setDenied((d) => d + 1)
-          sfx.scratch.denied()
+          scratchSfx.denied()
         }
         return
       }

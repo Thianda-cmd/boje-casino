@@ -24,7 +24,7 @@ import { missionsToday, useWallet, type WheelSpin } from '../../store/wallet'
 import { POINTER_ORIGIN, WheelDisc, WheelFrame, WheelGloss, WheelLights, WheelPointer, type WheelSegment } from '../../art/LuckyWheel'
 import { Coin, IconCheck, IconLock } from '../../components/icons'
 import { fmt, fmtDuration } from '../../lib/format'
-import { sfx } from '../../lib/sound'
+import { rewardsSfx } from './sound'
 import { useNow } from '../../lib/useNow'
 import { ClaimButton, EASE, Eyebrow, IconWheel, Popover, burstFrom, nb, showerOver, useLater } from './kit'
 import { useWheelUi } from './ready'
@@ -111,8 +111,8 @@ export const WheelCard = memo(function WheelCard() {
     setSpinning(false)
     setFresh(s)
     setSaid(`The wheel landed on ${fmt(s.amount, 0)}. You won ${fmt(s.amount, 0)} coins.`)
-    sfx.rewards.land()
-    later(() => sfx.rewards.prize(s.amount), 240)
+    rewardsSfx.land()
+    later(() => rewardsSfx.prize(s.amount), 240)
     setFlashing(true)
     later(() => setFlashing(false), s.amount >= 500 ? 6000 : s.amount >= 300 ? 3200 : 1600)
     burstFrom(wheel.current, s.amount >= 300 ? 2.5 : 2, 120)
@@ -136,7 +136,7 @@ export const WheelCard = memo(function WheelCard() {
     setSpinning(true)
     setFresh(null)
     setSaid('Spinning the Lucky Wheel.')
-    sfx.rewards.spin()
+    rewardsSfx.spin()
     // somewhere inside the segment, clear of its dividers (and of the little settle at the end)
     const offset = (Math.random() - 0.5) * SEG * 0.56
     const cur = rot.get()
@@ -183,7 +183,7 @@ export const WheelCard = memo(function WheelCard() {
         const dir = peg > lastPeg ? -1 : 1
         lastPeg = peg
         const k = Math.min(1, speed / 1.4)
-        sfx.rewards.tick(k)
+        rewardsSfx.tick(k)
         flickCtl.current = animate(pointer, [dir * (12 + 16 * k), 0], { duration: 0.18, ease: 'easeOut' })
       },
       onComplete: () => {
@@ -196,7 +196,7 @@ export const WheelCard = memo(function WheelCard() {
   const collect = () => {
     const got = useWallet.getState().collectWheel()
     if (!got) return
-    sfx.rewards.collect(2)
+    rewardsSfx.collect(2)
     setSaid(`Collected ${fmt(got, 0)} coins.`)
     useWallet.getState().pushToast({ kind: 'reward', title: 'Lucky Wheel prize collected', amount: got })
   }

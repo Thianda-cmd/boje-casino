@@ -2,7 +2,8 @@ import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } 
 import { AnimatePresence, motion } from 'framer-motion'
 import { BojeLoader } from '../../components/Loader'
 import { Coin } from '../../components/icons'
-import { isMuted, sfx } from '../../lib/sound'
+import { isMuted } from '../../lib/sound'
+import { tycoonSfx } from './sound'
 import { rand } from '../../lib/rng'
 import { flushStorage, safeStorage } from '../../lib/storage'
 import { useAuth } from '../../store/auth'
@@ -70,7 +71,7 @@ import { MANAGERS, coinWord } from './words'
       chip (a few real coins). Without WebGL they appear over the floor's stand-in instead, and the rest of the game
       plays in the panel as usual.
   Around them: the HUD (Hud.tsx), the Coin Vault (Vault.tsx), the panel (Panel.tsx and its five tabs), the cards
-  for coming back, how it works and selling, and the sounds (sfx.tycoon, with a quiet ambience bed).
+  for coming back, how it works and selling, and the sounds (tycoonSfx, with a quiet ambience bed).
 
   Three layouts: wide (the floor, and the vault over the panel beside it), tablet (the floor over the panel, its
   rows two to a line) and phone (the floor over the panel's compact rows, the vault a pill over the floor).
@@ -159,7 +160,7 @@ export default function Tycoon() {
   const showing = useRef<{ rank: number; until: number }>({ rank: 0, until: 0 })
   const lastPop = useRef({ at: 0, per: new Array<number>(N_ATTR).fill(0) })
   const lastTap = useRef({ x: innerWidth / 2, y: innerHeight / 2 })
-  const bed = useRef<ReturnType<typeof sfx.tycoon.ambience>>(null)
+  const bed = useRef<ReturnType<typeof tycoonSfx.ambience>>(null)
   /** the Run buttons held down: their rounds start again as they end */
   const holds = useRef(new Set<number>())
   /** when the page last drew from the ticker, and what it showed then (see draw) */
@@ -236,32 +237,32 @@ export default function Tycoon() {
     if (!c) return
     switch (m.kind) {
       case 'open':
-        sfx.tycoon.open()
+        tycoonSfx.open()
         say('gold', <AttractionIcon i={m.i} size={34} />, 'Grand opening!', ATTRACTIONS[m.i].name, 3)
         sceneRef.current?.focus(m.i, false)
         break
       case 'step':
-        sfx.tycoon.step()
+        tycoonSfx.step()
         say('green', <AttractionIcon i={m.i} size={34} />, `${ATTRACTIONS[m.i].name} ×${m.at}!`, m.n > 1 ? `${m.n} steps at once: ${2 ** m.n}× better` : m.at <= 100 ? 'Twice as fast' : 'Pays double', 2)
         break
       case 'all':
-        sfx.tycoon.step()
+        tycoonSfx.step()
         say('gold', <StarIcon size={30} />, `Every attraction at ${m.at}!`, 'All pay doubled', 3)
         break
       case 'hire':
-        sfx.tycoon.hire()
+        tycoonSfx.hire()
         say('sky', <ManagerFace i={m.i} size={36} />, `${MANAGERS[m.i].name} is hired!`, `The ${ATTRACTIONS[m.i].name} runs on its own`, 2)
         break
       case 'upgrade': {
         const u = UPGRADES.find((x) => x.id === m.id)
-        sfx.tycoon.upgrade()
+        tycoonSfx.upgrade()
         if (u) say('violet', u.target >= 0 ? <AttractionIcon i={u.target} size={34} /> : <StarIcon size={30} />, u.name.split(':')[0], `${u.target >= 0 ? ATTRACTIONS[u.target].name : 'The whole floor'} pays ×2`, 1)
         break
       }
       case 'reached': {
         const ms = m.ids.map((id) => MILESTONES.find((x) => x.id === id)!)
         const coins = ms.reduce((a, x) => a + x.coins, 0)
-        sfx.tycoon.reached()
+        tycoonSfx.reached()
         say('gold', <Coin size={28} />, ms.length > 1 ? `${ms.length} milestones reached!` : `Milestone: ${ms[0].name}`, `Claim ${coins.toLocaleString('en-US')} coins in Milestones`, 2)
         break
       }
@@ -289,7 +290,7 @@ export default function Tycoon() {
     const lp = lastPop.current
     const since = (now - (lp.per[i] || now - 1100)) / 1000
     lp.per[i] = now
-    sfx.tycoon.cycle(i)
+    tycoonSfx.cycle(i)
     if (now - lp.at < POP_MS) return
     lp.at = now
     const s = c.save
@@ -306,7 +307,7 @@ export default function Tycoon() {
   const run = (i: number) => {
     const c = live.current.casino
     if (!c || !c.tap(i)) return
-    sfx.tycoon.run()
+    tycoonSfx.run()
     setRuns((r) => r.map((n, k) => (k === i ? n + 1 : n)))
     push()
     refresh()
@@ -317,7 +318,7 @@ export default function Tycoon() {
     if (!c) return
     const opening = c.save.owned[i] === 0
     if (!c.buy(i, k)) return
-    if (!opening) sfx.tycoon.buy(k)
+    if (!opening) tycoonSfx.buy(k)
     riseText(at.left + at.width / 2, at.top, `+${k.toLocaleString('en-US')}`, '#5fe39a')
     setSelected(i)
     sceneRef.current?.select(i)
@@ -342,7 +343,7 @@ export default function Tycoon() {
 
   /** coins paid: they fly from (x, y) to the balance, with a "+n" and the sound */
   const paidOut = (paid: number, x: number, y: number, n: number) => {
-    sfx.tycoon.collect(paid)
+    tycoonSfx.collect(paid)
     flyCoins(x, y, n)
     riseText(x, y - 18, `+${coinWord(Math.round(paid * 100) / 100)}`, '#f7c548')
   }
@@ -368,14 +369,14 @@ export default function Tycoon() {
     refresh()
   }
   const vaultFull = () => {
-    sfx.tycoon.reached()
+    tycoonSfx.reached()
     say('gold', <VaultDoorIcon size={34} />, 'Your Coin Vault is full!', 'Collect it to keep it filling', 2)
   }
 
   const claim = (id: string, x: number, y: number) => {
     const paid = casino?.claim(id) ?? 0
     if (!paid) return
-    sfx.tycoon.claim(paid)
+    tycoonSfx.claim(paid)
     flyCoins(x, y, 5 + Math.round(Math.sqrt(paid) / 2))
     riseText(x, y - 18, `+${coinWord(paid)}`, '#f7c548')
     refresh()
@@ -383,7 +384,7 @@ export default function Tycoon() {
   const claimAll = (x: number, y: number) => {
     const paid = casino?.claimAll() ?? 0
     if (!paid) return
-    sfx.tycoon.claim(paid)
+    tycoonSfx.claim(paid)
     flyCoins(x, y, 14)
     riseText(x, y - 18, `+${coinWord(paid)}`, '#f7c548')
     refresh()
@@ -395,12 +396,12 @@ export default function Tycoon() {
     const r = c?.sell()
     if (!r) return
     holds.current.clear()
-    sfx.tycoon.sale()
-    if (r.city > r.wasCity) later(() => sfx.tycoon.city(), 1500)
+    tycoonSfx.sale()
+    if (r.city > r.wasCity) later(() => tycoonSfx.city(), 1500)
     // the milestones paid on the way out come to the balance as the card opens
     if (r.coins > 0)
       later(() => {
-        sfx.tycoon.claim(r.coins)
+        tycoonSfx.claim(r.coins)
         flyCoins(innerWidth / 2, innerHeight / 2, 12)
       }, 700)
     setSold(r)
@@ -445,7 +446,7 @@ export default function Tycoon() {
   const tipped = () => {
     const c = live.current.casino
     if (!c?.tipWhale()) return
-    sfx.tycoon.tip()
+    tycoonSfx.tip()
     say('gold', <TopHat />, 'Big tipper!', `×${c.save.boostMult} Cash for ${Math.round((c.save.boostUntil - Date.now()) / 1000)} seconds`, 4)
     push()
     refresh()
@@ -454,7 +455,7 @@ export default function Tycoon() {
     const c = live.current.casino
     if (!c) return
     const paid = c.catchChip(chipCoins(rand))
-    sfx.tycoon.catch()
+    tycoonSfx.catch()
     if (paid) {
       flyCoins(x, y, 8)
       riseText(x, y - 20, `+${coinWord(paid)}`, '#f7c548')
@@ -480,7 +481,7 @@ export default function Tycoon() {
       setFlatWhale(Date.now() + WHALE_STAY)
       later(() => setFlatWhale((u) => (u && u <= Date.now() ? 0 : u)), WHALE_STAY + 50)
     }
-    sfx.tycoon.whale()
+    tycoonSfx.whale()
     say('gold', <TopHat />, 'A whale walked in!', `Tap him for ×5 Cash: he waits ${WHALE_STAY / 1000}s`, 3)
   }
   const offerChip = () => {
@@ -491,7 +492,7 @@ export default function Tycoon() {
       setFlatChip({ until: Date.now() + CHIP_STAY, x: 0.2 + rand() * 0.6, y: 0.35 + rand() * 0.4 })
       later(() => setFlatChip((f) => (f && f.until <= Date.now() ? null : f)), CHIP_STAY + 50)
     }
-    sfx.tycoon.chip()
+    tycoonSfx.chip()
     say('gold', <Coin size={30} />, 'A golden chip!', 'Tap it on the floor for a few coins', 2)
   }
 
@@ -554,7 +555,7 @@ export default function Tycoon() {
     setCasino(c)
     setAway(c.away)
     // (a page opened by a press may sound; one reloaded may not yet, and the browser would only complain)
-    if (c.away && navigator.userActivation?.hasBeenActive !== false) sfx.tycoon.welcome()
+    if (c.away && navigator.userActivation?.hasBeenActive !== false) tycoonSfx.welcome()
     return () => {
       c.close()
       setCasino(null)
@@ -629,7 +630,7 @@ export default function Tycoon() {
       lastTap.current = { x: e.clientX, y: e.clientY }
     }
     const wake = () => {
-      if (!bed.current && !isMuted()) bed.current = sfx.tycoon.ambience()
+      if (!bed.current && !isMuted()) bed.current = tycoonSfx.ambience()
     }
     // a Run held down is let go wherever the press ends
     const letGo = () => holds.current.clear()
@@ -687,7 +688,7 @@ export default function Tycoon() {
       left = null
       if (r) {
         setAway(r)
-        sfx.tycoon.welcome()
+        tycoonSfx.welcome()
       }
       tick()
     }

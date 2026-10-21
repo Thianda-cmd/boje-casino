@@ -8,6 +8,7 @@ import { BojeLoader } from '../../components/Loader'
 import { fmt } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { penaltySfx } from './sound'
 import { safeStorage } from '../../lib/storage'
 import { useAuth } from '../../store/auth'
 import { CHALLENGE_MIN_BET, useWallet } from '../../store/wallet'
@@ -415,8 +416,8 @@ export default function Penalty() {
     say({ id: seq.current++, kind: 'cash', mult, amount, tier }, tier ? 3400 : 2400)
     sceneRef.current?.cashout(mult)
     sceneRef.current?.hurry()
-    sfx.penalty.cashout(mult)
-    if (tier) sfx.penalty.bigWin(tier)
+    penaltySfx.cashout(mult)
+    if (tier) penaltySfx.bigWin(tier)
   }
 
   /** ten from ten: it cashes out by itself, and pays once the celebration is over */
@@ -429,8 +430,8 @@ export default function Penalty() {
     endRun(r)
     setCaption(null)
     say({ id: seq.current++, kind: 'perfect', mult, amount, tier: Math.max(1, tierOf(mult)) }, 60000)
-    sfx.penalty.perfect()
-    sfx.penalty.bigWin(Math.max(1, tierOf(mult)))
+    penaltySfx.perfect()
+    penaltySfx.bigWin(Math.max(1, tierOf(mult)))
   }
   const releasePerfect = () => {
     if (!holdPerfect.current) return
@@ -531,7 +532,7 @@ export default function Penalty() {
         moment: (m) => {
           if (!alive.current || !MOMENT[m]) return
           note(pickOne(MOMENT[m]), 'gold', m === 'close' ? 1500 : 1200)
-          if (m === 'close') sfx.penalty.ooh()
+          if (m === 'close') penaltySfx.ooh()
         },
         replay: (on) => alive.current && setReplayOn(on),
         away: (on) => {
@@ -596,7 +597,7 @@ export default function Penalty() {
           queuedAt.current = now
           setQueued(z)
           if (z !== live.current.zone) choose(z, true)
-          sfx.penalty.aim()
+          penaltySfx.aim()
         }
       }
       sc?.hurry()
@@ -1203,7 +1204,7 @@ function useCount(to: number, ms: number, tick = false) {
         const now = performance.now()
         if (tick && now - last > 70) {
           last = now
-          sfx.penalty.count(x / (to || 1))
+          penaltySfx.count(x / (to || 1))
         }
       },
     })

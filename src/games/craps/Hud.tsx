@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useState } from 'react'
 import { AnimatePresence, animate, motion } from 'framer-motion'
 import { Coin } from '../../components/icons'
 import { fmt } from '../../lib/format'
-import { sfx } from '../../lib/sound'
+import { crapsSfx } from './sound'
 import { FACE, Lettering, PuckGlyph, RedDie } from './art'
 import { NUMBERS, totalOf, type Num } from './rules'
 import type { PastRoll } from './storage'
@@ -197,7 +197,7 @@ function useCount(to: number, ms: number) {
         const now = performance.now()
         if (now - last > 70) {
           last = now
-          sfx.craps.count(x / (to || 1))
+          crapsSfx.count(x / (to || 1))
         }
       },
     })

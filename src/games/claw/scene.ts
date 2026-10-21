@@ -4,7 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { Bits, PacedQuality, Sparks, glowTexture, rnd } from '../../lib/three/fx'
-import { sfx } from '../../lib/sound'
+import { clawSfx } from './sound'
 import { TAG_H, buildPlush, feltMaterial, heapGeometry, releaseModels, setModelTime, warmUp, type PlushRig } from './models'
 import {
   BOX,
@@ -202,7 +202,7 @@ export class ClawScene {
   private press0: { id: number; x: number; y: number } | null = null
   private motorStop: (() => void) | null = null
   /** the claw's sounds, silent once the scene is gone (a grab cut short by leaving still unwinds, quietly) */
-  private readonly sound = new Proxy(sfx.claw, {
+  private readonly sound = new Proxy(clawSfx, {
     get: (t, k) => (this.disposed ? () => () => {} : t[k as keyof typeof t]),
   })
 

@@ -4,7 +4,7 @@ import { Spinner } from '../../components/Loader'
 import { Coin, IconChevron, IconUsers } from '../../components/icons'
 import { fmt } from '../../lib/format'
 import { navigate } from '../../lib/router'
-import { sfx } from '../../lib/sound'
+import { battlesSfx } from './sound'
 import { useWallet } from '../../store/wallet'
 import { BattleBannerArt, EMBER, GOLD, Swords } from './art'
 import { CrateRuns, ModeChip, SeatRow, closesIn } from './bits'
@@ -40,7 +40,7 @@ export default function Lobby({
       if (b.status !== 'running' || started.current.has(b.id)) continue
       started.current.add(b.id)
       if (statusAt(b, f.now) === 'running' && b.startAt != null && f.now < b.startAt + 1500) {
-        sfx.battles.join()
+        battlesSfx.join()
         pushToast({ kind: 'info', title: `Battle #${b.id} is starting` })
       }
     }

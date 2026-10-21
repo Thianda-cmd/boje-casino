@@ -13,7 +13,7 @@
   and the ducks' own shapes (art.tsx). Positions are a pure function of the race clock, so slow motion, turbo and
   "tap to hurry" only change how fast the clock runs.
 */
-import { sfx } from '../../lib/sound'
+import { derbySfx } from './sound'
 import { DUCK_LEN, INK, NOSE_X, drawDuck, duckSprite, type DuckPose, type DuckSprite, type Expr } from './art'
 import { COURSE, COURSE_DL, T_END, progAt, ranking, speedAt, type Caption, type Plan } from './race'
 import { DUCKS, LANES } from './rules'
@@ -277,7 +277,7 @@ export class DerbyScene {
     this.rank = ranking(plan, 0)
     this.rankCand = this.rank
     this.stopRiver?.()
-    this.stopRiver = sfx.derby.river()
+    this.stopRiver = derbySfx.river()
     for (let i = 0; i < LANES; i++) this.quackAt[i] = this.time + 0.4 + Math.random() * 2.5
     this.splashLine()
   }
@@ -427,42 +427,42 @@ export class DerbyScene {
     const pl = progAt(plan, lead, t1)
     // the log
     if (t0 < plan.log.t + 0.008 && t1 >= plan.log.t + 0.008) {
-      sfx.derby.bonk()
+      derbySfx.bonk()
       this.shake = Math.max(this.shake, 0.35)
       this.ducks[plan.log.lane].stars = 1
       this.quack(plan.log.lane, true)
       this.burst(this.ducks[plan.log.lane].x + DL * 0.1, laneY(this.lay, plan.log.lane) + this.ground(this.ducks[plan.log.lane].x), 8, 'drop')
     }
     if (t0 < plan.whirl.t0 && t1 >= plan.whirl.t0) {
-      sfx.derby.whirl()
+      derbySfx.whirl()
       this.quack(plan.whirl.lane, true)
     }
     if (t0 < plan.wave.t0 && t1 >= plan.wave.t0) {
-      sfx.derby.wave()
+      derbySfx.wave()
       this.quack(plan.wave.lane, true)
     }
     // the rapids, when the leader reaches them
     const tr = COURSE.rapids[0]
-    if (progAt(plan, lead, t0) < tr && pl >= tr) sfx.derby.rapids()
+    if (progAt(plan, lead, t0) < tr && pl >= tr) derbySfx.rapids()
     // the falls: each duck lands with a splash
     for (let lane = 0; lane < LANES; lane++) {
       const land = COURSE.falls + (DL * 1.45) / this.X(1)
       const a = progAt(plan, lane, t0)
       const b = progAt(plan, lane, t1)
-      if (a < COURSE.falls && b >= COURSE.falls && lane === lead) sfx.derby.falls()
+      if (a < COURSE.falls && b >= COURSE.falls && lane === lead) derbySfx.falls()
       if (a < land && b >= land) {
         const x = this.X(b) - DL * 0.5
         const y = laneY(this.lay, lane) + this.D
         this.burst(x, y, 16, 'drop')
         this.ring(x, y)
-        sfx.derby.splash(0.6 + Math.random() * 0.4)
+        derbySfx.splash(0.6 + Math.random() * 0.4)
         if (lane === lead) this.shake = Math.max(this.shake, 0.5)
       }
     }
     // the crowd warms up down the stretch
     if (pl > 0.84 && this.crowdLevel < 1) {
       this.crowdLevel = 1
-      sfx.derby.crowd(0.55, 3.2)
+      derbySfx.crowd(0.55, 3.2)
     }
     // the line
     for (let lane = 0; lane < LANES; lane++) {
@@ -473,8 +473,8 @@ export class DerbyScene {
       this.ev.cross(lane, place)
       if (place === 0) {
         this.photo()
-        sfx.derby.shutter()
-        sfx.derby.crowd(1, 3.6)
+        derbySfx.shutter()
+        derbySfx.crowd(1, 3.6)
         this.confetti(70)
       }
       if (place === 1) this.secondAt = this.time
@@ -495,7 +495,7 @@ export class DerbyScene {
     this.lastQuack = this.time
     this.beakUntil[lane] = this.time + 0.18
     this.quackAt[lane] = this.time + (this.phase === 'race' ? 4 + Math.random() * 6 : 6 + Math.random() * 10)
-    if (force || this.phase === 'race') sfx.derby.quack(lane)
+    if (force || this.phase === 'race') derbySfx.quack(lane)
   }
 
   /** a duck tapped on the start line answers */

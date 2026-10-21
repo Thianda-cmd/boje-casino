@@ -5,6 +5,7 @@ import { Coin } from '../../components/icons'
 import { fmt, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { linesSfx } from './sound'
 import { safeStorage } from '../../lib/storage'
 import { useSize } from '../../lib/useSize'
 import { useAuth } from '../../store/auth'
@@ -370,7 +371,7 @@ export default function LuckyLines() {
       )
     }
     const isFull = g.marks.every(Boolean)
-    sfx.lines.welcome()
+    linesSfx.welcome()
     say('welcome', isFull ? 'Welcome back: your full card is here' : 'Welcome back: your card is still here', isFull ? 1600 : 2600)
     // a full card left in its beat (a reload, a closed tab) collects itself now; nothing else can happen to it
     if (isFull) closeFull(1300)
@@ -421,10 +422,10 @@ export default function LuckyLines() {
     const tier = tierOf(r.mult, lines)
     if (tier) setBig({ id: seq.current++, tier, mult: r.mult, lines, amount: payout })
     else if (payout > 0) {
-      sfx.lines.collect(r.mult)
+      linesSfx.collect(r.mult)
       const at = onStage({ x: MACHINE_W / 2, y: REELS_TOP + 60 })
       fxRef.current?.coins(at.x, at.y, 8 + Math.round(r.mult * 4), fitRef.current.k)
-    } else sfx.lines.over()
+    } else linesSfx.over()
     return r
   }
 
@@ -535,7 +536,7 @@ export default function LuckyLines() {
     setShown(after)
     setStamps((s) => ({ ...s, [cell]: (s[cell] ?? 0) + 1 }))
     const fill = Math.max(...LINES_AT[cell].map((k) => LINES[k].filter((j) => after[j]).length))
-    sfx.lines.daub(fill, joker)
+    linesSfx.daub(fill, joker)
     const k = fitRef.current.k
     const at = onStage(cellXY(cell))
     fxRef.current?.splat(at.x, at.y, COL[colOf(cell)].main, k)
@@ -550,12 +551,12 @@ export default function LuckyLines() {
       const b = onStage({ x: e.x1, y: e.y1 })
       fxRef.current?.line(a.x, a.y, b.x, b.y, k)
     }
-    sfx.lines.line(l1 - l0, l1)
+    linesSfx.line(l1 - l0, l1)
     say('line', lineShout(l1 - l0, l1), 1000)
     const s0 = stepOf(l0)
     const s1 = stepOf(l1)
     if (s1 > s0) {
-      window.setTimeout(() => alive.current && sfx.lines.step(s1), 160)
+      window.setTimeout(() => alive.current && linesSfx.step(s1), 160)
       const q = fitRef.current
       const p = stepXY(q.mode, s1)
       const ox = q.mode === 'wide' ? MACHINE_W + SIDE_GAP : 0
@@ -565,7 +566,7 @@ export default function LuckyLines() {
 
   /** what a reel's landing does: a number flies to its cell, a Joker lights its column, a Free Spin adds a spin */
   const land = (i: number, s: ReelSym, next: Game): Promise<void> => {
-    sfx.lines.stop(i)
+    linesSfx.stop(i)
     if (s.kind === 'num') {
       if (s.cell != null && !shownRef.current[s.cell]) {
         const cell = s.cell
@@ -579,7 +580,7 @@ export default function LuckyLines() {
       setLook(i, ok ? 'wait' : 'miss')
       if (ok) {
         setLandGlow((xs) => [...xs, i])
-        sfx.lines.joker()
+        linesSfx.joker()
         say('joker', 'Joker!', 900)
       }
     } else if (s.kind === 'super') {
@@ -587,13 +588,13 @@ export default function LuckyLines() {
       setLook(i, ok ? 'wait' : 'miss')
       if (ok) {
         setLandSuper(true)
-        sfx.lines.superJoker()
+        linesSfx.superJoker()
         say('super', 'Super Joker!', 1100)
       }
     } else {
       // the ticket flies into the spins counter, which gains a pip as it lands
       setLook(i, 'hit')
-      sfx.lines.free()
+      linesSfx.free()
       say('free', 'Free spin!', 1100)
       return fly(s, i, reelXY(i), { x: 230, y: REELS_TOP + PLATE / 2 + 1 }, 0.3).then(() => setCounter((c) => (c ? { ...c, left: c.left + 1, free: c.free + 1 } : c)))
     }
@@ -612,14 +613,14 @@ export default function LuckyLines() {
     setCounter({ left: prev.spins > 0 ? prev.spins - 1 : 0, free: prev.freeWon, extras: next.extras })
     const quick = live.current.turbo
     const syms = next.last!
-    sfx.lines.spin(quick)
+    linesSfx.spin(quick)
     const lands: Promise<void>[] = []
     try {
       await reelsRef.current?.spin(
         syms,
         planSpin(prev.marks, syms, quick),
         (i) => lands.push(land(i, syms[i], next)),
-        () => sfx.lines.tease(),
+        () => linesSfx.tease(),
       )
       await Promise.all(lands)
     } catch {
@@ -694,7 +695,7 @@ export default function LuckyLines() {
     setDealKey((k) => k + 1)
     setPreview(newCard(rand))
     commit(g1)
-    sfx.lines.deal()
+    linesSfx.deal()
     void show(g0, g1)
   }
 
@@ -728,7 +729,7 @@ export default function LuckyLines() {
     setLook(from, 'used')
     placingRef.current++
     setPlacing((n) => n + 1)
-    sfx.lines.placed()
+    linesSfx.placed()
     setSaid(`Joker placed on ${g.card[cell]}.`)
     hurried.current = false
     void fly(s, from, reelXY(from), cellXY(cell)).then(() => {
@@ -820,7 +821,7 @@ export default function LuckyLines() {
     }
     disarm()
     if (!useWallet.getState().placeBet(p, 0.01)) return
-    sfx.lines.buy()
+    linesSfx.buy()
     const bought = buyExtra(g, p)
     const next = spin(bought, rngFor(bought))
     commit(next)

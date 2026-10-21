@@ -8,6 +8,7 @@ import { BojeLoader } from '../../components/Loader'
 import { fmt, fmtCompact, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { roboSfx } from './sound'
 import { safeStorage } from '../../lib/storage'
 import { useAuth } from '../../store/auth'
 import { useWallet } from '../../store/wallet'
@@ -211,21 +212,21 @@ export default function RoboRiot() {
         sc.setTurbo(turboRef.current)
         sc.onProgress = (p) => alive.current && setProgress(0.12 + p * 0.88)
         sc.onCoin = () => sfx.coin()
-        sc.onLever = () => sfx.robo.lever()
-        sc.onVacuum = (col) => sfx.robo.vacuum(col)
+        sc.onLever = () => roboSfx.lever()
+        sc.onVacuum = (col) => roboSfx.vacuum(col)
         sc.onLand = (col, syms) => {
-          sfx.robo.land(col)
-          if (syms.some((s) => ROBOTS.includes(s))) sfx.robo.beep(col)
+          roboSfx.land(col)
+          if (syms.some((s) => ROBOTS.includes(s))) roboSfx.beep(col)
         }
         sc.onBonusLand = () => {
           const n = ++bonusN.current
           setHud((h) => ({ ...h, cells: n }))
-          sfx.robo.cell(n)
+          roboSfx.cell(n)
         }
-        sc.onSpinStop = (_pos, landed) => !landed && sfx.robo.tick()
+        sc.onSpinStop = (_pos, landed) => !landed && roboSfx.tick()
         sc.onClamp = (_pos, cell) => {
-          sfx.robo.clamp()
-          if (cell.gold) sfx.robo.gold()
+          roboSfx.clamp()
+          if (cell.gold) roboSfx.gold()
         }
         const fit = () => {
           const r = host.getBoundingClientRect()
@@ -318,7 +319,7 @@ export default function RoboRiot() {
     const at = sc.hostScreen()
     const f = sc.frameRect()
     setBubble({ id: seq.current++, text, x: at.x, y: at.y, side: (f.right - f.left) * 0.15 })
-    sfx.robo.voice(voice)
+    roboSfx.voice(voice)
     clearTimeout(bubbleTimer.current)
     bubbleTimer.current = window.setTimeout(() => setBubble(null), turboRef.current ? 1200 : 1700)
   }
@@ -326,7 +327,7 @@ export default function RoboRiot() {
   /** a move from Volt, with the whine of his servos */
   const act = (a: HostAction) => {
     sceneRef.current?.host(a)
-    sfx.robo.servo()
+    roboSfx.servo()
   }
 
   /** shows a banner for `ms`; one with a count-up of `count` seconds jumps to its end on the first tap */
@@ -337,10 +338,10 @@ export default function RoboRiot() {
       setBanner({ ...b, id })
       const sc = sceneRef.current
       if (b.kind === 'intro') {
-        sfx.robo.intro()
+        roboSfx.intro()
         sc?.confettiBurst(50)
       } else if (b.kind === 'max') {
-        sfx.robo.fanfare()
+        roboSfx.fanfare()
         sc?.coinShower(3.5)
       }
       const close = () => {
@@ -371,14 +372,14 @@ export default function RoboRiot() {
     const ms = Math.max(b.kind === 'end' ? hold(3400) : 0, count * 1000 + hold(1200))
     if (b.kind === 'big' || amount >= unit * 20) sceneRef.current?.coinShower(ms / 1000)
     // the tiers bring their own fanfare; a smaller total gets the plain one
-    if (tierIndex(amount / unit) < 0) sfx.robo.win(2)
+    if (tierIndex(amount / unit) < 0) roboSfx.win(2)
     return showBanner({ ...b, amount, unit, count }, ms, count)
   }
 
   /** a win banner's count passed a tier: a synth stab, fireworks and bolt cannons, steam, and Volt dances */
   const tierUp = (k: number) => {
     const sc = sceneRef.current
-    sfx.robo.tierUp(k)
+    roboSfx.tierUp(k)
     sc?.fireworks(ROCKETS[k])
     sc?.confettiCannons()
     sc?.steam(0.6 + k * 0.2)
@@ -415,7 +416,7 @@ export default function RoboRiot() {
     bonusN.current = 0
     setHud((h) => ({ ...h, cells: 0 }))
     const tease = teaseColumn(base.grid)
-    if (tease >= 0) void sc.wait(0.45 + 0.06 * tease).then(() => alive.current && !sc.hurried && sfx.robo.tease())
+    if (tease >= 0) void sc.wait(0.45 + 0.06 * tease).then(() => alive.current && !sc.hurried && roboSfx.tease())
     await sc.drop(base.grid, tease)
     if (!alive.current) return null
 
@@ -426,12 +427,12 @@ export default function RoboRiot() {
       setStamp({ id: seq.current++, kind: 'surge' })
       say(`Power Surge! Volt zaps in ${plural(n, 'power cell')}`)
       speak('POWER SURGE!', 'alert')
-      sfx.robo.charge()
+      roboSfx.charge()
       await sc.surge(base.surge, (i) => {
         const k = ++bonusN.current
         setHud((h) => ({ ...h, cells: k }))
-        sfx.robo.zap(i)
-        sfx.robo.cell(k)
+        roboSfx.zap(i)
+        roboSfx.cell(k)
       })
       if (!alive.current) return null
     }
@@ -444,7 +445,7 @@ export default function RoboRiot() {
       setPops(wayPops(base.ways, coins))
       setHud((h) => ({ ...h, win }))
       say(waysCaption(base.ways, coins))
-      sfx.robo.win(base.win >= 5 ? 2 : base.win >= 1 ? 1 : 0)
+      roboSfx.win(base.win >= 5 ? 2 : base.win >= 1 ? 1 : 0)
       if (base.win >= 2) {
         act(base.win >= 8 ? 'dance' : 'cheer')
         if (base.win >= 5) speak(base.win >= 15 ? 'RIOT!' : 'BEEP BOOP!', 'happy')
@@ -464,7 +465,7 @@ export default function RoboRiot() {
     } else if (!win) {
       if (++deadRun.current % 7 === 0) {
         act('facepalm')
-        sfx.robo.voice('sad')
+        roboSfx.voice('sad')
       }
     } else deadRun.current = 0
     return win
@@ -494,29 +495,29 @@ export default function RoboRiot() {
     const fire = async (a: Action) => {
       say(actionCaption(a))
       const goldT = a.persistent ? (sc.hurried ? 0.1 : 0.3) : 0
-      if (a.persistent) sfx.robo.gold()
-      if (a.kind === 'zap') void sc.wait(goldT).then(() => alive.current && sfx.robo.coil())
+      if (a.persistent) roboSfx.gold()
+      if (a.kind === 'zap') void sc.wait(goldT).then(() => alive.current && roboSfx.coil())
       else if (a.kind === 'boost') {
-        sfx.robo.charge(0.5)
-        void sc.wait(goldT + (sc.hurried ? 0.12 : 0.3)).then(() => alive.current && sfx.robo.boost())
-      } else void sc.wait(goldT).then(() => alive.current && sfx.robo.magnet())
+        roboSfx.charge(0.5)
+        void sc.wait(goldT + (sc.hurried ? 0.12 : 0.3)).then(() => alive.current && roboSfx.boost())
+      } else void sc.wait(goldT).then(() => alive.current && roboSfx.magnet())
       await sc.fire(
         a,
         (h, i) => {
           sum = round2(sum + h.to - h.from)
           showTotal()
-          if (a.kind === 'zap') sfx.robo.zap(i)
-          else if (a.kind === 'boost') sfx.robo.plus(i)
-          else sfx.robo.cash()
+          if (a.kind === 'zap') roboSfx.zap(i)
+          else if (a.kind === 'boost') roboSfx.plus(i)
+          else roboSfx.cash()
         },
-        (i) => sfx.robo.ping(i),
+        (i) => roboSfx.ping(i),
       )
       return alive.current
     }
 
     if (round.base) {
       // every power cell on the board flares
-      sfx.robo.trigger()
+      roboSfx.trigger()
       speak('POWER GRID!', 'wow')
       await sc.flareBonus()
       if (!alive.current) return false
@@ -525,7 +526,7 @@ export default function RoboRiot() {
     if (!alive.current) return false
 
     // red alert: the tubes become sockets and the starting cells lock in
-    sfx.robo.alarm()
+    roboSfx.alarm()
     setPops([])
     say(null)
     setHud((h) => ({ ...h, cells: 0, win: coins(pre), grid: { left, filled: 0, reset: 0, last: false } }))
@@ -564,11 +565,11 @@ export default function RoboRiot() {
       if (last) {
         sc.heartbeat(true)
         say('Last respin!')
-        sfx.robo.heartbeat()
+        roboSfx.heartbeat()
         if (!turboRef.current && !sc.hurried) await sc.wait(0.35)
         if (!alive.current) return false
       } else say(null)
-      sfx.robo.respin()
+      roboSfx.respin()
       await sc.respin(r.landed, (pl) => {
         filled++
         sum = round2(sum + (pl.cell.value ?? 0))
@@ -585,7 +586,7 @@ export default function RoboRiot() {
         reset++
         sc.heartbeat(false)
         sc.resetPulse()
-        sfx.robo.reset()
+        roboSfx.reset()
         grid({ left, reset, last: false })
         if (!r.actions.length) say(`${plural(r.landed.length, 'new cell')} · respins back to ${RESPINS}`)
       } else {
@@ -607,7 +608,7 @@ export default function RoboRiot() {
       setStamp({ id: seq.current++, kind: 'full' })
       say(`Full Grid! Every cell ×${FULL_MULT}`)
       speak('FULL GRID!', 'wow')
-      sfx.robo.fanfare()
+      roboSfx.fanfare()
       sum = bonus.total
       void sc.wait(0.3).then(() => alive.current && showTotal())
       await sc.fullBoard(true)
@@ -619,10 +620,10 @@ export default function RoboRiot() {
     const box = totalRef.current?.getBoundingClientRect()
     const stageBox = hostRef.current?.getBoundingClientRect()
     const to = box && stageBox ? { x: box.left + box.width / 2 - stageBox.left, y: box.top + box.height / 2 - stageBox.top } : { x: 0, y: hudTop }
-    sfx.robo.charge(0.6)
+    roboSfx.charge(0.6)
     await sc.collect(to, (_id, _v, i) => {
       setPunch((n) => n + 1)
-      sfx.robo.collect(i)
+      roboSfx.collect(i)
     })
     if (!alive.current) return false
     setHud((h) => ({ ...h, win: payout }))
@@ -633,7 +634,7 @@ export default function RoboRiot() {
       await showWin({ kind: 'end', respins: bonus.respins.length, filled, full: bonus.full }, payout, unit)
     }
     if (!alive.current) return false
-    sfx.robo.powerDown()
+    roboSfx.powerDown()
     say(null)
     setHud((h) => ({ ...h, grid: null, cells: 0, win: payout }))
     bonusN.current = 0

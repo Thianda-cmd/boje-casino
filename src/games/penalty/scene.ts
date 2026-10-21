@@ -4,7 +4,8 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { Bits, PacedQuality, Sparks, glowTexture, ringTexture, rnd } from '../../lib/three/fx'
-import { isMuted, sfx } from '../../lib/sound'
+import { isMuted } from '../../lib/sound'
+import { penaltySfx } from './sound'
 import { BALL_R, buildBall, buildPlayer, keeperLook, releaseModels, strikerSpec, type Expr, type PlayerSpec, type Rig } from './models'
 import { BOARD_Z, GOAL, NET, buildStadium, type Stadium } from './stadium'
 import { LEVELS, zoneCol, zoneRow, type Difficulty, type Shot, type Zone } from './rules'
@@ -634,7 +635,7 @@ export class PenaltyScene {
   private readonly onMove: (e: PointerEvent) => void
   private readonly onLeave: () => void
   private readonly stageEl: HTMLElement
-  private readonly sound = new Proxy(sfx.penalty, {
+  private readonly sound = new Proxy(penaltySfx, {
     get: (t, k) => (this.disposed ? () => () => {} : t[k as keyof typeof t]),
   })
 

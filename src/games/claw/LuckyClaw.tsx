@@ -8,6 +8,7 @@ import { BojeLoader } from '../../components/Loader'
 import { fmt, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { clawSfx } from './sound'
 import { safeStorage } from '../../lib/storage'
 import { useAuth } from '../../store/auth'
 import { useWallet } from '../../store/wallet'
@@ -255,7 +256,7 @@ export default function LuckyClaw() {
         if (!alive.current) return
         setGrabs((g) => [{ id: seq.current++, index, won: plan.won }, ...g].slice(0, 14))
         if (!plan.won) {
-          sfx.claw.aww()
+          clawSfx.aww()
           say({ id: seq.current++, kind: 'miss', text: pickOne(MISS_TEXT[plan.failure ?? 'slip']) }, turboNow ? 1300 : 1900)
         }
       },

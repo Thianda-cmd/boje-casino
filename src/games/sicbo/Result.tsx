@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { animate, motion } from 'framer-motion'
 import { Coin } from '../../components/icons'
 import { fmt } from '../../lib/format'
-import { sfx } from '../../lib/sound'
+import { sicboSfx } from './sound'
 import { DieFace, FACE, Lettering } from './art'
 import { SIZE_COLOR } from './Roads'
 import { describe, sorted, type Dice } from './rules'
@@ -135,7 +135,7 @@ function useCount(to: number, ms: number) {
         const now = performance.now()
         if (now - last > 70) {
           last = now
-          sfx.sicbo.count(x / (to || 1))
+          sicboSfx.count(x / (to || 1))
         }
       },
     })

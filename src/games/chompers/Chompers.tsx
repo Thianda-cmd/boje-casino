@@ -8,6 +8,7 @@ import { BojeLoader } from '../../components/Loader'
 import { fmt, fmtCompact, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { chompersSfx } from './sound'
 import { safeStorage } from '../../lib/storage'
 import { useAuth } from '../../store/auth'
 import { useWallet } from '../../store/wallet'
@@ -316,9 +317,9 @@ export default function Chompers() {
         sc.onProgress = (p) => alive.current && setProgress(0.12 + p * 0.88)
         sc.onCoin = () => sfx.coin()
         sc.onReelStop = (col, syms) => {
-          sfx.reelStop(col)
-          if (syms.includes('wild')) sfx.boing()
-          if (syms.includes('donut')) sfx.donutLand()
+          chompersSfx.reelStop(col)
+          if (syms.includes('wild')) chompersSfx.boing()
+          if (syms.includes('donut')) chompersSfx.donutLand()
         }
         const fit = () => {
           const r = host.getBoundingClientRect()
@@ -412,7 +413,7 @@ export default function Chompers() {
       const sc = sceneRef.current
       if (b.kind === 'intro') {
         sfx.feature()
-        sfx.chomp.cheer()
+        chompersSfx.chomp.cheer()
         sc?.confettiBurst(80)
       } else if (b.kind === 'level') sc?.confettiBurst(60)
       else if (b.kind === 'max') {
@@ -457,8 +458,8 @@ export default function Chompers() {
   /** a win banner's count passed a tier: a fanfare, confetti and a flash, and Big Mama cheers louder each time */
   const tierUp = (k: number) => {
     const sc = sceneRef.current
-    sfx.chomp.tierUp(k)
-    if (k >= 2) sfx.chomp.cheer()
+    chompersSfx.chomp.tierUp(k)
+    if (k >= 2) chompersSfx.chomp.cheer()
     sc?.host(k >= 3 ? 'wow' : k >= 1 ? 'cheer' : 'clap')
     sc?.confettiBurst(40 + k * 30)
     sc?.flash(0.2 + k * 0.1)
@@ -470,8 +471,8 @@ export default function Chompers() {
     sc?.flash(1)
     sc?.confettiBurst(160)
     sc?.host('wow')
-    sfx.chomp.tierUp(3)
-    sfx.chomp.cheer()
+    chompersSfx.chomp.tierUp(3)
+    chompersSfx.chomp.cheer()
     return showBanner({ kind: 'max', amount, unit }, hold(3800))
   }
 
@@ -509,7 +510,7 @@ export default function Chompers() {
     sc.onReelStop = (col, syms) => {
       prevStop?.(col, syms)
       const n = syms.filter((s) => s === 'egg').length
-      for (let i = 0; i < n; i++) sfx.eggLand(eggsSeen++)
+      for (let i = 0; i < n; i++) chompersSfx.eggLand(eggsSeen++)
     }
     await sc.spin(grid, free, tease)
     stopped = true
@@ -517,11 +518,11 @@ export default function Chompers() {
     if (!alive.current) return null
 
     if (spin.sneak) {
-      sfx.whoosh()
+      chompersSfx.whoosh()
       say('A hungry wild sneaks in!')
       await sc.wait(0.2)
       await sc.sneak(spin.sneak.col, spin.sneak.row, spin.sneak.cell, spin.sneak.replaced)
-      sfx.boing()
+      chompersSfx.boing()
       if (!alive.current) return null
     }
 
@@ -550,7 +551,7 @@ export default function Chompers() {
         const popId = seq.current++
         const at = sc.screenOf([c.wild]) ?? { x: 0, y: 0 }
         say(i === 0 ? `Chomp! ${n} ${n === 1 ? 'donut' : 'donuts'}${mult > 1 ? ` × ${mult}` : ''}` : `Another wild, another helping!`)
-        if (mult > 1) sfx.chomp.stamp(mult)
+        if (mult > 1) chompersSfx.chomp.stamp(mult)
         await sc.collect(
           c.wild,
           c.donuts,
@@ -558,7 +559,7 @@ export default function Chompers() {
             // leaving the page lands the donuts still in the air: no bites to hear then
             if (!alive.current) return
             got = round2(got + coins((values.get(c.donuts[j]) ?? 0) * mult))
-            sfx.chomp(j)
+            chompersSfx.chomp(j)
             setHud((h) => ({ ...h, win: Math.min(MAX_WIN * unit, round2(run + got)) }))
             setPops([{ id: popId, x: at.x, y: at.y - 44, amount: got, color: SYMBOL_COLOR.wild, big: true, mult: mult > 1 ? mult : undefined }])
           },
@@ -568,7 +569,7 @@ export default function Chompers() {
         say(`${i === 0 ? 'Chomp!' : 'Seconds!'} ${n} ${n === 1 ? 'donut' : 'donuts'}${mult > 1 ? ` × ${mult}` : ''} · ${fmt(coins(c.pay))}`)
         if (c.pay >= 10) {
           sfx.bigWin()
-          sfx.chomp.cheer()
+          chompersSfx.chomp.cheer()
         } else sfx.win()
         await sc.wait(0.5)
         setPops([])
@@ -582,7 +583,7 @@ export default function Chompers() {
       setPops([popAt(ids, coins(spin.eggPay), SYMBOL_COLOR.egg, true)])
       add(spin.eggPay)
       say(`${spin.eggs} eggs · ${spin.award} free spins!`)
-      sfx.hatch()
+      chompersSfx.hatch()
       await sc.eggs(ids, true)
       setPops([])
       if (!alive.current) return null
@@ -606,7 +607,7 @@ export default function Chompers() {
         resolve(i >= 0 && i < 3 ? i : Math.floor(Math.random() * 3))
       }
       const t = window.setTimeout(() => finish(-1), secs * 1000)
-      if (!auto) for (let k = 1; k < secs; k++) ticks.push(window.setTimeout(() => sfx.chomp.tick(k), k * 1000))
+      if (!auto) for (let k = 1; k < secs; k++) ticks.push(window.setTimeout(() => chompersSfx.chomp.tick(k), k * 1000))
       pickDone.current = finish
       setFeastUi({ id: seq.current++, phase: 'pick', spots: sc.feastSpots(), secs, super: sup })
     })
@@ -614,24 +615,24 @@ export default function Chompers() {
   /** Big Mama's three eggs: one is picked and hatches the modifier already drawn, the others show what they held */
   const feastPick = async (sc: ChompScene, feast: Feast) => {
     say(feast.super ? 'Super Feast! One more treat in one of these eggs' : 'Big Mama has three eggs. Pick one!')
-    sfx.chomp.rise()
-    sfx.chomp.grumble()
+    chompersSfx.chomp.rise()
+    chompersSfx.chomp.grumble()
     await sc.feastShow()
     if (!alive.current) return false
     const pick = await pickEgg(sc, feast.super)
     if (!alive.current) return false
     const spots = sc.feastSpots()
     setFeastUi(null)
-    sfx.chomp.crack()
+    chompersSfx.chomp.crack()
     const reveal = sc.feastReveal(pick, eggKinds(pick, feast))
     await sc.wait(0.55)
     if (!alive.current) return false
-    sfx.chomp.reveal()
-    sfx.chomp.cheer()
+    chompersSfx.chomp.reveal()
+    chompersSfx.chomp.cheer()
     setFeastUi({ id: seq.current++, phase: 'reveal', spots, egg: pick, pick: feast.pick, super: feast.super })
     const m = MOD[feast.pick]
     say(feast.super ? `Super Feast: Hungry + ${m.name}` : `${m.name}! ${m.line}`)
-    void sc.wait(0.9).then(() => alive.current && (sfx.chomp.peek(0), sfx.chomp.peek(1)))
+    void sc.wait(0.9).then(() => alive.current && (chompersSfx.chomp.peek(0), chompersSfx.chomp.peek(1)))
     await reveal
     await sc.wait(autoRef.current ? 0.5 : 1.3)
     if (!alive.current) return false
@@ -657,11 +658,11 @@ export default function Chompers() {
 
     if (!(await feastPick(sc, feast))) return false
     // the modifier takes hold
-    sfx.chomp.power()
+    chompersSfx.chomp.power()
     setHud((h) => ({ ...h, mods: feast.mods }))
     if (feast.spins) {
       left += feast.spins
-      sfx.chomp.extra()
+      chompersSfx.chomp.extra()
       setHud((h) => ({ ...h, free: { left, played } }))
     }
     if (feast.level > level) {
@@ -681,7 +682,7 @@ export default function Chompers() {
         say('Last spin!')
         sc.host('cover')
         if (!turboRef.current) {
-          sfx.chomp.heartbeat()
+          chompersSfx.chomp.heartbeat()
           await sc.wait(0.5)
           if (!alive.current) return false
         }
@@ -694,14 +695,14 @@ export default function Chompers() {
       if (fs.wildsCounted) {
         const filled = fs.levelUp ? WILDS_PER_LEVEL : filledOf(fs.meter, level)
         showMeter({ filled, level })
-        sfx.chomp.meter(filled)
+        chompersSfx.chomp.meter(filled)
       }
       if (fs.levelUp) {
         level = fs.level + fs.levelUp
         left = fs.left
         void sc.levelUp()
         sfx.levelUp()
-        sfx.chomp.cheer()
+        chompersSfx.chomp.cheer()
         say(`Meter full! +${LEVEL_SPINS * fs.levelUp} spins · donuts now ×${LEVEL_MULTS[level]}`)
         await showBanner({ kind: 'level', spins: LEVEL_SPINS * fs.levelUp, mult: LEVEL_MULTS[level] }, hold(2200))
         if (!alive.current) return false
@@ -741,7 +742,7 @@ export default function Chompers() {
     sfx.spinStart()
     if (opts.buy !== 'none') {
       sc.host('wow')
-      sfx.chomp.grumble()
+      chompersSfx.chomp.grumble()
     }
 
     const round = dev ? dev.draw() : playRound(rand, opts)
@@ -793,7 +794,7 @@ export default function Chompers() {
   const toggleAnte = (on: boolean) => {
     setAnte(on)
     if (on) {
-      sfx.chomp.rumble()
+      chompersSfx.chomp.rumble()
       sceneRef.current?.host('lick')
     }
   }

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Coin } from '../../components/icons'
-import { sfx } from '../../lib/sound'
+import { linesSfx } from './sound'
 import { FONT, GAME_U, INK, Sym } from './art'
 import { RollUp } from './Plates'
 import type { Fx } from './fx'
@@ -42,7 +42,7 @@ export function BigWin({ win, fx, box, quick, onDone }: { win: BigWinData; fx: F
   const roll = Math.min(hold * 0.55, 1200 + win.tier * 500)
 
   useEffect(() => {
-    sfx.lines.bigWin(win.tier)
+    linesSfx.bigWin(win.tier)
     fx?.confetti(60 + win.tier * 50)
     // the coins come up from under the stage and rain back down past the amount
     const at = window.setTimeout(() => fx?.coins(box.w / 2, box.h + 20, 22 + win.tier * 14, s * 1.15), 260)
@@ -124,7 +124,7 @@ export function BigWin({ win, fx, box, quick, onDone }: { win: BigWinData; fx: F
           className="mt-4 flex items-center gap-2.5 rounded-full border-[4px] bg-white py-2 pl-6 pr-5 text-[44px] font-black leading-none"
           style={{ borderColor: INK, color: INK, fontFamily: FONT, boxShadow: '0 7px 0 rgba(29,15,48,.55)' }}
         >
-          <RollUp value={win.amount} ms={roll} onTick={() => sfx.lines.count()} />
+          <RollUp value={win.amount} ms={roll} onTick={() => linesSfx.count()} />
           <Coin size={40} />
         </motion.div>
       </div>

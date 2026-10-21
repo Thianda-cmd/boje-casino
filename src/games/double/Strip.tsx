@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef } from 'react'
-import { sfx } from '../../lib/sound'
+import { doubleSfx } from './sound'
 import { useSize } from '../../lib/useSize'
 import { keyframes, spinCurve, type Curve } from '../cases/reel'
 import { TONE, Tile } from './art'
@@ -88,7 +88,7 @@ export const Strip = memo(function Strip({
       const idx = Math.floor(p + 0.5)
       if (idx !== lastIdx.current) {
         lastIdx.current = idx
-        if (soundRef.current && !document.hidden) sfx.double.tick(Math.min(1, (Math.abs(c.posAt(t + 8) - c.posAt(t - 8)) * (1000 / 16)) / 40))
+        if (soundRef.current && !document.hidden) doubleSfx.tick(Math.min(1, (Math.abs(c.posAt(t + 8) - c.posAt(t - 8)) * (1000 / 16)) / 40))
       }
     }
     raf.current = requestAnimationFrame(frame)
@@ -137,7 +137,7 @@ export const Strip = memo(function Strip({
         a.cancel()
         anim.current = null
         curve.current = null
-        if (live && soundRef.current && !document.hidden) sfx.double.land(COLORS.indexOf(colorOf(spin.roll)))
+        if (live && soundRef.current && !document.hidden) doubleSfx.land(COLORS.indexOf(colorOf(spin.roll)))
       },
       () => {},
     )

@@ -6,6 +6,7 @@ import { Chip } from '../../art/Chip'
 import { fmt, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { holdemSfx } from './sound'
 import { useSize } from '../../lib/useSize'
 import { useAuth } from '../../store/auth'
 import { useWallet } from '../../store/wallet'
@@ -509,7 +510,7 @@ export default function Holdem() {
     putTable({ id: saved.id, deck: h.deck, dealt: ALL.map(() => true), up, fly: false })
     setCirc({ stakes: handStakes(h), wins: {}, outcomes: null, leaving: 'player' })
     setBets({ ante: h.ante, trips: h.trips })
-    sfx.holdem.welcome()
+    holdemSfx.welcome()
     pushToast({ kind: 'info', title: brought ? "Your Hold'em hand came with you into your account" : "Welcome back: your Hold'em hand is just as you left it" })
     openDecision(h)
     // the lock is per player; the rest reads refs
@@ -526,7 +527,7 @@ export default function Holdem() {
   const turnOne = (i: number) => setCards((t) => ({ up: t.up.map((u, k) => u || k === i) }))
 
   /** turns cards over one after another; false if the sequence was stopped */
-  async function turn(id: number, idx: number[], stagger: number, sound: () => void = sfx.holdem.flip) {
+  async function turn(id: number, idx: number[], stagger: number, sound: () => void = holdemSfx.flip) {
     for (let k = 0; k < idx.length; k++) {
       turnOne(idx[k])
       sound()
@@ -552,7 +553,7 @@ export default function Holdem() {
   const refuse = (why: string, at?: { key?: BetKey; action?: Shake['action'] }) => {
     if (at?.key) setShake((s) => ({ key: at.key!, n: (s?.n ?? 0) + 1 }))
     if (at?.action) setBtnShake((s) => ({ action: at.action!, n: (s?.n ?? 0) + 1 }))
-    sfx.holdem.nope()
+    holdemSfx.nope()
     pushToast({ kind: 'info', title: why })
   }
 
@@ -597,13 +598,13 @@ export default function Holdem() {
     // player, dealer, player, dealer, then the board face down
     for (const i of [0, 2, 1, 3]) {
       dealOne(i)
-      sfx.holdem.deal()
+      holdemSfx.deal()
       await wait(190)
       if (!live(id)) return
     }
     for (let i = 4; i < 9; i++) {
       dealOne(i)
-      sfx.holdem.deal(true)
+      holdemSfx.deal(true)
       await wait(100)
       if (!live(id)) return
     }
@@ -623,9 +624,9 @@ export default function Holdem() {
       const cost = round2(h.ante * k)
       if (useWallet.getState().balance < cost || !useWallet.getState().placeBet(cost))
         return refuse(`${LABEL[a].label} needs ${fmt(cost)} coins: you have ${fmt(useWallet.getState().balance)}.`, { action: a })
-      sfx.holdem.bet(k)
-    } else if (a === 'check') sfx.holdem.check()
-    else sfx.holdem.fold()
+      holdemSfx.bet(k)
+    } else if (a === 'check') holdemSfx.check()
+    else holdemSfx.fold()
     const next = act(h, a)
     // saved (with the Play bet just taken) before anything moves
     commit(next)
@@ -674,7 +675,7 @@ export default function Holdem() {
     await wait(260)
     if (!live(id)) return
     // the dealer turns over
-    sfx.holdem.reveal()
+    holdemSfx.reveal()
     await wait(280)
     if (!live(id)) return
     if (!(await turn(id, [2, 3], 120, () => {}))) return
@@ -705,10 +706,10 @@ export default function Holdem() {
     const net = round2(sd.ret - sd.stake)
     // the sting: a won hand's by the size of the win; any other by what it came to (Trips can carry a lost or folded
     // hand into profit)
-    if (v === 'win') sfx.holdem.win(net >= h.ante * 8 ? 2 : net >= h.ante * 3 ? 1 : 0)
-    else if (net > 0) sfx.holdem.win(net >= h.ante * 3 ? 1 : 0)
-    else if (v === 'push') sfx.holdem.push()
-    else sfx.holdem.lose()
+    if (v === 'win') holdemSfx.win(net >= h.ante * 8 ? 2 : net >= h.ante * 3 ? 1 : 0)
+    else if (net > 0) holdemSfx.win(net >= h.ante * 3 ? 1 : 0)
+    else if (v === 'push') holdemSfx.push()
+    else holdemSfx.lose()
 
     const outcomes: Outcomes = {}
     const keep = handStakes(h)
@@ -732,8 +733,8 @@ export default function Holdem() {
     if (moment) {
       later(380, () => {
         setBig(moment)
-        if (full) sfx.holdem.bigHand(royal)
-        else sfx.holdem.trips()
+        if (full) holdemSfx.bigHand(royal)
+        else holdemSfx.trips()
       })
       // the moment closes itself (a tap or Space closes it sooner)
       later(380 + (royal ? 4400 : full ? 2300 : 1700), () => setBig((b) => (b?.id === moment.id ? null : b)))
@@ -741,12 +742,12 @@ export default function Holdem() {
     if (lost)
       later(450, () => {
         setCirc((c) => ({ ...c, leaving: 'dealer', stakes: keep }))
-        sfx.holdem.sweep()
+        holdemSfx.sweep()
       })
     if (Object.keys(profit).length)
       later(900, () => {
         setCirc((c) => ({ ...c, wins: profit }))
-        sfx.holdem.pay()
+        holdemSfx.pay()
       })
     // the chips come back to the player, then the same bets go down again for the next deal
     later(royal ? 4600 : full ? 3000 : 2700, () => {
@@ -781,7 +782,7 @@ export default function Holdem() {
       // Trips is a whole coin or more (a part-coin left by a top-up comes off with it)
       const v = k === 'trips' && left < 1 ? 0 : left
       if (v === cur) return refuse(`The Ante can't go under ${MIN_ANTE}`, { key })
-      sfx.holdem.remove()
+      holdemSfx.remove()
       return changeBets({ ...b, [k]: v })
     }
     const max = k === 'ante' ? MAX_ANTE : MAX_TRIPS
@@ -794,7 +795,7 @@ export default function Holdem() {
       return refuse(NO_COINS, { key })
     }
     if (add < chip) pushToast({ kind: 'info', title: cur + add >= max ? `Topped up to the ${fmt(max, 0)} limit` : `Only room for ${coins(add)} more` })
-    sfx.holdem.chip()
+    holdemSfx.chip()
     changeBets({ ...b, [k]: round2(cur + add) })
   }
   const chipRef = useRef(chipOn)
@@ -808,7 +809,7 @@ export default function Holdem() {
     if (!on) return changeBets({ ...b, trips: 0 })
     const v = Math.min(MAX_TRIPS, b.ante, chip)
     if (round2(useWallet.getState().balance - total(b)) < v) return refuse(NO_COINS, { key: 'trips' })
-    sfx.holdem.chip()
+    holdemSfx.chip()
     changeBets({ ...b, trips: Math.max(1, v) })
   }
 
@@ -842,7 +843,7 @@ export default function Holdem() {
     setBtnShake((s) => ({ action: 'all', n: (s?.n ?? 0) + 1 }))
     if (performance.now() - riverHintAt.current < 2500) return
     riverHintAt.current = performance.now()
-    sfx.holdem.nope()
+    holdemSfx.nope()
     pushToast({ kind: 'info', title: 'Your call at the river: Bet 1× (key 1) or Fold (F)' })
   }
 

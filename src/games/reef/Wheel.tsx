@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { animate, motion, useMotionValue } from 'framer-motion'
 import { fmt } from '../../lib/format'
-import { sfx } from '../../lib/sound'
+import { reefSfx } from './sound'
 import { WHEEL } from './rules'
 import { GoldCoin, INK, inked } from './art'
 
@@ -67,14 +67,14 @@ export function TreasureWheel({ spin, stage, onDone }: { spin: WheelSpin; stage:
         const n = Math.floor(v / SEG)
         if (n !== peg) {
           peg = n
-          sfx.reef.tick()
+          reefSfx.tick()
           kick.set(-22)
           animate(kick, 0, { type: 'spring', stiffness: 700, damping: 14 })
         }
       },
       onComplete: () => {
         setLanded(true)
-        sfx.reef.wheelWin(spin.mult)
+        reefSfx.wheelWin(spin.mult)
       },
     })
     const leave = window.setTimeout(() => setLeaving(true), (spin.spin + HOLD) * 1000)

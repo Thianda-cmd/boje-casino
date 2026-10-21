@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, animate, motion } from 'framer-motion'
 import { Coin } from '../../components/icons'
 import { fmt, round2 } from '../../lib/format'
-import { sfx } from '../../lib/sound'
+import { holdemSfx } from './sound'
 import { BLIND_PAYS, TRIPS_PAYS, type HandRank, type Showdown } from './rules'
 import { handWords, isBigHand, oddsWords, shortName } from './words'
 
@@ -213,7 +213,7 @@ export function BigHand({ data, x, y, narrow, onDone }: { data: BigHandData; x: 
       const now = performance.now()
       if (now - last > 90) {
         last = now
-        sfx.holdem.count()
+        holdemSfx.count()
       }
     }, 95)
     const stop = window.setTimeout(() => clearInterval(t), 2400)

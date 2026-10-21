@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { rand, randInt } from '../../lib/rng'
-import { sfx } from '../../lib/sound'
+import { casesSfx } from '../cases/sound'
 import { keyframes, spinCurve } from '../cases/reel'
 import { CRATES, RARITY, buildStrip, fillers, type Tile } from '../cases/rules'
 import { TileFace } from '../cases/tiles'
@@ -124,7 +124,7 @@ export const Reel = memo(function Reel({
       const idx = Math.floor(p + 0.5)
       if (idx !== lastIdx.current) {
         lastIdx.current = idx
-        if (ticksRef.current && !document.hidden) sfx.cases.tick(Math.min(1, (Math.abs(c.posAt(t + 8) - c.posAt(t - 8)) * (1000 / 16)) / 22))
+        if (ticksRef.current && !document.hidden) casesSfx.tick(Math.min(1, (Math.abs(c.posAt(t + 8) - c.posAt(t - 8)) * (1000 / 16)) / 22))
       }
     }
     raf.current = requestAnimationFrame(frame)

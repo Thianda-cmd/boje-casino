@@ -6,6 +6,7 @@ import { fmt, round2 } from '../../lib/format'
 import { defaultName, saveName } from '../../lib/identity'
 import { navigate } from '../../lib/router'
 import { sfx } from '../../lib/sound'
+import { tableSfx } from './sound'
 import { useSize } from '../../lib/useSize'
 import { useAuth } from '../../store/auth'
 import { useWallet } from '../../store/wallet'
@@ -316,7 +317,7 @@ export default function Table({
     const seat = f.mine.seat
     const res = await server.react(table, code)
     if (res.ok) {
-      sfx.table.pop()
+      tableSfx.pop()
       setSent((s) => [...s.filter((x) => x.at > res.at - 8000), { id: res.id, seat, code, at: res.at }])
     } else if (res.error === 'rate') setRateUntil(clock.now() + TIMING.REACTION_GAP_MS)
   }
@@ -374,16 +375,16 @@ export default function Table({
     const s = heard.current
     if (!s.shuffle && momentOf(feed, t) === 'shuffling') {
       s.shuffle = true
-      sfx.table.shuffle()
+      tableSfx.shuffle()
     }
     const hole = feed.dealer[1]
     if (!s.hole && hole?.flip != null && hole.flip <= t) {
       s.hole = true
-      sfx.table.flip()
+      tableSfx.flip()
     }
     if (!s.results && r.resultsAt != null && t >= r.resultsAt && feed.hands.some((x) => x.outcome)) {
       s.results = true
-      sfx.table.chipsSlide()
+      tableSfx.chipsSlide()
       if (summary) {
         const net = summary.payout - summary.bet
         if (net > 0) (myHands.some((x) => x.outcome === 'blackjack') ? sfx.bigWin : sfx.win)()
@@ -394,7 +395,7 @@ export default function Table({
     const turnKey = myTurn && r.turn ? `${r.id}:${r.turn.seat}:${r.turn.hand}` : ''
     if (turnKey && s.turn !== turnKey) {
       s.turn = turnKey
-      sfx.table.turn()
+      tableSfx.turn()
       navigator.vibrate?.(30)
     }
   })

@@ -6,6 +6,7 @@ import { Coin, IconX } from '../../components/icons'
 import { ActionButton, Toggle } from '../../components/ui'
 import { fmt, round2 } from '../../lib/format'
 import { sfx } from '../../lib/sound'
+import { casesSfx } from '../cases/sound'
 import { useWallet } from '../../store/wallet'
 import { CrateArt } from '../cases/art'
 import { CRATES, TIERS, multLabel, topMult, type Tier } from '../cases/rules'
@@ -50,7 +51,7 @@ export default function CreateModal({ initial, name, onCreate, onClose }: { init
 
   const add = (t: Tier) => {
     if (full) return
-    sfx.cases.pick(TIERS.indexOf(t))
+    casesSfx.pick(TIERS.indexOf(t))
     setCases((c) => [...c, t])
   }
   const removeOne = (t: Tier) => {

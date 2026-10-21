@@ -8,6 +8,7 @@ import { BojeLoader } from '../../components/Loader'
 import { fmt } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { isMuted, sfx } from '../../lib/sound'
+import { coinflipSfx } from './sound'
 import { safeStorage } from '../../lib/storage'
 import { useAuth } from '../../store/auth'
 import { CHALLENGE_MIN_BET, useWallet } from '../../store/wallet'
@@ -144,7 +145,7 @@ export default function CoinFlip() {
   const lastPress = useRef(0)
   const lastBroke = useRef(0)
   const lastFace = useRef<Side | null>(null)
-  const music = useRef<ReturnType<typeof sfx.coinflip.music>>(null)
+  const music = useRef<ReturnType<typeof coinflipSfx.music>>(null)
   const reconcileRef = useRef<() => void>(() => {})
   const live = useRef({ bet, side, turbo, target, pattern, uid, phase, mode })
   live.current = { bet, side, turbo, target, pattern, uid, phase, mode }
@@ -233,7 +234,7 @@ export default function CoinFlip() {
   useEffect(() => {
     const sync = () => {
       if (wins > 0 && !isMuted()) {
-        music.current ??= sfx.coinflip.music()
+        music.current ??= coinflipSfx.music()
         music.current?.set(wins)
       } else if (music.current) {
         music.current.stop()
@@ -313,7 +314,7 @@ export default function CoinFlip() {
   const active = !!streak && !streak.over
   const choose = (s: Side, quiet = false) => {
     if (autoRef.current || live.current.phase === 'flight') return
-    if (s !== live.current.side && !quiet) sfx.coinflip.pick(s)
+    if (s !== live.current.side && !quiet) coinflipSfx.pick(s)
     setSide(s)
     live.current.side = s
     safeStorage.setItem(SIDE_KEY, s)
@@ -346,10 +347,10 @@ export default function CoinFlip() {
     const sc = sceneRef.current
     sc?.setStreak(0, true)
     sc?.cashout(mult)
-    sfx.coinflip.cashout(mult)
+    coinflipSfx.cashout(mult)
     if (tier) {
       sc?.jackpot(tier)
-      sfx.coinflip.jackpot(tier)
+      coinflipSfx.jackpot(tier)
       say({ id: seq.current++, kind: 'jackpot', wins: s.wins, mult, amount, tier }, (autoRef.current ? 2600 : 4400) + tier * (tier >= 3 ? 1400 : 900))
     } else say({ id: seq.current++, kind: 'cash', wins: s.wins, mult, amount, note }, note ? 3600 : autoRef.current ? 1500 * sp() : 2600 * sp())
   }
@@ -456,14 +457,14 @@ export default function CoinFlip() {
         music.current = null
         sceneRef.current?.lost(before)
         sceneRef.current?.setStreak(0, true)
-        sfx.coinflip.lose(before)
+        coinflipSfx.lose(before)
         if (autoRef.current && theStreak.paid != null) stopAuto()
         say({ id: seq.current++, kind: 'lose', face: flip.face, call, wins: before, lost: before > 0 ? payoutFor(theStreak.bet, before) : theStreak.bet }, (autoRef.current ? 1400 : 2400) * sp())
         return
       }
       if (theStreak.paid != null) return finishPaid(theStreak)
       setStreak({ ...theStreak, calls: [...theStreak.calls], faces: [...theStreak.faces] })
-      sfx.coinflip.win(after)
+      coinflipSfx.win(after)
       sceneRef.current?.setStreak(after)
       if (after >= MAX_FLIPS) cashOut()
       else say({ id: seq.current++, kind: 'win', face: flip.face, wins: after, mult: multiplier(after), amount: payoutFor(theStreak.bet, after) }, (autoRef.current ? 1100 : 2200) * sp())
@@ -1139,7 +1140,7 @@ function useCount(to: number, ms: number, tick = false) {
         const now = performance.now()
         if (tick && now - last > 70) {
           last = now
-          sfx.coinflip.count(x / (to || 1))
+          coinflipSfx.count(x / (to || 1))
         }
       },
     })

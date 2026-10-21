@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { BetInput, GameShell } from '../../components/ui'
 import { fmt, round2 } from '../../lib/format'
-import { sfx } from '../../lib/sound'
+import { doubleSfx } from './sound'
 import { useSize } from '../../lib/useSize'
 import { useAuth } from '../../store/auth'
 import { MAX_BET, useWallet } from '../../store/wallet'
@@ -196,7 +196,7 @@ export default function Double() {
     if (!res.paid || !first) return
     const audible = !document.hidden
     if (live) {
-      if (o.bet > 0 && audible) (o.payout > 0 ? () => sfx.double.win(o.green) : sfx.double.lose)()
+      if (o.bet > 0 && audible) (o.payout > 0 ? () => doubleSfx.win(o.green) : doubleSfx.lose)()
       if (o.refund > 0) pushToast({ kind: 'info', title: `${fmt(o.refund)} of your bet never reached the table, so it came back.` })
     } else if (o.bet > 0) {
       const what = o.payout > o.bet ? `won ${fmt(o.payout)}` : o.payout === o.bet ? `your ${fmt(o.bet)} back` : o.payout > 0 ? `${fmt(o.payout)} of ${fmt(o.bet)} back` : `lost ${fmt(o.bet)}`
@@ -259,7 +259,7 @@ export default function Double() {
     if (!s || !f) return
     const id = f.round.id
     if (f.round.phase !== 'betting' || clock() >= f.round.startsAt - CLIENT_CLOSE_MS) {
-      sfx.double.refused()
+      doubleSfx.refused()
       return
     }
     const amt = round2(amountRef.current)
@@ -275,13 +275,13 @@ export default function Double() {
       return
     }
     addStake(me, s.book, id, f.round.hash, color, amt)
-    sfx.double.chip(COLORS.indexOf(color))
+    doubleSfx.chip(COLORS.indexOf(color))
     setMine(stakeOf(me, s.book, id))
     try {
       const r = await s.bet(id, color, amt, nameRef.current.name, nameRef.current.avatar)
       if (!r.ok) {
         const back = await refundChip(me, s.book, id, color, amt)
-        sfx.double.refused()
+        doubleSfx.refused()
         pushToast({
           kind: 'info',
           title:
@@ -333,7 +333,7 @@ export default function Double() {
         const key = `${r.id}:${stage}`
         const audible = !document.hidden
         if (key !== last) {
-          if (last === `${r.id}:open` && audible) sfx.double.close()
+          if (last === `${r.id}:open` && audible) doubleSfx.close()
           last = key
           setPhase(ph)
           setShut(stage === 'shut')
@@ -345,13 +345,13 @@ export default function Double() {
           const s = Math.ceil((left - CLIENT_CLOSE_MS) / 1000)
           if (s >= 1 && s <= 3 && s !== lastCount) {
             lastCount = s
-            if (audible) sfx.double.count(s)
+            if (audible) doubleSfx.count(s)
           }
         }
         // the push-off, also when a late roll sets the strip off a moment after the start (Strip.tsx)
         if (r.roll != null && est >= r.startsAt && est < r.startsAt + 1500 && spun !== r.id) {
           spun = r.id
-          if (audible) sfx.double.spin()
+          if (audible) doubleSfx.spin()
         }
         if (r.roll != null && est >= r.endsAt && landedAt !== r.id) {
           landedAt = r.id

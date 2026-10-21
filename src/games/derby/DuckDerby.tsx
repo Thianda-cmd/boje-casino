@@ -7,6 +7,7 @@ import { fmt, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { safeStorage } from '../../lib/storage'
 import { sfx } from '../../lib/sound'
+import { derbySfx } from './sound'
 import { useSize } from '../../lib/useSize'
 import { useAuth } from '../../store/auth'
 import { useWallet } from '../../store/wallet'
@@ -296,7 +297,7 @@ export default function DuckDerby() {
     if (phase !== 'betting') return
     if (has(b)) {
       setSlip((s) => s.filter((x) => betKey(x) !== betKey(b)))
-      sfx.derby.release()
+      derbySfx.release()
       return
     }
     if (slip.length >= MAX_BETS) {
@@ -304,7 +305,7 @@ export default function DuckDerby() {
       return
     }
     setSlip((s) => [...s, b])
-    sfx.derby.squeeze()
+    derbySfx.squeeze()
   }
   const pickForecast = (lane: number) => {
     if (phase !== 'betting') return
@@ -313,7 +314,7 @@ export default function DuckDerby() {
       sfx.click()
     } else if (fcFirst === lane) {
       setFcFirst(null)
-      sfx.derby.release()
+      derbySfx.release()
     } else {
       toggle({ kind: 'forecast', a: fcFirst, b: lane })
       setFcFirst(null)
@@ -369,7 +370,7 @@ export default function DuckDerby() {
     counts.forEach((n, i) =>
       later(() => {
         setCount(n)
-        sfx.derby.pip()
+        derbySfx.pip()
       }, i * beat),
     )
     later(() => {
@@ -378,7 +379,7 @@ export default function DuckDerby() {
       const plan = step.value
       planRef.current = plan
       setCount('GO!')
-      sfx.derby.horn()
+      derbySfx.horn()
       setRank([0, 1, 2, 3, 4, 5])
       sceneRef.current?.race(plan, turboRef.current)
       setPhase('racing')
@@ -395,9 +396,9 @@ export default function DuckDerby() {
     setPhase('podium')
     setCaption(null)
     if (pd.payout > 0) {
-      sfx.derby.fanfare(pd.payout >= pd.stake * 5)
+      derbySfx.fanfare(pd.payout >= pd.stake * 5)
       later(() => sfx.coin(), 500)
-    } else sfx.derby.lose()
+    } else derbySfx.lose()
   }
 
   const nextRace = () => {
@@ -471,9 +472,9 @@ export default function DuckDerby() {
         onRemove={(b) => toggle(b)}
         onClear={() => {
           setSlip([])
-          sfx.derby.release()
+          derbySfx.release()
         }}
-        onRebet={lastSlip.length && !slip.length && phase === 'betting' ? () => (setSlip(lastSlip.slice(0, MAX_BETS)), sfx.derby.squeeze()) : undefined}
+        onRebet={lastSlip.length && !slip.length && phase === 'betting' ? () => (setSlip(lastSlip.slice(0, MAX_BETS)), derbySfx.squeeze()) : undefined}
         best={best}
       />
       {/* on a phone the button sits right under the river, where the bets are placed */}

@@ -7,6 +7,8 @@ import { AnimatedNumber, useStake } from '../../components/ui'
 import { fmt } from '../../lib/format'
 import { navigate } from '../../lib/router'
 import { sfx } from '../../lib/sound'
+import { casesSfx } from '../cases/sound'
+import { battlesSfx } from './sound'
 import { useWallet } from '../../store/wallet'
 import { CrateArt, ItemArt, twinkle } from '../cases/art'
 import { CRATES, RARITIES, RARITY, multLabel, type Rarity, type Tier } from '../cases/rules'
@@ -98,25 +100,25 @@ export default function Battle({ server, id, who, name, connecting, onRetry }: {
     const prev = prevT.current ?? t
     prevT.current = t
     const seated = v.seats.filter(Boolean).length
-    if (filled.current != null && seated > filled.current && v.status === 'open') sfx.battles.join()
+    if (filled.current != null && seated > filled.current && v.status === 'open') battlesSfx.join()
     filled.current = seated
     if (prev >= t || v.startAt == null) return
     const hit = (x: number | null) => x != null && x > prev && x <= t && t - x < 900
-    for (const k of [3, 2, 1]) if (hit(v.startAt - k * 1000)) sfx.battles.count(k)
+    for (const k of [3, 2, 1]) if (hit(v.startAt - k * 1000)) battlesSfx.count(k)
     if (hit(v.startAt)) {
-      sfx.battles.count(0)
-      sfx.battles.push()
+      battlesSfx.count(0)
+      battlesSfx.push()
     }
-    for (let r = 1; r < v.cases.length; r++) if (hit(roundStart(v, r))) sfx.battles.push()
+    for (let r = 1; r < v.cases.length; r++) if (hit(roundStart(v, r))) battlesSfx.push()
     for (let r = 0; r < v.cases.length; r++)
       if (hit(roundLand(v, r)) && v.results) {
         const best = Math.max(...v.results.map((row) => RARITIES.indexOf(CRATES[v.cases[r]].items[itemOfMult(v.cases[r], row[r])].rarity)))
-        sfx.cases.land(best)
+        casesSfx.land(best)
       }
     if (v.endAt != null) {
-      if (hit(v.endAt - 1500)) sfx.battles.roll(1.3)
+      if (hit(v.endAt - 1500)) battlesSfx.roll(1.3)
       const me = mySeat(v)
-      if (hit(v.endAt)) sfx.battles.reveal(me ? !!v.winners?.includes(me) : true)
+      if (hit(v.endAt)) battlesSfx.reveal(me ? !!v.winners?.includes(me) : true)
     }
   })
 

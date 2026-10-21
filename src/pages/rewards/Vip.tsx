@@ -14,6 +14,7 @@ import { Coin, IconCheck, IconLock } from '../../components/icons'
 import { TierBadge } from '../../art/TierBadge'
 import { fmt, fmtCompact } from '../../lib/format'
 import { sfx } from '../../lib/sound'
+import { rewardsSfx } from './sound'
 import { Bar, ClaimButton, EASE, Eyebrow, Glow, IconCrown, IconReturn, Panel, joinAnd, useClaim } from './kit'
 import { pendingLevelCoins, rakebackPayable } from './ready'
 
@@ -291,7 +292,7 @@ export function RakebackCard() {
         </div>
       </div>
       <div className="relative mt-auto pt-5">
-        <ClaimButton ready={payable >= 0.01} tone="green" onClick={() => claim(claimRakeback(), 'Rakeback claimed', sfx.rewards.rakeback)}>
+        <ClaimButton ready={payable >= 0.01} tone="green" onClick={() => claim(claimRakeback(), 'Rakeback claimed', rewardsSfx.rakeback)}>
           {payable >= 0.01 ? (
             <>
               <Coin size={18} /> Claim {fmt(payable, 2)} coins
@@ -333,7 +334,7 @@ export function TierBonusCard() {
       </>
     )
     foot = (
-      <ClaimButton ready onClick={() => claim(claimTierBonus(), names.length > 1 ? 'Tier bonuses claimed' : `${names[0]} bonus claimed`, sfx.rewards.tier)} burst={1.5}>
+      <ClaimButton ready onClick={() => claim(claimTierBonus(), names.length > 1 ? 'Tier bonuses claimed' : `${names[0]} bonus claimed`, rewardsSfx.tier)} burst={1.5}>
         <Coin size={18} /> Claim {fmt(due.coins, 0)} coins
       </ClaimButton>
     )

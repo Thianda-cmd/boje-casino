@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { GameShell } from '../../components/ui'
 import { BojeLoader } from '../../components/Loader'
 import { isMuted, sfx } from '../../lib/sound'
+import { reefSfx } from './sound'
 import { fmt, round2 } from '../../lib/format'
 import { safeStorage } from '../../lib/storage'
 import { useAuth } from '../../store/auth'
@@ -27,7 +28,7 @@ import type { CatchFx, Cue, FormationName, ReefEvent, ReefScene, StageLayout } f
   batches and squares everything up when the page goes. Only one tab at a time plays for a player (a Web Lock); a
   second one waits and says so. Around them: the panel (Panel.tsx), the overlay on the reef (Hud.tsx: the dock, feed,
   banners, payout numbers and the big-win celebration), the treasure wheel (Wheel.tsx), the paytable (Paytable.tsx)
-  and the sounds (sfx.reef, woken inside the first press on the stage for iOS).
+  and the sounds (reefSfx, woken inside the first press on the stage for iOS).
 
   Controls: the mouse aims, a click fires one and holding keeps firing (Space too); A auto fire, L lock (pick a
   creature; Esc lets go), 1-7, Q / E or the mouse wheel over the reef change the cannon. On a phone a tap fires toward
@@ -112,7 +113,7 @@ export default function Reef() {
   const hostRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<ReefScene | null>(null)
-  const bed = useRef<ReturnType<typeof sfx.reef.ambience>>(null)
+  const bed = useRef<ReturnType<typeof reefSfx.ambience>>(null)
   const seq = useRef(0)
   const shownBanner = useRef({ rank: 0, until: 0 })
   const timers = useRef(new Set<number>())
@@ -136,7 +137,7 @@ export default function Reef() {
     // so quick steps (a spun mouse wheel) chain before the next render
     live.current.level = n
     setLevel(n)
-    sfx.reef.level(n)
+    reefSfx.level(n)
   }
   const step = (d: -1 | 1) => pickLevel(live.current.level + d)
   const toggleAuto = () => {
@@ -150,8 +151,8 @@ export default function Reef() {
 
   /** a press on the stage: the audio wakes inside the gesture (iOS only lets it start in one) and the bed starts */
   const wake = () => {
-    sfx.reef.unlock()
-    if (!bed.current && !isMuted()) bed.current = sfx.reef.ambience()
+    reefSfx.unlock()
+    if (!bed.current && !isMuted()) bed.current = reefSfx.ambience()
   }
 
   /* ---------------- what the scene reports ---------------- */
@@ -167,12 +168,12 @@ export default function Reef() {
     const r = purse.fire(cost)
     if (r === 'ok') {
       // the bed starts with the first shot (a gesture, so the audio may start)
-      if (!bed.current && !isMuted()) bed.current = sfx.reef.ambience()
+      if (!bed.current && !isMuted()) bed.current = reefSfx.ambience()
       return true
     }
     if (r === 'broke') {
       setAuto(false)
-      sfx.reef.broke()
+      reefSfx.broke()
       const bal = useWallet.getState().balance
       let lower: number | null = null
       for (let i = COSTS.length - 1; i >= 0 && lower == null; i--) if (COSTS[i] < cost && COSTS[i] <= bal) lower = i
@@ -221,21 +222,21 @@ export default function Reef() {
     })
     later(() => setFeed((f) => f.filter((q) => performance.now() - q.at < FEED_MS - 100)), FEED_MS)
     // (the chest's fanfare plays as its wheel lands)
-    if (c.target !== 'chest' && (c.tier >= 1 || whale)) sfx.reef.win(whale ? 3 : c.tier)
+    if (c.target !== 'chest' && (c.tier >= 1 || whale)) reefSfx.win(whale ? 3 : c.tier)
   }
 
   const event = (e: ReefEvent) => {
     switch (e.type) {
       case 'whale-incoming':
         say('whale', 'Golden Whale incoming!', 'Worth 200× your shot')
-        sfx.reef.whale()
+        reefSfx.whale()
         break
       case 'whale-gone':
         if (!e.caught) say('gone', 'The Golden Whale swam away')
         break
       case 'tide':
         say('tide', 'Here comes the tide!')
-        sfx.reef.tide()
+        reefSfx.tide()
         break
       case 'formation':
         say('formation', FORMATION[e.name])
@@ -256,7 +257,7 @@ export default function Reef() {
   }
 
   const cue = (c: Cue, k: number) => {
-    const s = sfx.reef
+    const s = reefSfx
     if (c === 'shot') s.shot(k)
     else if (c === 'net') s.net(k)
     else if (c === 'flinch') s.flinch(k)

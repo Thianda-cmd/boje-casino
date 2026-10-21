@@ -7,6 +7,7 @@ import { Chip } from '../../art/Chip'
 import { fmt, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { baccaratSfx } from './sound'
 import { useSize } from '../../lib/useSize'
 import { useWallet } from '../../store/wallet'
 import { useAuth } from '../../store/auth'
@@ -295,7 +296,7 @@ export default function Baccarat() {
   async function reveal(cardId: number, id: number) {
     if (turboRef.current || hurry.current) {
       setMode(cardId, 'up')
-      sfx.baccarat.flip()
+      baccaratSfx.flip()
       await wait(turboRef.current ? 240 : 380)
       refreshTotals()
       return
@@ -305,7 +306,7 @@ export default function Baccarat() {
     setLifted(cardId)
     await wait(150)
     if (!live(id)) return
-    sfx.baccarat.squeeze()
+    baccaratSfx.squeeze()
     await new Promise<void>((res) => {
       peelDone.current = res
       // peek at the corner, hold a breath, then peel the rest
@@ -321,7 +322,7 @@ export default function Baccarat() {
     if (!live(id)) return
     setMode(cardId, 'up')
     setLifted(null)
-    sfx.baccarat.reveal()
+    baccaratSfx.reveal()
     refreshTotals()
     await wait(turboRef.current || hurry.current ? 120 : 240)
   }
@@ -344,7 +345,7 @@ export default function Baccarat() {
     const add = (o: Round['order'][number], up: boolean) => {
       const slot = cards.current.filter((c) => c.side === o.side).length
       putCards([...cards.current, { card: o.card, side: o.side, slot, mode: up ? 'up' : 'down', flipInFlight: up }])
-      sfx.baccarat.deal()
+      baccaratSfx.deal()
       if (up) later(flight * 900, refreshTotals)
     }
     // Player, Banker, Player, Banker: the first card of each hand face up, the second face down
@@ -433,7 +434,7 @@ export default function Baccarat() {
       setHist([])
       setShoeInfo(shoeView(s, round.order.length))
       setShuffling({ burn: s.burn!.card, count: s.burn!.count, id })
-      sfx.baccarat.shuffle()
+      baccaratSfx.shuffle()
       await wait(T ? 1150 : 2350)
       if (!live(id)) return
       setShuffling(null)
@@ -470,7 +471,7 @@ export default function Baccarat() {
     const push = BET_KEYS.every((k) => !placed[k] || outs[k] === 'push')
     setResult({ id: run.current, winner: round.winner, natural: round.natural, pPair: round.pPair, bPair: round.bPair, bet: total, payout: pay.payout, push })
     setOutcomes(outs)
-    sfx.baccarat.announce(round.winner)
+    baccaratSfx.announce(round.winner)
 
     // the dealer takes the losing chips, pays the winners, then the chips come back to the player
     const keep: Bets = {}
@@ -487,12 +488,12 @@ export default function Baccarat() {
       later(T ? 120 : 420, () => {
         setLeaving('dealer')
         setBets(keep)
-        sfx.baccarat.collect()
+        baccaratSfx.collect()
       })
     if (Object.keys(profit).length)
       later(T ? 300 : 820, () => {
         setWins(profit)
-        sfx.baccarat.pay()
+        baccaratSfx.pay()
       })
     later(T ? 1250 : 2500, () => {
       setLeaving('player')
@@ -537,7 +538,7 @@ export default function Baccarat() {
       if (phase === 'done') setBets(base)
       return refuse(key, roomLimit < 1 ? `Table limit: ${fmt(BET_INFO[key].limit, 0)} on ${BET_INFO[key].name}` : NO_COINS)
     }
-    sfx.baccarat.chip()
+    baccaratSfx.chip()
     setBets({ ...base, [key]: round2(cur + add) })
     setUndo((u) => [...(phase === 'done' ? [] : u), { key, amount: add }])
   }
@@ -577,7 +578,7 @@ export default function Baccarat() {
       return d > 0 ? [{ key, amount: d }] : []
     })
     if (!steps.length) return void pushToast({ kind: 'info', title: 'Those bets are at the table limit' })
-    sfx.baccarat.chip()
+    baccaratSfx.chip()
     setBets(next)
     setUndo((u) => [...(phase === 'done' ? [] : u), ...steps])
   }

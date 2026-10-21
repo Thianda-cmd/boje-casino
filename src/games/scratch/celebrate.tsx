@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { animate, motion } from 'framer-motion'
 import { Coin } from '../../components/icons'
 import { fmt } from '../../lib/format'
-import { sfx } from '../../lib/sound'
+import { scratchSfx } from './sound'
 import { CARDS, multLabel, tierTitle, winTier, type CardId, type SymbolId } from './rules'
 import { THEMES } from './cardart'
 import { SymbolArt } from './symbols'
@@ -72,7 +72,7 @@ export function Celebration({ party, fx, phone, desk, quick, stage, onSettle, on
       at(90, () => setPhase('lift'))
       at(480, () => {
         setPhase('gather')
-        sfx.scratch.gather()
+        scratchSfx.gather()
       })
       at(1040, () => setPhase('fuse'))
     }
@@ -81,7 +81,7 @@ export function Celebration({ party, fx, phone, desk, quick, stage, onSettle, on
       const cx = (r?.left ?? 0) + (r?.width ?? 800) / 2
       const cy = (r?.top ?? 0) + (r?.height ?? 600) * 0.4
       if (full) {
-        sfx.scratch.boom()
+        scratchSfx.boom()
         // the shockwave and the jolt
         fx?.ring(cx, cy, Math.min(r?.width ?? 600, 700) * 0.55, '#ffffff', 0.7)
         fx?.ring(cx, cy, Math.min(r?.width ?? 600, 700) * 0.4, t.win, 0.9)
@@ -100,7 +100,7 @@ export function Celebration({ party, fx, phone, desk, quick, stage, onSettle, on
       fx?.coins(cx, cy, full ? 44 : 26, full ? 1.35 : 1.1)
       fx?.confetti(full ? 70 : 40, t.confetti, { cx, cy })
       fx?.shower(full ? 5 : 2.5, t.confetti)
-      sfx.scratch.jackpot(party.id, tier)
+      scratchSfx.jackpot(party.id, tier)
     })
     // the count, then the coins to the balance
     const D = full ? (party.top || party.mult >= 1000 ? 3500 : 2800) : 1900
@@ -117,12 +117,12 @@ export function Celebration({ party, fx, phone, desk, quick, stage, onSettle, on
           const now = performance.now()
           if (now - last > 55) {
             last = now
-            sfx.scratch.tick(v / party.amount)
+            scratchSfx.tick(v / party.amount)
           }
         },
         onComplete: () => {
           el.textContent = fmt(party.amount)
-          sfx.scratch.kaching()
+          scratchSfx.kaching()
           setPhase('landed')
         },
       })
@@ -143,7 +143,7 @@ export function Celebration({ party, fx, phone, desk, quick, stage, onSettle, on
         { x: target.left + target.width / 2, y: target.top + target.height / 2 },
         phone ? 12 : 16,
         () => {
-          sfx.scratch.coin()
+          scratchSfx.coin()
           if (first) {
             first = false
             settle()

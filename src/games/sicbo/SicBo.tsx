@@ -8,6 +8,7 @@ import { Chip, chipLabel } from '../../art/Chip'
 import { fmt, round2 } from '../../lib/format'
 import { rand, randInt } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { sicboSfx } from './sound'
 import { useSize } from '../../lib/useSize'
 import { useAuth } from '../../store/auth'
 import { MAX_BET, useWallet } from '../../store/wallet'
@@ -523,10 +524,10 @@ export default function SicBo() {
     }
     setStruck((s) => [...s, l])
     sceneRef.current?.flash(l.mult >= 20 ? 1.4 : l.mult >= 10 ? 1.1 : 0.75)
-    sfx.sicbo.strike(l.mult)
+    sicboSfx.strike(l.mult)
     // the most exciting strike of all: one on the player's own chips
     const mine = !!play.current?.bets[l.key]
-    if (mine) sfx.sicbo.mine(l.mult)
+    if (mine) sicboSfx.mine(l.mult)
     setSay(`Lucky strike ×${l.mult} on ${spotTitle(l.key)}${mine ? ', your bet' : ''}.`)
     if (l.mult >= 20) void quake.start({ x: [0, -8, 7, -5, 3, -1, 0], y: [0, 4, -5, 3, -2, 1, 0], transition: { duration: 0.5 } })
     else if (l.mult >= 10) void quake.start({ x: [0, -3, 3, -2, 0], y: [0, 2, -2, 1, 0], transition: { duration: 0.3 } })
@@ -585,7 +586,7 @@ export default function SicBo() {
     setBig(false)
     setReadout((r) => r && { ...r, live: false })
     setHint(0)
-    sfx.sicbo.roll()
+    sicboSfx.roll()
     const sc = readyRef.current ? sceneRef.current : null
     // the shake is worked out (off the main thread) while the lightning plays
     void sc?.plan(round.dice)
@@ -600,17 +601,17 @@ export default function SicBo() {
       shown = true
       setReadout({ dice: round.dice, live: true })
       setSay(rollWords(round.dice))
-      sfx.sicbo.settle()
+      sicboSfx.settle()
     }
     if (sc && readyRef.current) {
-      const bed = sfx.sicbo.rattle()
+      const bed = sicboSfx.rattle()
       try {
         await sc.shake(round.dice, {
           kick: (k) => {
-            sfx.sicbo.kick(k)
+            sicboSfx.kick(k)
             bed?.kick(k)
           },
-          hit: (h, k) => sfx.sicbo.knock(h.on, k),
+          hit: (h, k) => sicboSfx.knock(h.on, k),
           readable: () => {
             bed?.stop()
             reveal()
@@ -661,18 +662,18 @@ export default function SicBo() {
       at(T ? 150 : 480, () => {
         setLeaving('house')
         setBets(keep)
-        sfx.sicbo.sweep()
+        sicboSfx.sweep()
       })
     if (Object.keys(profit).length)
       at(T ? 320 : 900, () => {
         setWins(profit)
-        sfx.sicbo.pay()
+        sicboSfx.pay()
       })
     const tier = p.ret > p.stake ? tierOf(p.ret / p.stake) : 0
     if (p.ret > p.stake) {
       at(T ? 260 : 650, () => {
         setWinShow({ id, amount: p.ret, stake: p.stake, tier })
-        sfx.sicbo.win(tier)
+        sicboSfx.win(tier)
       })
     }
     at(T ? 300 : 700, () => setSay(p.ret > p.stake ? `You won ${coins(p.ret)}.` : p.ret > 0 ? `${coins(p.ret)} of ${coins(p.stake)} back.` : 'No win this roll.'))
@@ -727,7 +728,7 @@ export default function SicBo() {
 
   const refuse = (key: BetKey | null, why: string) => {
     if (key) setShake((s) => ({ key, n: (s?.n ?? 0) + 1 }))
-    sfx.sicbo.nope()
+    sicboSfx.nope()
     pushToast({ kind: 'info', title: why })
   }
 
@@ -757,7 +758,7 @@ export default function SicBo() {
               ? `Table limit ${fmt(MAX_BET, 0)}: placed ${coins(add)} on ${s.label}`
               : `Only ${coins(add)} coins left: placed ${coins(add)} on ${s.label}`,
       })
-    sfx.sicbo.chip()
+    sicboSfx.chip()
     setBets({ ...base, [key]: round2(cur + add) })
     setUndo((u) => [...u, { key, amount: add }])
   }
@@ -774,7 +775,7 @@ export default function SicBo() {
     const next = { ...base }
     if (v > 0) next[key] = v
     else delete next[key]
-    sfx.sicbo.remove()
+    sicboSfx.remove()
     setBets(next)
     setUndo((u) => [...u, { key, amount: -take }])
   }
@@ -803,7 +804,7 @@ export default function SicBo() {
     if (!betting) return
     const base = editable()
     if (!betTotal(base)) return
-    sfx.sicbo.remove()
+    sicboSfx.remove()
     setLeaving('player')
     setBets({})
     setUndo([])
@@ -821,7 +822,7 @@ export default function SicBo() {
       return d > 0 ? [{ key, amount: d }] : []
     })
     if (!steps.length) return refuse(null, 'Those bets are at their limits')
-    sfx.sicbo.chip()
+    sicboSfx.chip()
     setBets(next)
     setUndo((u) => [...u, ...steps])
   }

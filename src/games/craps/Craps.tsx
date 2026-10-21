@@ -7,6 +7,7 @@ import { Chip } from '../../art/Chip'
 import { fmt, round2 } from '../../lib/format'
 import { rand } from '../../lib/rng'
 import { sfx } from '../../lib/sound'
+import { crapsSfx } from './sound'
 import { useSize } from '../../lib/useSize'
 import { useAuth } from '../../store/auth'
 import { useWallet } from '../../store/wallet'
@@ -532,7 +533,7 @@ export default function Craps() {
 
   const refuse = (key: BetKey | null, why: string) => {
     if (key) setShake((s) => ({ key, n: (s?.n ?? 0) + 1 }))
-    sfx.craps.nope()
+    crapsSfx.nope()
     pushToast({ kind: 'info', title: why })
   }
 
@@ -575,11 +576,11 @@ export default function Craps() {
         await sc.roll(
           dice,
           {
-            collect: () => sfx.craps.collect(),
-            shake: () => sfx.craps.shake(T ? 0.2 : 0.42),
-            release: () => sfx.craps.release(),
-            hit: (h, k) => sfx.craps.hit(h.on, k),
-            readable: () => sfx.craps.settle(),
+            collect: () => crapsSfx.collect(),
+            shake: () => crapsSfx.shake(T ? 0.2 : 0.42),
+            release: () => crapsSfx.release(),
+            hit: (h, k) => crapsSfx.hit(h.on, k),
+            readable: () => crapsSfx.settle(),
             landed: () => land(id),
           },
           beat,
@@ -589,11 +590,11 @@ export default function Craps() {
       }
     } else {
       setFlat({ dice, rolling: true })
-      sfx.craps.shake(T ? 0.2 : 0.42)
+      crapsSfx.shake(T ? 0.2 : 0.42)
       await wait(T ? 650 : 1300)
       if (!live(id)) return
       setFlat({ dice, rolling: false })
-      sfx.craps.settle()
+      crapsSfx.settle()
     }
     if (!live(id)) return
     land(id)
@@ -620,7 +621,7 @@ export default function Craps() {
     const n = netOf(r)
     setPhase('result')
     setCall({ id, call: stickCall(r) })
-    sfx.craps.call(r.event, r.total, isHard(r.dice))
+    crapsSfx.call(r.event, r.total, isHard(r.dice))
     setRolled(r.total)
     setSay(`${stickCall(r).big} ${rollWords(r.dice, r.event, r.before.point)}.`)
     later(260 * T, () => {
@@ -628,12 +629,12 @@ export default function Craps() {
       if (r.before.point === r.after.point) return
       setPuckState(r.after.point)
       sceneRef.current?.setPuck(r.after.point)
-      sfx.craps.puck(r.after.point !== null)
+      crapsSfx.puck(r.after.point !== null)
     })
     // a point made lights its Fire Bet square; after a seven-out the squares stay lit through the payout
     const madeNow = r.after.shooter.points.length > r.before.shooter.points.length
     setFirePts(r.event === 'seven-out' ? r.before.shooter.points : r.after.shooter.points)
-    if (madeNow) later(380 * T, () => sfx.craps.fire(r.after.shooter.points.length))
+    if (madeNow) later(380 * T, () => crapsSfx.fire(r.after.shooter.points.length))
 
     // the board comes back, then the payout plays out on it
     const back = 560 * T
@@ -664,12 +665,12 @@ export default function Craps() {
           pushed.map((x) => x.key),
           'player',
         )
-        if (lost.length) sfx.craps.sweep()
+        if (lost.length) crapsSfx.sweep()
       })
     if (won.length)
       at(720, () => {
         setPiles((ps) => [...ps, ...won.filter((x) => pileOf(x.key, ps)).map((x): Pile => ({ id: `${x.key}+${id}`, key: x.key, amount: round2(x.ret - x.stake), win: true }))])
-        sfx.craps.pay()
+        crapsSfx.pay()
       })
     // the roll's total: shown with the payout (a roll that decided nothing shows nothing), and in the panel then
     at(r.wagered > 0 ? (won.length ? 760 : 360) : 80, () => {
@@ -700,7 +701,7 @@ export default function Craps() {
           const arrived = moved.map((m): Pile => ({ id: `${m.to}.${++pileSeq}`, key: m.to!, amount: m.stake, from: m.key }))
           return [...ps.filter((q) => !from.includes(q)), ...arrived]
         })
-        sfx.craps.chip()
+        crapsSfx.chip()
       })
 
     // a big win: its celebration, which holds the table until it ends (or a tap closes it)
@@ -709,9 +710,9 @@ export default function Craps() {
     if (fireWin || tier)
       at(820, () => {
         setCelebrate({ id, tier, fire: fireWin ? r.after.shooter.points.length || r.before.shooter.points.length : 0, amount: n })
-        sfx.craps.win(fireWin ? 3 : tier)
+        crapsSfx.win(fireWin ? 3 : tier)
       })
-    else if (n > 0) at(760, () => sfx.craps.win(0))
+    else if (n > 0) at(760, () => crapsSfx.win(0))
     const hold = fireWin || tier ? 820 + TIER_COUNT[fireWin ? 3 : tier] + 1700 : won.length ? collectAt + 650 : moved.length || lost.length ? 1100 : 700
     at(hold, () => finishShow(id))
   }
@@ -742,7 +743,7 @@ export default function Craps() {
     // the next throw needn't wait for it (a roll pressed first brings them back itself)
     sceneRef.current?.collect(false)
     later(SWEEP_AFTER, () => {
-      if (phaseRef.current === 'bet' && sceneRef.current?.collect(true)) sfx.craps.collect()
+      if (phaseRef.current === 'bet' && sceneRef.current?.collect(true)) crapsSfx.collect()
     })
     // the roll's total stays a moment longer
     const shown = run.current
@@ -768,7 +769,7 @@ export default function Craps() {
     }
     // a chip cut short is never silent: say what was placed, and why
     if (res.amount < chip) pushToast({ kind: 'info', title: round2(before + res.amount) >= res.max ? `Topped up to the ${coins(res.max)} limit on ${betName(key)}` : `Only ${coins(res.amount)} coins left: placed ${coins(res.amount)} on ${betName(key)}` })
-    sfx.craps.chip()
+    crapsSfx.chip()
     sync()
     setUndo((u) => [...u, { key, amount: res.amount }])
     setStillThere(0)
@@ -797,7 +798,7 @@ export default function Craps() {
       if (r.why === 'stays') refuse(target, whyStays(target, keeper.table))
       return
     }
-    sfx.craps.remove()
+    crapsSfx.remove()
     sync()
     if (r.trimmed.length) pushToast({ kind: 'info', title: keeper.table.bets[r.trimmed[0]] ? `${betName(r.trimmed[0])} came down to its new limit` : `${betName(r.trimmed[0])} came down with it` })
     setUndo((u) => u.filter((x) => keeper.table.bets[x.key]))
@@ -820,7 +821,7 @@ export default function Craps() {
       if (r.why === 'stays') refuse(step.key, whyStays(step.key, keeper.table))
       return
     }
-    sfx.craps.remove()
+    crapsSfx.remove()
     sync()
   }
 
@@ -832,7 +833,7 @@ export default function Craps() {
     const back = keeper.clear()
     setUndo([])
     if (back > 0) {
-      sfx.craps.remove()
+      crapsSfx.remove()
       sync()
     }
     // contract bets stay: say so rather than seem to ignore the press
@@ -850,7 +851,7 @@ export default function Craps() {
     const why = keeper.putMany(adds)
     if (why === 'coins') return refuse(null, 'Not enough coins for your last bets')
     if (why) return
-    sfx.craps.chip()
+    crapsSfx.chip()
     sync()
     setUndo((u) => [...u, ...steps.map(([key, amount]) => ({ key, amount }))])
   }

@@ -1,7 +1,7 @@
 import { forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { fmt, round2 } from '../../lib/format'
-import { sfx } from '../../lib/sound'
+import { scratchSfx } from './sound'
 import { CARDS, coinLabel, isMax, isPrize, multLabel, symbolOf, type CardId, type Outcome } from './rules'
 import { BONUS, CARD_H, CARD_R, CARD_W, cellCenter, cellRect, hasBonus } from './layout'
 import { CardFace, THEMES, tableSlot } from './cardart'
@@ -345,7 +345,7 @@ export const ScratchCard = forwardRef<CardHandle, Props>(function ScratchCard(
     window.setTimeout(() => {
       const eng = engineRef.current
       if (!eng || eng !== e) return
-      sfx.scratch.blast()
+      scratchSfx.blast()
       const f = cb.current.fx
       const c = cellCenter(area)
       const p = client(c.x, c.y)
@@ -373,7 +373,7 @@ export const ScratchCard = forwardRef<CardHandle, Props>(function ScratchCard(
   useEffect(() => {
     const el = designRef.current!
     let pressed: number | null = null
-    let voice: ReturnType<typeof sfx.scratch.scrape> | null = null
+    let voice: ReturnType<typeof scratchSfx.scrape> | null = null
     let raf = 0
     let swipe: { id: number; x: number; y: number; t: number } | null = null
     const toDesign = (e: PointerEvent) => {
@@ -407,7 +407,7 @@ export const ScratchCard = forwardRef<CardHandle, Props>(function ScratchCard(
       eng.down(p.x, p.y, radius(e))
       eng.hover(p.x, p.y)
       voice?.stop()
-      voice = sfx.scratch.scrape(id)
+      voice = scratchSfx.scrape(id)
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(sound)
     }
@@ -503,7 +503,7 @@ export const ScratchCard = forwardRef<CardHandle, Props>(function ScratchCard(
       }
       const fast = speed === 'turbo'
       const v = fast ? 5.2 : 2.6
-      const voice = sfx.scratch.scrape(id)
+      const voice = scratchSfx.scrape(id)
       let raf = 0
       const sound = () => {
         voice.set(Math.min(1, eng.speed / 1.6), eng.removing)
@@ -559,7 +559,7 @@ export const ScratchCard = forwardRef<CardHandle, Props>(function ScratchCard(
     const timers = outcome.line.map((_, k) =>
       window.setTimeout(() => {
         setHops((h) => h.map((v, j) => (j === k ? v + 1 : v)))
-        sfx.scratch.ring(k)
+        scratchSfx.ring(k)
       }, 120 + k * 190),
     )
     timers.push(window.setTimeout(() => setTableLit(true), 1050))

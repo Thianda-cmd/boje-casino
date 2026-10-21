@@ -20,6 +20,7 @@ import { RewardChest } from '../../art/RewardChest'
 import { Coin } from '../../components/icons'
 import { fmt, fmtDuration } from '../../lib/format'
 import { sfx } from '../../lib/sound'
+import { rewardsSfx } from './sound'
 import { useNow } from '../../lib/useNow'
 import { ClaimButton, Glow, IconWheel, KINDS, KindTile, Panel, nb, useLater } from './kit'
 import { dailyState } from './daily'
@@ -59,12 +60,12 @@ export function RewardsHeader() {
   const claimAll = () => {
     const r = claimEverything(useWheelUi.getState().spinning)
     if (r.sum > 0) {
-      if (r.n) sfx.rewards.collect(r.n)
-      else sfx.rewards.rakeback()
+      if (r.n) rewardsSfx.collect(r.n)
+      else rewardsSfx.rakeback()
       pushToast({ kind: 'reward', title: r.n === 0 ? 'Rakeback claimed' : r.n === 1 ? 'Reward claimed' : `${r.n} rewards claimed`, amount: r.sum })
     }
     if (r.unlocked) {
-      later(() => sfx.rewards.unlock(), 450)
+      later(() => rewardsSfx.unlock(), 450)
       pushToast({ kind: 'reward', title: 'Lucky Wheel unlocked: your spin is ready' })
     }
   }
