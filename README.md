@@ -1,7 +1,8 @@
 # Boje Casino (play money)
 
-A Stake-style casino with thirty-four games. Originals: Showtime (a game-show money wheel), Bullseye (darts), Market
-Rush (a live trading chart), Chicken Road, Crash, Double, Coin Flip, Reef Raid, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
+A Stake-style casino with thirty-six games. Originals: Showtime (a game-show money wheel), Bullseye (darts), Market
+Rush (a live trading chart), Banker's Deal (briefcases and a Banker's offers), Pot Luck (a live player-versus-player
+pot), Chicken Road, Crash, Double, Coin Flip, Reef Raid, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
 Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Slots: Lucky Lines, Plunder Bay, Chompers, Pop Party and Robo Riot. Table games:
 Blackjack, Live Blackjack, Baccarat, Sic Bo, Craps, Hold'em Showdown, Roulette and Video Poker.
 Vault Heist (a skill game) and Casino Tycoon (an idle game) are free and pay coins. Coins are play money only. Guests keep their wallet in the
@@ -330,6 +331,22 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   where T is the chance of that total or more, rounded to tidy steps and capped at 10,000×, with c solved so the
   table returns as close to 97% as it can without going over (96.93% to 97.00%). `tools/darts-test.ts` checks the
   geometry, the grid against continuous throws, every table and sampled rounds.
+- Banker's Deal (src/games/deal/rules.ts): sixteen briefcases on one of three boards of prizes (multiples of the
+  stake): Classic (top 5×, average 0.857×), Gold (top 25×) and Diamond (top 250×, one game in 500), with Gold's
+  chance solved so that playing every game to the end returns exactly 96%. The player keeps a case and opens the rest
+  in rounds of 4, 4, 3, 2 and 1; after each round, and at the final two (where the player may also swap), the Banker
+  offers 75%, 84%, 90%, 94%, 97% and 99% of the unopened prizes' average, less up to 3% for his mood, rounded down.
+  An offer never exceeds what the player's case is worth on average, so no way of playing returns more than 96%
+  (dealing at the first offer returns about 70%, at the final two about 94%). A case's prize is drawn only when it is
+  opened (the player's at the end), so a stored game never holds a prize the player hasn't seen; each draw and offer
+  is stored before it is shown. `tools/deal-test.ts` checks the boards, the course of a game, every offer's bound,
+  the fairness of the draws and six ways of playing.
+- Pot Luck (src/games/pot/rules.ts): a live pot on the database clock (20 s of betting, the draw, the winner). Every
+  cent paid in is a ticket, numbered in the order paid; the draw takes u from sha256(seed + ':pot') (the hash of the
+  seed is published when the round opens) and the holder of ticket floor(u × tickets) wins the pot less a 4% rake.
+  So each player's chance is their share of the pot and every coin returns 96% on average, whoever else plays. House
+  bots (2 to 5 a round, 5 to 5,000 coins each) keep rounds going; their coins are the house's. `tools/pot-test.ts`
+  checks the tickets, the draw, every player's exact return over random rounds, the limits and the bots' plan.
 - Market Rush (src/games/market/rules.ts): a price that ticks ten times a second as a martingale (each tick multiplies
   it by 1 + σz with z bounded, mean 0, variance 1; σ by the market's mood, Calm, Steady or Wild). A position Up or Down
   at 1× to 100× leverage costs a 2% fee and is worth margin + notional × the price's move, so closing at any moment is

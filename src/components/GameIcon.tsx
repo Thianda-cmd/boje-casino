@@ -7,6 +7,8 @@ import { HoldemIcon } from '../games/holdem/cover'
 import { ShowtimeIcon } from '../games/showtime/cover'
 import { DartsIcon } from '../games/darts/cover'
 import { MarketIcon } from '../games/market/cover'
+import { DealIcon } from '../games/deal/cover'
+import { PotIcon } from '../games/pot/cover'
 
 // Small 20px monochrome icons for navigation.
 export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
@@ -191,6 +193,10 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
       return <DartsIcon {...p} />
     case 'market':
       return <MarketIcon {...p} />
+    case 'deal':
+      return <DealIcon {...p} />
+    case 'pot':
+      return <PotIcon {...p} />
     case 'plunder':
       return (
         <svg {...p}>

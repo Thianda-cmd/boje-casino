@@ -15,6 +15,8 @@ import { migrateGuest, pendingAll } from './games/livebj/ledger'
 import type { TableServer } from './games/livebj/types'
 import { hasShared as hasBattleStakes, isNew as isNewBattle, migrateGuest as migrateBattleGuest, pendingAll as pendingBattles } from './games/battles/ledger'
 import type { BattleServer } from './games/battles/types'
+import { hasOpen as hasPotStakes } from './games/pot/ledger'
+import type { PotServer } from './games/pot/net'
 import { GameIcon } from './components/GameIcon'
 import { GameCover } from './components/covers'
 import { MoreGames } from './components/GameRows'
@@ -52,6 +54,8 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   showtime: lazy(() => import('./games/showtime/Showtime')),
   darts: lazy(() => import('./games/darts/Bullseye')),
   market: lazy(() => import('./games/market/MarketRush')),
+  deal: lazy(() => import('./games/deal/BankersDeal')),
+  pot: lazy(() => import('./games/pot/PotLuck')),
   lines: lazy(() => import('./games/lines/LuckyLines')),
   penalty: lazy(() => import('./games/penalty/Penalty')),
   scratch: lazy(() => import('./games/scratch/Scratch')),
@@ -85,6 +89,7 @@ export default function App() {
   const m = route.match(/^\/game\/(\w+)/)
   useLiveBjPayouts(who, authReady && m?.[1] !== 'livebj')
   useBattlePayouts(who, authReady && m?.[1] !== 'battles')
+  usePotPayouts(who, authReady && m?.[1] !== 'pot')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -187,6 +192,45 @@ function useLiveBjPayouts(who: string, on: boolean) {
         const f = await server.tables()
         // only the tab that controls the seat touches the wallet, as in the Live Blackjack lobby
         if (!stop && (!f.mine || f.mine.active)) await settleMissed(server, who, 'shared', null, [])
+      } catch {
+        /* offline: try again on the next tick */
+      } finally {
+        busy = false
+      }
+    }
+    run()
+    const id = setInterval(run, 5000)
+    const onVisible = () => !document.hidden && run()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      stop = true
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [who, on])
+}
+
+/* A Pot Luck round is drawn on the server's clock whether or not anyone watches. The Pot Luck page settles its own;
+   everywhere else this asks about the rounds you paid into (pot_state, or the offline stand-in for an offline
+   session's) and settles each one once its ticket is drawn: the winner's own browser pays itself the pot. It only
+   polls while such a payment is waiting (games/pot/ledger.ts), and the ledger's lock and markers keep it to once. */
+function usePotPayouts(who: string, on: boolean) {
+  useEffect(() => {
+    if (!on) return
+    let stop = false
+    let busy = false
+    let server: PotServer | null = null
+    const run = async () => {
+      if (busy || !hasPotStakes(who)) return
+      busy = true
+      try {
+        const [net, { awayToast, settleMissed }] = await Promise.all([import('./games/pot/net'), import('./games/pot/settle')])
+        server ??= await net.tryShared()
+        if (stop) return
+        for (const s of await settleMissed(server, who)) {
+          const t = awayToast(s)
+          if (t) useWallet.getState().pushToast(t)
+        }
       } catch {
         /* offline: try again on the next tick */
       } finally {

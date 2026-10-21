@@ -26,6 +26,8 @@ import { HoldemCover } from '../games/holdem/cover'
 import { ShowtimeCover } from '../games/showtime/cover'
 import { DartsCover } from '../games/darts/cover'
 import { MarketCover } from '../games/market/cover'
+import { DealCover } from '../games/deal/cover'
+import { PotCover } from '../games/pot/cover'
 
 /* Lobby art. Chicken Road keeps its pixel look; everything else is clean vector art on a bold gradient. */
 
@@ -92,6 +94,10 @@ export function GameCover({ id }: { id: GameId }) {
       return <DartsCover />
     case 'market':
       return <MarketCover />
+    case 'deal':
+      return <DealCover />
+    case 'pot':
+      return <PotCover />
     case 'holdem':
       return <HoldemCover />
     case 'cases':

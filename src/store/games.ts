@@ -1,4 +1,4 @@
-export type GameId = 'chicken' | 'showtime' | 'darts' | 'market' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'coinflip' | 'reef' | 'lines' | 'sicbo' | 'craps' | 'holdem' | 'plunder' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
+export type GameId = 'chicken' | 'showtime' | 'darts' | 'market' | 'deal' | 'pot' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'coinflip' | 'reef' | 'lines' | 'sicbo' | 'craps' | 'holdem' | 'plunder' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
 
 export type Category = 'originals' | 'slots' | 'table'
 
@@ -16,6 +16,8 @@ export const GAMES: GameInfo[] = [
   { id: 'showtime', name: 'Showtime', category: 'originals', tagline: 'A live game-show money wheel: everyone bets the same spin, with a Booster and four bonus rounds up to 20,000×.', accent: '#ff4d61', tag: 'live' },
   { id: 'darts', name: 'Bullseye', category: 'originals', tagline: 'Three darts at the board. Pick your target and your thrower; the total pays, up to 10,000× for a big finish.', accent: '#e8344e', tag: 'new' },
   { id: 'market', name: 'Market Rush', category: 'originals', tagline: 'A live price chart. Go Up or Down with up to 100× leverage and cash out before you are liquidated.', accent: '#00d1a0', tag: 'new' },
+  { id: 'deal', name: "Banker's Deal", category: 'originals', tagline: 'Sixteen briefcases and a Banker on the phone. Take his offer, or play on for a case worth up to 250×.', accent: '#f2b134', tag: 'new' },
+  { id: 'pot', name: 'Pot Luck', category: 'originals', tagline: 'Everyone pays into one pot; your share is your chance. Winner takes it all.', accent: '#a855f7', tag: 'live' },
   { id: 'chicken', name: 'Chicken Road', category: 'originals', tagline: 'Cross lane by lane, cash out before the traffic gets you.', accent: '#f7a440', tag: 'hot' },
   { id: 'crash', name: 'Crash', category: 'originals', tagline: 'Everyone rides the same rocket. Cash out before it blows.', accent: '#9b7bff', tag: 'live' },
   { id: 'double', name: 'Double', category: 'originals', tagline: 'Red, black or green. One strip, and everyone bets the same spin.', accent: '#ef3e5c', tag: 'live' },

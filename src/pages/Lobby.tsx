@@ -86,6 +86,40 @@ const SLIDES: Slide[] = [
     art: <HeroFan ids={['coinflip', 'lines', 'showtime', 'popparty', 'reef']} />,
   },
   {
+    key: 'pot',
+    eyebrow: 'New · Live',
+    tone: 'text-[#d6b4ff] bg-[#a855f7]/18',
+    title: (
+      <>
+        One pot.
+        <br />
+        Winner takes all.
+      </>
+    ),
+    text: 'Pot Luck: everyone pays into the same pot and your share is your chance. Drop in late, chase the long shot, take the lot.',
+    cta: 'Join Pot Luck',
+    to: '/game/pot',
+    bg: 'linear-gradient(110deg,#140a26 0%,#22103e 55%,#3a1660 100%)',
+    art: <HeroFan ids={['battles', 'double', 'pot', 'showtime', 'crash']} />,
+  },
+  {
+    key: 'deal',
+    eyebrow: 'New game show',
+    tone: 'text-gold bg-gold/15',
+    title: (
+      <>
+        Deal,
+        <br />
+        or no deal?
+      </>
+    ),
+    text: "Banker's Deal: sixteen briefcases, one is yours. Open the rest, hear the Banker's offer, and decide. A Diamond board hides 250×.",
+    cta: "Play Banker's Deal",
+    to: '/game/deal',
+    bg: 'linear-gradient(110deg,#1a1406 0%,#2a1e08 55%,#3d2a0a 100%)',
+    art: <HeroFan ids={['scratch', 'cases', 'deal', 'claw', 'showtime']} />,
+  },
+  {
     key: 'darts',
     eyebrow: 'New original',
     tone: 'text-[#ff8c9a] bg-[#e8344e]/15',
