@@ -1,8 +1,8 @@
 # Boje Casino (play money)
 
-A Stake-style casino with thirty-two games. Originals: Showtime (a game-show money wheel), Chicken Road, Crash, Double,
-Coin Flip, Reef Raid, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo, Wheel, Cases, Case Battles, Duck Derby, Lucky Claw,
-Penalty Shootout and Scratch & Win. Slots: Lucky Lines, Plunder Bay, Chompers, Pop Party and Robo Riot. Table games:
+A Stake-style casino with thirty-four games. Originals: Showtime (a game-show money wheel), Bullseye (darts), Market
+Rush (a live trading chart), Chicken Road, Crash, Double, Coin Flip, Reef Raid, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
+Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Slots: Lucky Lines, Plunder Bay, Chompers, Pop Party and Robo Riot. Table games:
 Blackjack, Live Blackjack, Baccarat, Sic Bo, Craps, Hold'em Showdown, Roulette and Video Poker.
 Vault Heist (a skill game) and Casino Tycoon (an idle game) are free and pay coins. Coins are play money only. Guests keep their wallet in the
 browser (localStorage); signed-in players have it saved to their account.
@@ -321,6 +321,23 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   that can still come) it returns about 99.3% of everything wagered (`tools/holdem-test.ts` checks the evaluator on
   all 2,598,960 five-card hands and the known seven-card frequencies, every settlement rule, and the returns).
 - Roulette: European single zero, a bet covering n numbers pays 36 / n.
+- Bullseye (src/games/darts/rules.ts): three darts at a regulation board, paid on their total (0 to 180). The player
+  picks a target (Treble 20, Treble 19 or the Bull) and a thrower (Pro, Regular, Wild: a round Gaussian scatter of 14,
+  26 or 42 mm). Each region's chance is the scatter integrated over it on a polar grid whose cells line up with the
+  wires, so the odds are exact up to a few parts in a million (and match a million continuous throws per setup); a
+  dart is drawn by region from that table, then placed inside its region. Totals follow by convolution. Each of the
+  nine setups has its own paytable: nothing below par (the total beaten 42% of the time), from par up c / T^0.86
+  where T is the chance of that total or more, rounded to tidy steps and capped at 10,000×, with c solved so the
+  table returns as close to 97% as it can without going over (96.93% to 97.00%). `tools/darts-test.ts` checks the
+  geometry, the grid against continuous throws, every table and sampled rounds.
+- Market Rush (src/games/market/rules.ts): a price that ticks ten times a second as a martingale (each tick multiplies
+  it by 1 + σz with z bounded, mean 0, variance 1; σ by the market's mood, Calm, Steady or Wild). A position Up or Down
+  at 1× to 100× leverage costs a 2% fee and is worth margin + notional × the price's move, so closing at any moment is
+  worth the stake less the fee on average. It is liquidated, for nothing, at 20% of its stake; a tick can only carry it
+  a bounded way past that line, so liquidation is on average a gain for the house and no way of playing returns more
+  than 98% (`tools/market-test.ts` simulates seven strategies at 1×, 10× and 100×). A position worth 1,000 stakes
+  closes itself. The price is stored before each tick is drawn on screen, and leaving the page closes open positions
+  at the current price.
 - Showtime (src/games/showtime/rules.ts): a 54-segment money wheel, 21 × 1, 13 × 2, 7 × 5, 4 × 10 (paying their value
   to 1) and four bonus rounds: Coin Toss (4 segments; a multiplier on each face of a tossed coin), Peg Drop (2; a puck
   drops onto 16 slots, two of them DOUBLEs that double the row and drop again), Prize Wall (2; the player picks one of

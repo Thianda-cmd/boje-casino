@@ -50,6 +50,8 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   craps: lazy(() => import('./games/craps/Craps')),
   holdem: lazy(() => import('./games/holdem/Holdem')),
   showtime: lazy(() => import('./games/showtime/Showtime')),
+  darts: lazy(() => import('./games/darts/Bullseye')),
+  market: lazy(() => import('./games/market/MarketRush')),
   lines: lazy(() => import('./games/lines/LuckyLines')),
   penalty: lazy(() => import('./games/penalty/Penalty')),
   scratch: lazy(() => import('./games/scratch/Scratch')),

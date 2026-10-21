@@ -86,6 +86,40 @@ const SLIDES: Slide[] = [
     art: <HeroFan ids={['coinflip', 'lines', 'showtime', 'popparty', 'reef']} />,
   },
   {
+    key: 'darts',
+    eyebrow: 'New original',
+    tone: 'text-[#ff8c9a] bg-[#e8344e]/15',
+    title: (
+      <>
+        One hundred
+        <br />
+        and eighty!
+      </>
+    ),
+    text: 'Bullseye: three darts at a real board. Pick your target and your thrower, and the total pays, up to 10,000× for a big finish.',
+    cta: 'Play Bullseye',
+    to: '/game/darts',
+    bg: 'linear-gradient(110deg,#200c12 0%,#301018 55%,#0f2a1c 100%)',
+    art: <HeroFan ids={['penalty', 'claw', 'darts', 'scratch', 'mines']} />,
+  },
+  {
+    key: 'market',
+    eyebrow: 'New original',
+    tone: 'text-[#5cf0c8] bg-[#00d1a0]/15',
+    title: (
+      <>
+        Buy the dip.
+        <br />
+        Ride the rush.
+      </>
+    ),
+    text: 'Market Rush: a live price chart. Go Up or Down with up to 100× leverage and cash out before you are liquidated.',
+    cta: 'Play Market Rush',
+    to: '/game/market',
+    bg: 'linear-gradient(110deg,#04161a 0%,#062a24 55%,#0b3a2c 100%)',
+    art: <HeroFan ids={['crash', 'limbo', 'market', 'double', 'plinko']} />,
+  },
+  {
     key: 'chicken',
     eyebrow: 'Featured',
     tone: 'text-gold bg-gold/15',

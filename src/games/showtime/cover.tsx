@@ -88,7 +88,7 @@ export function ShowtimeCover() {
       <path d={`M${cx} ${cy - R + 12} L${cx - 9} ${cy - R - 14} A10 10 0 1 1 ${cx + 9} ${cy - R - 14} Z`} fill={`url(#${u}gold)`} stroke={INK} strokeWidth="2.2" strokeLinejoin="round" />
       <circle cx={cx} cy={cy - R - 17} r="4.2" fill="#ff4d61" stroke={INK} strokeWidth="1.6" />
       {/* the marquee */}
-      <g transform="rotate(-4 100 34)">
+      <g transform="translate(6 8) rotate(-4 100 34)">
         <rect x="30" y="16" width="140" height="38" rx="12" fill="#ff4d61" stroke={INK} strokeWidth="3" />
         <rect x="35" y="21" width="130" height="28" rx="8" fill="#b31d34" />
         {Array.from({ length: 14 }, (_, i) => (
