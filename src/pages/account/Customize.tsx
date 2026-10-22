@@ -1,11 +1,12 @@
 /*
-  The wardrobe: everything a player can wear, by kind (avatar, frame, banner, name colour, title, showcase badges),
-  beside a live preview of their profile card.
+  The wardrobe: everything a player can wear, by kind (avatar, frame, aura, banner, backdrop, name colour, title,
+  showcase badges), beside a live preview of their profile card standing on their backdrop, the aura round the avatar.
 
   Anything wearable goes on with one press (wear() on the wallet, saved at once for an account; an account's avatar
   through update_profile). Anything not yet theirs is tried on instead: the preview shows it with a Try-on ribbon,
   and the bar under the preview says how to get it: its price and a Buy button (the shop's confirm step), or what
-  unlocks it with how far along that is. Guests have no avatar to change (it belongs to an account), so their avatar
+  unlocks it with how far along that is, or for a crate-only look which crates drop it and the chance, with the way to
+  the crates. Guests have no avatar to change (it belongs to an account), so their avatar
   presses are try-ons with the sign-up pitch. The Badges kind picks up to three earned achievements for the showcase.
 */
 import { useRef, useState } from 'react'
@@ -18,7 +19,8 @@ import { sfx } from '../../lib/sound'
 import { useAuth } from '../../store/auth'
 import { useWallet } from '../../store/wallet'
 import { AVATAR_COUNT, SHOWCASE, achievement, canWear, cosmetic, cosmeticsOf, earnedAchievements, type Cosmetic, type CosmeticKind } from '../../store/cosmetics'
-import { Bar, CardHead, EASE, IconSparkle, KIND_NAME, LOOK_KEY, Panel, RarityTag, equip, saveSoon, unlockProgress, useIdentity, useLook, useWardrobe } from './kit'
+import { Bar, CardHead, EASE, IconSparkle, KIND_NAME, LOOK_KEY, Panel, PrismEdge, RarityTag, equip, saveSoon, unlockProgress, useIdentity, useLook, useWardrobe } from './kit'
+import { CrateHint } from './Crates'
 import { ProfileCard } from './ProfileHeader'
 import { BuyModal } from './Shop'
 import { useAccountTab } from './tab'
@@ -27,7 +29,9 @@ type Kind = CosmeticKind | 'badges'
 const KINDS: { id: Kind; name: string }[] = [
   { id: 'avatar', name: 'Avatar' },
   { id: 'frame', name: 'Frame' },
+  { id: 'aura', name: 'Aura' },
   { id: 'banner', name: 'Banner' },
+  { id: 'backdrop', name: 'Backdrop' },
   { id: 'nameColor', name: 'Name colour' },
   { id: 'title', name: 'Title' },
   { id: 'badges', name: 'Badges' },
@@ -112,6 +116,7 @@ export function CustomizeTab() {
 
       <div ref={preview} className="order-1 flex scroll-mt-20 flex-col gap-3 lg:sticky lg:top-[68px] lg:order-2">
         <ProfileCard
+          scene
           look={previewLook}
           avatar={previewAvatar}
           name={me.name}
@@ -160,6 +165,7 @@ function ItemTile({ c, worn, mine, selected, small, disabled, onPress }: { c: Co
       data-state={worn ? 'worn' : mine ? 'mine' : 'locked'}
     >
       <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full" style={{ background: R.color, boxShadow: `0 0 6px ${R.color}` }} title={R.name} />
+      {c.rarity === 'mythic' && !worn && !selected && <PrismEdge />}
       <span className="relative">
         <span className={locked ? 'opacity-55 saturate-[.6]' : undefined}>
           <CosmeticPreview id={c.id} size={small ? 56 : 72} avatar={avatar} />
@@ -193,6 +199,12 @@ function TryBar({ c, onBuy, onStop }: { c: Cosmetic; onBuy: () => void; onStop: 
   const mine = canWear(c.id, w)
   const prog = unlockProgress(c, source)
   const R = RARITY[c.rarity]
+  const setTab = useAccountTab((s) => s.setTab)
+  // to the shop, then down to its crates once the tab has changed
+  const toCrates = () => {
+    setTab('shop')
+    setTimeout(() => document.getElementById('crates')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 260)
+  }
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22, ease: EASE }}>
       <Panel className="!p-4">
@@ -226,6 +238,14 @@ function TryBar({ c, onBuy, onStop }: { c: Cosmetic; onBuy: () => void; onStop: 
             <Coin size={16} /> Buy for {fmt(c.price, 0)}
             {balance < c.price && <span className="text-[11.5px] font-bold opacity-70">· {fmt(c.price - balance, 0)} short</span>}
           </button>
+        ) : c.unlock?.crate && !mine ? (
+          <div className="mt-3.5 rounded-xl bg-stage px-3 py-2.5">
+            <CrateHint itemId={c.id}>
+              <button onClick={toCrates} className="h-9 shrink-0 rounded-lg bg-[linear-gradient(180deg,#ffd75e,#f2b134)] px-3 text-[12.5px] font-extrabold text-[#2a1c00] transition hover:brightness-105" data-try-crates>
+                Open crates
+              </button>
+            </CrateHint>
+          </div>
         ) : prog ? (
           <div className="mt-3.5 rounded-xl bg-stage px-3 py-2.5">
             <div className="flex items-center justify-between gap-2 text-[12px] font-bold">

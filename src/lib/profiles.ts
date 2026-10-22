@@ -187,11 +187,15 @@ const hash = (s: string) => {
   }
   return h
 }
+// some made-up players wear the animated cosmetics (auras, backdrops, the crates' Mythics), so the pages show them
 const LOOKS: Partial<Look>[] = [
-  { frame: 'frame:gold', banner: 'banner:gold', nameColor: 'name:gold', title: 'title:high-roller' },
-  { frame: 'frame:neon', banner: 'banner:neon', nameColor: 'name:ice', title: 'title:night-owl' },
-  { frame: 'frame:flame', banner: 'banner:galaxy', nameColor: 'name:fire', title: 'title:big-fish' },
-  { frame: 'frame:crown', banner: 'banner:aurora', nameColor: 'name:rainbow', title: 'title:tycoon' },
+  { frame: 'frame:gold', aura: 'aura:coins', banner: 'banner:gold', backdrop: 'backdrop:coins', nameColor: 'name:gold', title: 'title:high-roller' },
+  { frame: 'frame:neon', banner: 'banner:matrix', backdrop: 'backdrop:matrix', nameColor: 'name:ice', title: 'title:night-owl' },
+  { frame: 'frame:flame', aura: 'aura:embers', banner: 'banner:volcano', backdrop: 'backdrop:embers', nameColor: 'name:fire', title: 'title:big-fish' },
+  { frame: 'frame:prism', aura: 'aura:prism', banner: 'banner:singularity', backdrop: 'backdrop:prism', nameColor: 'name:prism', title: 'title:immortal' },
+  { frame: 'frame:diamond', aura: 'aura:sparkles', banner: 'banner:sakura', backdrop: 'backdrop:sakura', nameColor: 'name:diamond', title: 'title:legend' },
+  { frame: 'frame:crown', aura: 'aura:halo', banner: 'banner:aurora', backdrop: 'backdrop:aurora', nameColor: 'name:rainbow', title: 'title:tycoon' },
+  { frame: 'frame:kaiju', aura: 'aura:atomic', banner: 'banner:kaiju', backdrop: 'backdrop:storm', nameColor: 'name:electric', title: 'title:kaiju-king' },
   {},
 ]
 

@@ -3,11 +3,14 @@ import { levelFromXp, tierIndexOf } from './levels'
 /*
   Cosmetics and achievements: what a player can wear on their profile and what they have earned.
 
-  A player's look has five parts: their avatar (one of AVATAR_COUNT designs; the first 16 are free), a frame round
-  it, a banner behind their profile, the colour of their name, and a title under it, plus up to three badges in their
-  showcase. Each cosmetic is free (every player has it), unlocked by progress (a level, a VIP tier, a challenge, an
-  achievement) or bought in the shop with coins. Bought items are kept in the wallet's `owned` list; unlocks are
-  worked out from the wallet whenever they are needed, so they can never be lost.
+  A player's look has seven parts: their avatar (one of AVATAR_COUNT designs; the first 16 are free), a frame round
+  it, an aura (an animated effect round the framed avatar), a banner behind their profile, a backdrop (an animated
+  scene behind their whole profile page), the colour of their name, and a title under it, plus up to three badges in
+  their showcase. Each cosmetic is free (every player has it), unlocked by progress (a level, a VIP tier, a challenge,
+  an achievement), bought in the shop with coins, or found in a crate (CRATES: a crate drops one cosmetic its owner
+  doesn't have yet; the crate-only ones, most of them Mythic, can't be had any other way). Bought and dropped items
+  are kept in the wallet's `owned` list; unlocks are worked out from the wallet whenever they are needed, so they can
+  never be lost.
 
   Achievements are badges earned by playing: milestones (rounds, coins wagered, the biggest win), VIP tiers, the daily
   streak, Vault Heist, and one for every challenge completed. They are worked out from a few wallet fields
@@ -35,8 +38,8 @@ export function setChallenges(list: readonly ChallengeInfo[]) {
   all = null
 }
 
-export type CosmeticKind = 'avatar' | 'frame' | 'banner' | 'nameColor' | 'title'
-export type Rarity = 'common' | 'rare' | 'epic' | 'legendary'
+export type CosmeticKind = 'avatar' | 'frame' | 'aura' | 'banner' | 'backdrop' | 'nameColor' | 'title'
+export type Rarity = 'common' | 'rare' | 'epic' | 'legendary' | 'mythic'
 
 /** what unlocks a cosmetic without buying it */
 export interface Unlock {
@@ -47,6 +50,8 @@ export interface Unlock {
   challenge?: string
   /** an achievement id */
   achievement?: string
+  /** found only in this crate (CRATES): never unlocked by progress, only owned once dropped */
+  crate?: string
 }
 
 export interface Cosmetic {
@@ -101,6 +106,35 @@ const frames: Cosmetic[] = [
   { id: 'frame:holo', kind: 'frame', name: 'Hologram', line: 'Shifts colour as it turns', rarity: 'legendary', price: 30000 },
   { id: 'frame:explorer', kind: 'frame', name: 'Compass', line: 'Complete the Explorer challenge', rarity: 'rare', unlock: { challenge: 'explorer' } },
   { id: 'frame:highroller', kind: 'frame', name: 'High Roller', line: 'Wager 1,000,000 coins', rarity: 'legendary', unlock: { achievement: 'wagered-1m' } },
+  { id: 'frame:frost', kind: 'frame', name: 'Frostbite', line: 'Ice that grows as you watch', rarity: 'rare', price: 6000 },
+  { id: 'frame:glitch', kind: 'frame', name: 'Glitch', line: 'A frame that can’t quite load', rarity: 'epic', price: 10000 },
+  { id: 'frame:plasma', kind: 'frame', name: 'Plasma', line: 'Electric arcs that never sit still', rarity: 'epic', price: 12000 },
+  { id: 'frame:orbit', kind: 'frame', name: 'Orbit', line: 'Three moons on tilted rings', rarity: 'epic', price: 14000 },
+  { id: 'frame:runes', kind: 'frame', name: 'Arcane', line: 'Rune circles turning both ways', rarity: 'epic', unlock: { crate: 'crate:neon' } },
+  { id: 'frame:kaiju', kind: 'frame', name: 'Kaiju', line: 'Call an exact result in Kaiju Clash', rarity: 'epic', unlock: { challenge: 'kaiju-exact' } },
+  { id: 'frame:inferno', kind: 'frame', name: 'Inferno', line: 'A ring of roaring fire', rarity: 'legendary', price: 28000 },
+  { id: 'frame:storm', kind: 'frame', name: 'Thunderhead', line: 'Storm clouds and forked lightning', rarity: 'legendary', price: 32000 },
+  { id: 'frame:liquidgold', kind: 'frame', name: 'Liquid Gold', line: 'Molten gold, still flowing', rarity: 'legendary', price: 40000 },
+  { id: 'frame:serpent', kind: 'frame', name: 'Ouroboros', line: 'A dragon chasing its own tail', rarity: 'legendary', unlock: { crate: 'crate:cosmic' } },
+  { id: 'frame:blackhole', kind: 'frame', name: 'Event Horizon', line: 'Light bends around you', rarity: 'mythic', unlock: { crate: 'crate:mythic' } },
+  { id: 'frame:prism', kind: 'frame', name: 'Prism', line: 'Every colour, refracted', rarity: 'mythic', unlock: { crate: 'crate:mythic' } },
+]
+
+const auras: Cosmetic[] = [
+  { id: 'aura:none', kind: 'aura', name: 'No aura', line: 'Just the frame', rarity: 'common' },
+  { id: 'aura:sparkles', kind: 'aura', name: 'Stardust', line: 'Reach level 8', rarity: 'common', unlock: { level: 8 } },
+  { id: 'aura:embers', kind: 'aura', name: 'Embers', line: 'Sparks drifting up', rarity: 'rare', price: 4000 },
+  { id: 'aura:bubbles', kind: 'aura', name: 'Bubbles', line: 'Rising from the deep', rarity: 'rare', price: 4000 },
+  { id: 'aura:snow', kind: 'aura', name: 'Snowfall', line: 'A quiet flurry', rarity: 'rare', price: 4000 },
+  { id: 'aura:hearts', kind: 'aura', name: 'Smitten', line: 'Hearts floating up', rarity: 'rare', unlock: { crate: 'crate:neon' } },
+  { id: 'aura:butterflies', kind: 'aura', name: 'Butterflies', line: 'A flutter of colour', rarity: 'epic', price: 9000 },
+  { id: 'aura:pixels', kind: 'aura', name: '8-Bit', line: 'Pixels breaking away', rarity: 'epic', price: 10000 },
+  { id: 'aura:coins', kind: 'aura', name: 'Coin Orbit', line: 'Gold coins circling', rarity: 'epic', price: 11000 },
+  { id: 'aura:lightning', kind: 'aura', name: 'Static', line: 'Arcs that snap round you', rarity: 'epic', unlock: { crate: 'crate:neon' } },
+  { id: 'aura:halo', kind: 'aura', name: 'Halo', line: 'Reach Platinum', rarity: 'legendary', unlock: { tier: 3 } },
+  { id: 'aura:atomic', kind: 'aura', name: 'Atomic', line: 'Win a Round 1 bet in Kaiju Clash', rarity: 'legendary', unlock: { challenge: 'kaiju-r1' } },
+  { id: 'aura:shadow', kind: 'aura', name: 'Shadowflame', line: 'Dark violet fire', rarity: 'legendary', unlock: { crate: 'crate:cosmic' } },
+  { id: 'aura:prism', kind: 'aura', name: 'Prism', line: 'Every colour, refracted', rarity: 'mythic', unlock: { crate: 'crate:mythic' } },
 ]
 
 const banners: Cosmetic[] = [
@@ -116,6 +150,33 @@ const banners: Cosmetic[] = [
   { id: 'banner:diamond', kind: 'banner', name: 'Diamond Lounge', line: 'Reach Diamond', rarity: 'legendary', unlock: { tier: 4 } },
   { id: 'banner:jackpot', kind: 'banner', name: 'Jackpot', line: 'Win 10,000 coins in one round', rarity: 'legendary', unlock: { achievement: 'bigwin-10k' } },
   { id: 'banner:aurora', kind: 'banner', name: 'Aurora', line: 'Ribbons of light', rarity: 'legendary', price: 25000 },
+  { id: 'banner:matrix', kind: 'banner', name: 'Code Rain', line: 'Falling green glyphs', rarity: 'rare', price: 5000 },
+  { id: 'banner:sakura', kind: 'banner', name: 'Sakura', line: 'Petals under a full moon', rarity: 'rare', price: 5000 },
+  { id: 'banner:warp', kind: 'banner', name: 'Hyperspace', line: 'Stars at light speed', rarity: 'epic', price: 9000 },
+  { id: 'banner:synthwave', kind: 'banner', name: 'Synthwave', line: 'Chrome sun, endless grid', rarity: 'epic', price: 9000 },
+  { id: 'banner:vegas', kind: 'banner', name: 'Vegas Lights', line: 'Marquee bulbs chasing round', rarity: 'epic', price: 12000 },
+  { id: 'banner:storm', kind: 'banner', name: 'Supercell', line: 'Rain and lightning', rarity: 'epic', unlock: { crate: 'crate:neon' } },
+  { id: 'banner:kaiju', kind: 'banner', name: 'Kaiju City', line: 'Win a long shot on the winner in Kaiju Clash', rarity: 'epic', unlock: { challenge: 'kaiju-upset' } },
+  { id: 'banner:volcano', kind: 'banner', name: 'Eruption', line: 'Lava and rising embers', rarity: 'legendary', price: 26000 },
+  { id: 'banner:abyss', kind: 'banner', name: 'Abyss', line: 'Glowing jellyfish in the deep', rarity: 'legendary', unlock: { crate: 'crate:cosmic' } },
+  { id: 'banner:singularity', kind: 'banner', name: 'Singularity', line: 'A black hole, slowly turning', rarity: 'mythic', unlock: { crate: 'crate:mythic' } },
+]
+
+const backdrops: Cosmetic[] = [
+  { id: 'backdrop:none', kind: 'backdrop', name: 'No backdrop', line: 'The house colours', rarity: 'common' },
+  { id: 'backdrop:stars', kind: 'backdrop', name: 'Starlight', line: 'Reach level 5', rarity: 'common', unlock: { level: 5 } },
+  { id: 'backdrop:snow', kind: 'backdrop', name: 'Blizzard', line: 'Snow on the wind', rarity: 'rare', price: 5000 },
+  { id: 'backdrop:matrix', kind: 'backdrop', name: 'Code Rain', line: 'Falling green glyphs', rarity: 'rare', price: 6000 },
+  { id: 'backdrop:sakura', kind: 'backdrop', name: 'Sakura', line: 'Petals on the breeze', rarity: 'rare', price: 6000 },
+  { id: 'backdrop:fireflies', kind: 'backdrop', name: 'Fireflies', line: 'A warm summer night', rarity: 'rare', unlock: { crate: 'crate:neon' } },
+  { id: 'backdrop:coins', kind: 'backdrop', name: 'Coin Rain', line: 'It’s raining coins', rarity: 'epic', price: 10000 },
+  { id: 'backdrop:chips', kind: 'backdrop', name: 'Chip Shower', line: 'Casino chips tumbling down', rarity: 'epic', price: 10000 },
+  { id: 'backdrop:warp', kind: 'backdrop', name: 'Warp Speed', line: 'Punch it', rarity: 'epic', price: 12000 },
+  { id: 'backdrop:confetti', kind: 'backdrop', name: 'Confetti', line: 'Win 10,000 coins in one round', rarity: 'epic', unlock: { achievement: 'bigwin-10k' } },
+  { id: 'backdrop:embers', kind: 'backdrop', name: 'Ember Storm', line: 'A sky full of sparks', rarity: 'legendary', price: 22000 },
+  { id: 'backdrop:storm', kind: 'backdrop', name: 'Thunderstorm', line: 'Rain, wind and lightning', rarity: 'legendary', unlock: { crate: 'crate:cosmic' } },
+  { id: 'backdrop:aurora', kind: 'backdrop', name: 'Aurora', line: 'The northern lights', rarity: 'legendary', unlock: { crate: 'crate:cosmic' } },
+  { id: 'backdrop:prism', kind: 'backdrop', name: 'Prism', line: 'Every colour, refracted', rarity: 'mythic', unlock: { crate: 'crate:mythic' } },
 ]
 
 const nameColors: Cosmetic[] = [
@@ -128,6 +189,15 @@ const nameColors: Cosmetic[] = [
   { id: 'name:fire', kind: 'nameColor', name: 'Fire', line: 'Burns as it moves', rarity: 'epic', price: 12000 },
   { id: 'name:rainbow', kind: 'nameColor', name: 'Rainbow', line: 'Every colour at once', rarity: 'legendary', price: 25000 },
   { id: 'name:diamond', kind: 'nameColor', name: 'Diamond', line: 'Reach Diamond', rarity: 'legendary', unlock: { tier: 4 } },
+  { id: 'name:neon', kind: 'nameColor', name: 'Neon Sign', line: 'Buzzing pink neon', rarity: 'rare', price: 6000 },
+  { id: 'name:frost', kind: 'nameColor', name: 'Frost', line: 'An icy shimmer', rarity: 'rare', price: 6000 },
+  { id: 'name:lava', kind: 'nameColor', name: 'Lava', line: 'Molten and flowing', rarity: 'epic', price: 12000 },
+  { id: 'name:glitch', kind: 'nameColor', name: 'Glitch', line: 'Split, jittering, unstable', rarity: 'epic', price: 14000 },
+  { id: 'name:electric', kind: 'nameColor', name: 'Electric', line: 'Crackling with current', rarity: 'epic', unlock: { crate: 'crate:neon' } },
+  { id: 'name:holo', kind: 'nameColor', name: 'Holo Foil', line: 'A foil sheen that sweeps across', rarity: 'legendary', price: 30000 },
+  { id: 'name:goldrush', kind: 'nameColor', name: 'Gold Rush', line: 'Win 100,000 coins in one round', rarity: 'legendary', unlock: { achievement: 'bigwin-100k' } },
+  { id: 'name:void', kind: 'nameColor', name: 'Void', line: 'Dark matter with a violet pulse', rarity: 'legendary', unlock: { crate: 'crate:cosmic' } },
+  { id: 'name:prism', kind: 'nameColor', name: 'Prism', line: 'Every colour, refracted', rarity: 'mythic', unlock: { crate: 'crate:mythic' } },
 ]
 
 const titles: Cosmetic[] = [
@@ -144,12 +214,82 @@ const titles: Cosmetic[] = [
   { id: 'title:jackpot-hunter', kind: 'title', name: 'Jackpot Hunter', line: 'Win 10,000 coins in one round', rarity: 'epic', unlock: { achievement: 'bigwin-10k' } },
   { id: 'title:legend', kind: 'title', name: 'Legend', line: 'Reach Diamond', rarity: 'legendary', unlock: { tier: 4 } },
   { id: 'title:tycoon', kind: 'title', name: 'Tycoon', line: 'In the shop', rarity: 'legendary', price: 40000 },
+  { id: 'title:showstopper', kind: 'title', name: 'Showstopper', line: 'In the shop', rarity: 'rare', price: 5000 },
+  { id: 'title:menace', kind: 'title', name: 'Menace', line: 'In the shop', rarity: 'epic', price: 9000 },
+  { id: 'title:mastermind', kind: 'title', name: 'Mastermind', line: 'In the shop', rarity: 'epic', price: 12000 },
+  { id: 'title:glitched', kind: 'title', name: 'Glitched', line: 'Found in the Neon Crate', rarity: 'epic', unlock: { crate: 'crate:neon' } },
+  { id: 'title:kaiju-king', kind: 'title', name: 'Kaiju King', line: 'Win a long shot on the winner in Kaiju Clash', rarity: 'epic', unlock: { challenge: 'kaiju-upset' } },
+  { id: 'title:whale', kind: 'title', name: 'The Whale', line: 'Wager 1,000,000 coins', rarity: 'legendary', unlock: { achievement: 'wagered-1m' } },
+  { id: 'title:cosmic', kind: 'title', name: 'Cosmic', line: 'Found in the Cosmic Crate', rarity: 'legendary', unlock: { crate: 'crate:cosmic' } },
+  { id: 'title:immortal', kind: 'title', name: 'Immortal', line: 'Found in the Mythic Crate', rarity: 'mythic', unlock: { crate: 'crate:mythic' } },
 ]
 
-export const COSMETICS: readonly Cosmetic[] = [...avatars, ...frames, ...banners, ...nameColors, ...titles]
+export const COSMETICS: readonly Cosmetic[] = [...avatars, ...frames, ...auras, ...banners, ...backdrops, ...nameColors, ...titles]
 const byId = new Map(COSMETICS.map((c) => [c.id, c]))
 export const cosmetic = (id: string) => byId.get(id)
 export const cosmeticsOf = (kind: CosmeticKind) => COSMETICS.filter((c) => c.kind === kind)
+
+/* ---------------- crates ---------------- */
+
+/*
+  A crate is bought with coins and drops one cosmetic from its pool that the player can't wear yet (not owned, not
+  unlocked), picked by weight: each item weighs its rarity's weight (CRATE_WEIGHT). The crate-only cosmetics
+  (unlock.crate) are in their crate's pool and no other; the rest of a pool is from the shop. Once a player can wear everything in
+  a crate, it can't be bought. Every chance is shown before buying.
+*/
+export interface Crate {
+  id: string
+  name: string
+  line: string
+  price: number
+  /** its colour in the shop */
+  rarity: Rarity
+  /** the cosmetic ids it can drop */
+  pool: readonly string[]
+}
+/** how much each rarity weighs in a crate's draw */
+export const CRATE_WEIGHT: Record<Rarity, number> = { common: 120, rare: 100, epic: 45, legendary: 12, mythic: 3 }
+
+const crateOnly = (crate: string) => COSMETICS.filter((c) => c.unlock?.crate === crate).map((c) => c.id)
+export const CRATES: readonly Crate[] = [
+  {
+    id: 'crate:neon',
+    name: 'Neon Crate',
+    line: 'Rare and Epic looks, with seven you can only find here',
+    price: 3000,
+    rarity: 'rare',
+    pool: [
+      ...crateOnly('crate:neon'),
+      'frame:frost', 'name:neon', 'name:frost', 'aura:embers', 'aura:bubbles', 'aura:snow', 'banner:matrix', 'banner:sakura',
+      'backdrop:matrix', 'backdrop:sakura', 'backdrop:snow', 'title:showstopper',
+    ],
+  },
+  {
+    id: 'crate:cosmic',
+    name: 'Cosmic Crate',
+    line: 'Epic and Legendary looks, with seven you can only find here',
+    price: 10000,
+    rarity: 'epic',
+    pool: [
+      ...crateOnly('crate:cosmic'),
+      'frame:plasma', 'frame:orbit', 'frame:glitch', 'banner:warp', 'banner:synthwave', 'banner:vegas', 'name:glitch', 'name:lava',
+      'aura:coins', 'aura:butterflies', 'aura:pixels', 'backdrop:coins', 'backdrop:chips', 'backdrop:warp', 'title:menace', 'title:mastermind',
+    ],
+  },
+  {
+    id: 'crate:mythic',
+    name: 'Mythic Crate',
+    line: 'Legendary and Mythic only: the rarest looks in the casino',
+    price: 30000,
+    rarity: 'mythic',
+    pool: [
+      ...crateOnly('crate:mythic'),
+      'frame:inferno', 'frame:storm', 'frame:liquidgold', 'banner:volcano', 'name:holo', 'backdrop:embers',
+    ],
+  },
+]
+const crateById = new Map(CRATES.map((c) => [c.id, c]))
+export const crateOf = (id: string) => crateById.get(id)
 
 /* ---------------- achievements ---------------- */
 
@@ -221,13 +361,15 @@ export const earnedAchievements = (s: AchievementSource) => allAchievements().fi
 /** what a player wears; ids from COSMETICS, badges from ACHIEVEMENTS (up to SHOWCASE) */
 export interface Look {
   frame: string
+  aura: string
   banner: string
+  backdrop: string
   nameColor: string
   title: string
   badges: string[]
 }
 export const SHOWCASE = 3
-export const DEFAULT_LOOK: Look = { frame: 'frame:bronze', banner: 'banner:default', nameColor: 'name:default', title: 'title:newcomer', badges: [] }
+export const DEFAULT_LOOK: Look = { frame: 'frame:bronze', aura: 'aura:none', banner: 'banner:default', backdrop: 'backdrop:none', nameColor: 'name:default', title: 'title:newcomer', badges: [] }
 
 /** a look read from anywhere (storage, the server), with anything unknown put back to the default */
 export function cleanLook(x: unknown): Look {
@@ -235,7 +377,9 @@ export function cleanLook(x: unknown): Look {
   const pick = (id: unknown, kind: CosmeticKind, fallback: string) => (typeof id === 'string' && byId.get(id)?.kind === kind ? id : fallback)
   return {
     frame: pick(l.frame, 'frame', DEFAULT_LOOK.frame),
+    aura: pick(l.aura, 'aura', DEFAULT_LOOK.aura),
     banner: pick(l.banner, 'banner', DEFAULT_LOOK.banner),
+    backdrop: pick(l.backdrop, 'backdrop', DEFAULT_LOOK.backdrop),
     nameColor: pick(l.nameColor, 'nameColor', DEFAULT_LOOK.nameColor),
     title: pick(l.title, 'title', DEFAULT_LOOK.title),
     badges: Array.isArray(l.badges) ? [...new Set(l.badges.filter((b): b is string => typeof b === 'string' && !!achievement(b)))].slice(0, SHOWCASE) : [],
@@ -252,6 +396,7 @@ export interface Wardrobe {
 export function unlockedBy(c: Cosmetic, s: AchievementSource): boolean {
   if (!c.unlock) return c.price === undefined
   const u = c.unlock
+  if (u.crate !== undefined) return false
   const level = levelFromXp(s.xp).level
   if (u.level !== undefined && level < u.level) return false
   if (u.tier !== undefined && tierIndexOf(level) < u.tier) return false
@@ -272,11 +417,20 @@ export function wearable(look: Look, w: Wardrobe): Look {
   const keep = (id: string, fallback: string) => (canWear(id, w) ? id : fallback)
   return {
     frame: keep(look.frame, DEFAULT_LOOK.frame),
+    aura: keep(look.aura, DEFAULT_LOOK.aura),
     banner: keep(look.banner, DEFAULT_LOOK.banner),
+    backdrop: keep(look.backdrop, DEFAULT_LOOK.backdrop),
     nameColor: keep(look.nameColor, DEFAULT_LOOK.nameColor),
     title: keep(look.title, DEFAULT_LOOK.title),
     badges: look.badges.filter((b) => earned.has(b)).slice(0, SHOWCASE),
   }
+}
+
+/** what a crate can still drop for a player: its pool less what they can already wear, each with its chance */
+export function crateDrops(crate: Crate, w: Wardrobe): { id: string; chance: number }[] {
+  const left = crate.pool.filter((id) => byId.has(id) && !canWear(id, w))
+  const total = left.reduce((a, id) => a + CRATE_WEIGHT[byId.get(id)!.rarity], 0)
+  return left.map((id) => ({ id, chance: CRATE_WEIGHT[byId.get(id)!.rarity] / total }))
 }
 
 /** an avatar index a player may use */

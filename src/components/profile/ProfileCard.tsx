@@ -72,7 +72,7 @@ export function ProfileCard({ p, onOpen }: { p: PublicProfile; onOpen?: () => vo
       </ProfileBanner>
       <div className="relative px-4 pb-4">
         <div className="-mt-10 flex items-end justify-between gap-3">
-          <FramedAvatar avatar={p.avatar} frame={p.look.frame} size={72} className="drop-shadow-[0_8px_16px_rgba(0,0,0,.6)]" />
+          <FramedAvatar avatar={p.avatar} frame={p.look.frame} aura={p.look.aura} size={72} className="drop-shadow-[0_8px_16px_rgba(0,0,0,.6)]" />
           {p.look.badges.length > 0 && (
             <span className="mb-1 flex gap-1">
               {p.look.badges.map((b) => (

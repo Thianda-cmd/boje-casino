@@ -66,7 +66,7 @@ export function saveSoon() {
 }
 
 /** the look's field a cosmetic kind is worn in (avatars are the account's, not the look's) */
-export const LOOK_KEY = { frame: 'frame', banner: 'banner', nameColor: 'nameColor', title: 'title' } as const
+export const LOOK_KEY = { frame: 'frame', aura: 'aura', banner: 'banner', backdrop: 'backdrop', nameColor: 'nameColor', title: 'title' } as const
 
 /**
  * Puts a cosmetic on. An avatar is the account's (update_profile); a guest has none to change, so it says so. The rest
@@ -94,17 +94,41 @@ export function accountNumber(uid: string | null) {
   return `BJ-${String(100000 + (h % 900000))}`
 }
 
-export const RARITY_ORDER: Rarity[] = ['common', 'rare', 'epic', 'legendary']
-export const KIND_NAME: Record<Cosmetic['kind'], string> = { avatar: 'Avatar', frame: 'Frame', banner: 'Banner', nameColor: 'Name colour', title: 'Title' }
+export const RARITY_ORDER: Rarity[] = ['common', 'rare', 'epic', 'legendary', 'mythic']
+export const KIND_NAME: Record<Cosmetic['kind'], string> = { avatar: 'Avatar', frame: 'Frame', aura: 'Aura', banner: 'Banner', backdrop: 'Backdrop', nameColor: 'Name colour', title: 'Title' }
 
-/** a rarity as a small coloured tag */
+/** a rarity as a small coloured tag; a Mythic's runs round the rainbow, with a twinkle for its dot */
 export function RarityTag({ rarity, className = '' }: { rarity: Rarity; className?: string }) {
   const r = RARITY[rarity]
+  if (rarity === 'mythic')
+    return (
+      <span
+        className={`bjc-pan inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-black uppercase leading-none tracking-[.08em] text-white ${className}`}
+        style={{ backgroundImage: 'linear-gradient(90deg,#ff4fd8,#ffb347,#5dff9a,#3fd8ff,#9b7bff,#ff4fd8)', textShadow: '0 1px 2px rgba(40,0,50,.7)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.45), 0 0 10px -2px rgba(255,79,216,.7)' }}
+        data-rarity="mythic"
+      >
+        <svg width="8" height="8" viewBox="-5 -5 10 10" className="bjc-tw shrink-0" aria-hidden>
+          <path d="M0 -5Q.8 -.8 5 0Q.8 .8 0 5Q-.8 .8 -5 0Q-.8 -.8 0 -5Z" fill="#fff" />
+        </svg>
+        {r.name}
+      </span>
+    )
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-black uppercase leading-none tracking-[.08em] ${className}`} style={{ color: r.light, background: `${r.color}24`, boxShadow: `inset 0 0 0 1px ${r.color}40` }}>
       <span className="h-1.5 w-1.5 rounded-full" style={{ background: r.color }} />
       {r.name}
     </span>
+  )
+}
+
+/** the prismatic edge every Mythic item's tile wears: a thin rainbow border that keeps running round (put it last in a relative, rounded box) */
+export function PrismEdge({ width = 1.5 }: { width?: number }) {
+  return (
+    <span
+      aria-hidden
+      className="bjc-pan pointer-events-none absolute inset-0 rounded-[inherit]"
+      style={{ padding: width, backgroundImage: 'linear-gradient(90deg,#ff4fd8,#ffb347,#5dff9a,#3fd8ff,#9b7bff,#ff4fd8)', WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)', WebkitMaskComposite: 'xor', mask: 'linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)' }}
+    />
   )
 }
 

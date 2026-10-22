@@ -1,8 +1,8 @@
 # Boje Casino (play money)
 
-A Stake-style casino with thirty-seven games. Originals: Showtime (a game-show money wheel), Bullseye (darts), Market
-Rush (a live trading chart), Banker's Deal (briefcases and a Banker's offers), Pot Luck (a live player-versus-player
-pot), Summit (a mountain climb), Chicken Road, Crash, Double, Coin Flip, Reef Raid, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
+A Stake-style casino with thirty-eight games. Originals: Kaiju Clash (a live kaiju fight night), Showtime (a game-show
+money wheel), Bullseye (darts), Market Rush (a live trading chart), Banker's Deal (briefcases and a Banker's offers),
+Pot Luck (a live player-versus-player pot), Summit (a mountain climb), Chicken Road, Crash, Double, Coin Flip, Reef Raid, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
 Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Slots: Lucky Lines, Plunder Bay, Chompers, Pop Party and Robo Riot. Table games:
 Blackjack, Live Blackjack, Baccarat, Sic Bo, Craps, Hold'em Showdown, Roulette and Video Poker.
 Vault Heist (a skill game) and Casino Tycoon (an idle game) are free and pay coins. Coins are play money only. Guests keep their wallet in the
@@ -16,7 +16,8 @@ browser (localStorage); signed-in players have it saved to their account.
 
 ## Stack
 Vite + React 19 + TypeScript, Tailwind CSS v4, Framer Motion, Zustand, supabase-js. Plinko and Crash draw on
-canvas; the slots (Chompers, Pop Party, Robo Riot and Plunder Bay) are three.js scenes, loaded only when the game opens.
+canvas; the slots (Chompers, Pop Party, Robo Riot and Plunder Bay) and Kaiju Clash's Neon Bay are three.js scenes, loaded
+only when the game opens.
 The wallet is saved to localStorage in batches (src/lib/storage.ts): its writes, and Reef Raid's ledger with them, land
 together at the end of a task and at most every 250 ms while they keep coming, any other write lands them first, and
 hiding or leaving the page writes everything at once (`tools/storage-test.ts`). Hash
@@ -135,11 +136,17 @@ VIP progress, an account number), Customize (a wardrobe with a live preview of t
 Statistics, a unified History of bets, rewards and purchases, Achievements (pick three for the showcase), Settings
 and security (username, email, password, bio, privacy, log out, delete) and Responsible play.
 
-Cosmetics and achievements (src/store/cosmetics.ts): 32 avatars, 14 frames, 12 banners, 9 name colours and 13 titles,
-each free, earned (a level, a VIP tier, a challenge or an achievement) or sold for coins; bought items are kept in the
-wallet's `owned`, unlocks are worked out from the wallet. Achievements are milestones (rounds, coins wagered, the
-biggest win, the daily streak, Vault Heist, VIP tiers) plus one per challenge. The look, bio and privacy (share
-stats, share big wins, appear in search and the leaderboards) are kept in the wallet, so they are saved with it.
+Cosmetics and achievements (src/store/cosmetics.ts): 32 avatars, 26 frames, 14 auras (an animated effect round the
+framed avatar), 22 banners, 14 backdrops (an animated scene behind the player's whole public profile page), 18 name
+colours and 21 titles, in five rarities up to Mythic. Each is free, earned (a level, a VIP tier, a challenge or an
+achievement), sold for coins, or found in a crate: the Neon, Cosmic and Mythic Crates each drop one look the player
+can't wear yet, weighted by rarity, every chance shown before buying, and each holds seven looks found nowhere else
+(the Mythic ones among them). Bought and dropped items are kept in the wallet's `owned`, unlocks are worked out from
+the wallet. The animated ones (src/art/fx-frames.tsx, auras.tsx, fx-names.ts, fx-banners.tsx, backdrops.tsx) are CSS,
+SVG and small canvases that pause off screen and in a hidden tab, simplify in long lists, and stand still for reduced
+motion. Achievements are milestones (rounds, coins wagered, the biggest win, the daily streak, Vault Heist, VIP tiers)
+plus one per challenge. The look, bio and privacy (share stats, share big wins, appear in search and the
+leaderboards) are kept in the wallet, so they are saved with it.
 
 Public profiles (src/pages/Player.tsx at #/player/<name>, src/lib/profiles.ts): the server's profile_view reads a
 signed-in player's saved wallet and returns only what is public: the look (every id checked against a whitelist of
@@ -372,6 +379,25 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   the boldest routes reach), so every mix of routes and every moment to bank returns exactly 97% until the cap. Each
   pitch is drawn when its route is chosen and stored before it is shown; a climb in progress resumes after a reload
   and is paid once (`tools/summit-test.ts`, `tools/summit-money.mjs`).
+- Kaiju Clash (src/games/kaiju/rules.ts): a live fight night on the database clock (src/games/kaiju/clock.ts: 17 s of
+  betting, a 6 s walkout, three 10 s rounds with 3 s breaks, 8 s for the result; one fight every 67 s, the same fight
+  for everyone). Each fight, two of eight kaiju (the pairing from the round id alone, so the card is known ahead) end
+  one of 14 ways: either wins by a knockout in round 1, 2 or 3, a Splash into the bay in round 1, 2 or 3, or on the
+  judges' cards. The 14 whole-number weights add up to exactly 2^20 and come from the stats with + − × ÷ only (so
+  every browser computes them bit for bit): strength S = 2·power + grapple + 2·tough + speed plus matchup edges, the
+  winner in proportion to S⁴, the method in proportion to power² × (13 − tough) × (16 − speed), 70 × grapple ×
+  (12 − speed) and 185 × (toughness and speed), the round as (3 + d) : (4 + d) : 5 with d the winner's edge. The
+  first strike is drawn on its own from speed; each round fought flattens 0 to 6 buildings (a binomial on the two
+  kaijus' chaos), and the buildings line is the half number nearest an even chance, priced by exact convolution.
+  Nineteen selections in six markets (winner, method, winner and method, round, first strike, buildings) each pay
+  floor(0.97 / p, to the cent), so every selection returns just under 97% (96.4% to 97.0%; the longest price is
+  under 27×, far from the 250× cap). The round's hash is published before betting; the key, sha256(seed + ':key'),
+  is revealed at the close and draws the result and the blow-by-blow fight script every browser plays (fight.ts);
+  the seed comes out at the final bell. Bets are held in the database (kj_bet, 10,000 a selection), the wallet stays
+  on the client and a ledger settles every round once, wherever the page was when it ended; without the database a
+  stand-in with house bots runs the same timetable in the browser (`tools/kaiju-test.ts` checks the weights, every
+  price, sampled draws and 20,000 scripts; `tools/kaiju-sql` the server; `tools/kaiju-ledger-test.ts`,
+  `tools/kaiju-money.mjs` and `tools/kaiju-duo.mjs` the money).
 - Pot Luck (src/games/pot/rules.ts): a live pot on the database clock (20 s of betting, the draw, the winner). Every
   cent paid in is a ticket, numbered in the order paid; the draw takes u from sha256(seed + ':pot') (the hash of the
   seed is published when the round opens) and the holder of ticket floor(u × tickets) wins the pot less a 4% rake.

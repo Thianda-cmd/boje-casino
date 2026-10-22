@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BadgeIcon, FramedAvatar, NameTag, ProfileBanner, RARITY, TitleChip } from '../art/cosmetics'
+import { PageBackdrop, hasScene } from '../art/backdrops'
 import { TierBadge } from '../art/TierBadge'
 import { GameCover } from '../components/covers'
 import { GameIcon } from '../components/GameIcon'
@@ -18,9 +19,11 @@ import { TIERS, levelFromXp, tierOf } from '../store/levels'
 import { DEFAULT_PRIVACY, useWallet } from '../store/wallet'
 
 /*
-  A player's public profile, at #/player/<username>: their banner, framed avatar, name in its colour, title and
-  showcase badges, their level and VIP tier, whether they are online, when they joined and their bio; then, unless
-  they keep them private, their numbers, favourite games and achievements, and their recent big wins.
+  A player's public profile, at #/player/<username>: their banner, framed avatar (with its aura), name in its colour,
+  title and showcase badges, their level and VIP tier, whether they are online, when they joined and their bio; then,
+  unless they keep them private, their numbers, favourite games and achievements, and their recent big wins. The
+  whole page stands on their backdrop (src/art/backdrops.tsx PageBackdrop), still behind the scrolling page, and what
+  sits straight on it (the way back, the own-profile note) gets a solid footing so it stays readable.
 
   The profile comes from the server (src/lib/profiles.ts fetchProfile, kept for the visit by
   src/components/profile/data.ts, so a profile opened from a hover card shows at once). The signed-in player's own
@@ -28,7 +31,7 @@ import { DEFAULT_PRIVACY, useWallet } from '../store/wallet'
   a note on what their privacy settings share and the way to edit it.
 */
 
-const RANK: Record<Rarity, number> = { legendary: 0, epic: 1, rare: 2, common: 3 }
+const RANK: Record<Rarity, number> = { mythic: -1, legendary: 0, epic: 1, rare: 2, common: 3 }
 
 const IconLink = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -80,9 +83,10 @@ export default function Player() {
   else if (answer === 'offline') body = <Offline onRetry={retry} />
   else if (answer === null) body = <NotFound name={name} />
   else body = <Profile p={answer} own={own} />
+  const scene = !!answer && answer !== 'offline' && hasScene(answer.look.backdrop)
   return (
     <div className="flex flex-col gap-4">
-      <button onClick={() => navigate('/players')} className="flex h-8 items-center gap-1 self-start rounded-lg pr-2.5 text-[13px] font-bold text-muted transition hover:text-ink">
+      <button onClick={() => navigate('/players')} className={`flex h-8 items-center gap-1 self-start rounded-lg pr-2.5 text-[13px] font-bold transition hover:text-ink ${scene ? 'bg-black/40 pl-1.5 text-ink/85 backdrop-blur-sm' : 'text-muted'}`}>
         <IconChevron size={15} className="rotate-180" /> Players
       </button>
       {body}
@@ -105,7 +109,8 @@ function Profile({ p: server, own }: { p: PublicProfile; own: boolean }) {
   const p = useOwn(server, own)
   return (
     <>
-      {own && <OwnNote />}
+      <PageBackdrop key={p.look.backdrop} id={p.look.backdrop} />
+      {own && <OwnNote solid={hasScene(p.look.backdrop)} />}
       <Header p={p} own={own} />
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-4">
@@ -146,7 +151,7 @@ function PanelTitle({ icon, children, right }: { icon: ReactNode; children: Reac
 }
 
 /** the signed-in player looking at their own profile: what it shares, and the way to change it */
-function OwnNote() {
+function OwnNote({ solid = false }: { solid?: boolean }) {
   const saved = useWallet((s) => s.profile?.privacy)
   const privacy = { ...DEFAULT_PRIVACY, ...(saved ?? {}) }
   const bits: [string, string, boolean][] = [
@@ -155,7 +160,7 @@ function OwnNote() {
     ['Listed in search', 'Not listed', privacy.listed],
   ]
   return (
-    <div className="flex flex-col gap-3 rounded-xl bg-[linear-gradient(90deg,rgba(34,211,111,.13),rgba(34,211,111,.03))] px-4 py-3 ring-1 ring-accent/20 sm:flex-row sm:items-center">
+    <div className={`flex flex-col gap-3 rounded-xl bg-[linear-gradient(90deg,rgba(34,211,111,.13),rgba(34,211,111,.03))] px-4 py-3 ring-1 ring-accent/20 sm:flex-row sm:items-center ${solid ? 'bg-panel' : ''}`}>
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
           <IconEye size={18} />
@@ -197,7 +202,7 @@ function Header({ p, own }: { p: PublicProfile; own: boolean }) {
               transition={{ type: 'spring', stiffness: 300, damping: 22 }}
             >
               <span className="absolute inset-[6%] rounded-full bg-panel" />
-              <FramedAvatar avatar={p.avatar} frame={p.look.frame} size={wide ? 140 : 100} className="relative drop-shadow-[0_14px_26px_rgba(0,0,0,.6)]" />
+              <FramedAvatar avatar={p.avatar} frame={p.look.frame} aura={p.look.aura} size={wide ? 140 : 100} className="relative drop-shadow-[0_14px_26px_rgba(0,0,0,.6)]" />
               {p.online && <OnlineDot size={wide ? 22 : 18} ring="border-panel" className="absolute bottom-[9%] right-[9%]" />}
             </motion.div>
             {!wide && (

@@ -23,9 +23,12 @@
   Pot Luck: one pot for everyone, a cent a ticket, one ticket drawn. Rounds repeat lazily like Double's; each commits
   to sha256(seed) and schedules its house bots (from the hash) when it is made, draws the ticket when betting closes
   and reveals the seed once the wheel has landed.
+  Kaiju Clash: one fight night for everyone on a timetable that never changes, so a round is only a row with its
+  seed, made lazily with the next one; each commits to sha256(seed), reveals the key that decides the fight when
+  betting closes and the seed at the final bell.
 */
 
-export const SCHEMA_VERSION = '2026-10-22.1'
+export const SCHEMA_VERSION = '2026-10-22.2'
 
 export const SCHEMA_SQL = /* sql */ `
 set local lock_timeout = '8s';
@@ -438,8 +441,11 @@ create index if not exists profiles_newest on public.profiles (created_at desc) 
 
 create table if not exists public.cosmetic (
   id text primary key,
-  kind text not null check (kind in ('avatar', 'frame', 'banner', 'nameColor', 'title'))
+  kind text not null check (kind in ('avatar', 'frame', 'aura', 'banner', 'backdrop', 'nameColor', 'title'))
 );
+-- a catalog made before auras and backdrops has the older check: put the current one in its place
+alter table public.cosmetic drop constraint if exists cosmetic_kind_check;
+alter table public.cosmetic add constraint cosmetic_kind_check check (kind in ('avatar', 'frame', 'aura', 'banner', 'backdrop', 'nameColor', 'title'));
 alter table public.cosmetic enable row level security;
 revoke all on public.cosmetic from anon, authenticated;
 
@@ -452,17 +458,35 @@ select v.kind, v.id from (values
   ('frame', 'frame:none'), ('frame', 'frame:bronze'), ('frame', 'frame:silver'), ('frame', 'frame:gold'),
   ('frame', 'frame:platinum'), ('frame', 'frame:diamond'), ('frame', 'frame:neon'), ('frame', 'frame:pixel'),
   ('frame', 'frame:flame'), ('frame', 'frame:laurel'), ('frame', 'frame:crown'), ('frame', 'frame:holo'),
-  ('frame', 'frame:explorer'), ('frame', 'frame:highroller'),
+  ('frame', 'frame:explorer'), ('frame', 'frame:highroller'), ('frame', 'frame:frost'), ('frame', 'frame:glitch'),
+  ('frame', 'frame:plasma'), ('frame', 'frame:orbit'), ('frame', 'frame:runes'), ('frame', 'frame:kaiju'),
+  ('frame', 'frame:inferno'), ('frame', 'frame:storm'), ('frame', 'frame:liquidgold'), ('frame', 'frame:serpent'),
+  ('frame', 'frame:blackhole'), ('frame', 'frame:prism'),
+  ('aura', 'aura:none'), ('aura', 'aura:sparkles'), ('aura', 'aura:embers'), ('aura', 'aura:bubbles'),
+  ('aura', 'aura:snow'), ('aura', 'aura:hearts'), ('aura', 'aura:butterflies'), ('aura', 'aura:pixels'),
+  ('aura', 'aura:coins'), ('aura', 'aura:lightning'), ('aura', 'aura:halo'), ('aura', 'aura:atomic'),
+  ('aura', 'aura:shadow'), ('aura', 'aura:prism'),
   ('banner', 'banner:default'), ('banner', 'banner:felt'), ('banner', 'banner:sunset'), ('banner', 'banner:ocean'),
   ('banner', 'banner:neon'), ('banner', 'banner:arcade'), ('banner', 'banner:galaxy'), ('banner', 'banner:vault'),
   ('banner', 'banner:gold'), ('banner', 'banner:diamond'), ('banner', 'banner:jackpot'), ('banner', 'banner:aurora'),
+  ('banner', 'banner:matrix'), ('banner', 'banner:sakura'), ('banner', 'banner:warp'), ('banner', 'banner:synthwave'),
+  ('banner', 'banner:vegas'), ('banner', 'banner:storm'), ('banner', 'banner:kaiju'), ('banner', 'banner:volcano'),
+  ('banner', 'banner:abyss'), ('banner', 'banner:singularity'),
+  ('backdrop', 'backdrop:none'), ('backdrop', 'backdrop:stars'), ('backdrop', 'backdrop:snow'), ('backdrop', 'backdrop:matrix'),
+  ('backdrop', 'backdrop:sakura'), ('backdrop', 'backdrop:fireflies'), ('backdrop', 'backdrop:coins'), ('backdrop', 'backdrop:chips'),
+  ('backdrop', 'backdrop:warp'), ('backdrop', 'backdrop:confetti'), ('backdrop', 'backdrop:embers'), ('backdrop', 'backdrop:storm'),
+  ('backdrop', 'backdrop:aurora'), ('backdrop', 'backdrop:prism'),
   ('nameColor', 'name:default'), ('nameColor', 'name:green'), ('nameColor', 'name:ice'), ('nameColor', 'name:rose'),
   ('nameColor', 'name:violet'), ('nameColor', 'name:gold'), ('nameColor', 'name:fire'), ('nameColor', 'name:rainbow'),
-  ('nameColor', 'name:diamond'),
+  ('nameColor', 'name:diamond'), ('nameColor', 'name:neon'), ('nameColor', 'name:frost'), ('nameColor', 'name:lava'),
+  ('nameColor', 'name:glitch'), ('nameColor', 'name:electric'), ('nameColor', 'name:holo'), ('nameColor', 'name:goldrush'),
+  ('nameColor', 'name:void'), ('nameColor', 'name:prism'),
   ('title', 'title:none'), ('title', 'title:newcomer'), ('title', 'title:regular'), ('title', 'title:lucky'),
   ('title', 'title:night-owl'), ('title', 'title:explorer'), ('title', 'title:card-shark'), ('title', 'title:veteran'),
   ('title', 'title:big-fish'), ('title', 'title:high-roller'), ('title', 'title:jackpot-hunter'), ('title', 'title:legend'),
-  ('title', 'title:tycoon')
+  ('title', 'title:tycoon'), ('title', 'title:showstopper'), ('title', 'title:menace'), ('title', 'title:mastermind'),
+  ('title', 'title:glitched'), ('title', 'title:kaiju-king'), ('title', 'title:whale'), ('title', 'title:cosmic'),
+  ('title', 'title:immortal')
 ) as v (kind, id);
 
 /* ---------- helpers (not granted) ---------- */
@@ -501,7 +525,9 @@ create or replace function public._public_look(w jsonb) returns jsonb
 language sql stable set search_path = public as $$
   select jsonb_build_object(
     'frame', coalesce((select c.id from public.cosmetic c where c.kind = 'frame' and c.id = w #>> '{look,frame}'), 'frame:bronze'),
+    'aura', coalesce((select c.id from public.cosmetic c where c.kind = 'aura' and c.id = w #>> '{look,aura}'), 'aura:none'),
     'banner', coalesce((select c.id from public.cosmetic c where c.kind = 'banner' and c.id = w #>> '{look,banner}'), 'banner:default'),
+    'backdrop', coalesce((select c.id from public.cosmetic c where c.kind = 'backdrop' and c.id = w #>> '{look,backdrop}'), 'backdrop:none'),
     'nameColor', coalesce((select c.id from public.cosmetic c where c.kind = 'nameColor' and c.id = w #>> '{look,nameColor}'), 'name:default'),
     'title', coalesce((select c.id from public.cosmetic c where c.kind = 'title' and c.id = w #>> '{look,title}'), 'title:newcomer'),
     'badges', coalesce((
@@ -533,6 +559,8 @@ update public.profiles
        last_seen = (extract(epoch from updated_at) * 1000)::bigint
  where last_seen is null;
 update public.profiles set look = public._public_look(wallet) where look is null;
+-- looks stored before auras and backdrops are worked out again, once, so every stored look has the same fields
+update public.profiles set look = public._public_look(wallet) where not (look ? 'aura' and look ? 'backdrop');
 
 /* ---------- public functions ---------- */
 
@@ -3005,6 +3033,261 @@ begin
                             'tickets', r.tickets, 'ticket', r.ticket, 'deposits', public._pot_deps(r.id, null, r.ends_at));
 end $$;
 
+/* ------------------------------------------------------------------ */
+/*  Kaiju Clash                                                        */
+/* ------------------------------------------------------------------ */
+-- One fight night shown to everyone (src/games/kaiju/). Its timetable never changes (src/games/kaiju/clock.ts): round
+-- n opens at n x 67 s on the database clock and takes bets for 17 s, closing 500 ms before the show; the walkout runs
+-- 6 s, the fight three 10 s rounds with 3 s breaks, and the result shows for 8 s before round n + 1 opens. So a round
+-- is only a row holding its seed, made by whichever call first needs it (_kj_current) together with the next one, so
+-- the next fight's hash is out before its betting opens. Each round commits to sha256(seed) when it is made; the key,
+-- sha256(seed + ':key'), is revealed when betting closes and decides the whole fight (drawResult in
+-- src/games/kaiju/rules.ts, drawFight in fight.ts), and the seed comes out at the final bell. Who fights is worked
+-- out from the round id alone (matchupOf), so the database never draws anything: the browser settles a round from
+-- its key and what the database holds of the player's stakes, and wallets stay on the client, as in Crash. Up to
+-- 10,000 a selection for each player in a round. Rounds are deleted three days after they end.
+
+create table if not exists public.kj_round (
+  id bigint primary key,                    -- the round opens at id x 67000 ms
+  opens_at bigint not null,                 -- betting opens
+  closes_at bigint not null,                -- betting closes and the key is revealed
+  show_at bigint not null,                  -- the walkout
+  fight_at bigint not null,                 -- the first bell
+  ends_at bigint not null,                  -- the final bell: the result is final and the seed is revealed
+  next_at bigint not null,                  -- the next round opens
+  seed text not null,
+  key text not null,
+  hash text not null
+);
+create table if not exists public.kj_bet (
+  round_id bigint not null references public.kj_round (id) on delete cascade,
+  player text not null,                     -- auth uid or guest id; never sent to clients
+  sel text not null check (sel in ('win:a', 'win:b', 'how:ko', 'how:splash', 'how:dec', 'exact:a-ko', 'exact:a-splash', 'exact:a-dec',
+                                   'exact:b-ko', 'exact:b-splash', 'exact:b-dec', 'rnd:1', 'rnd:2', 'rnd:3', 'rnd:dist',
+                                   'first:a', 'first:b', 'dmg:over', 'dmg:under')),
+  name text not null,
+  avatar smallint not null default 0,
+  amount numeric(14, 2) not null check (amount > 0 and amount <= 10000),
+  placed_at bigint not null,                -- the first chip on this selection, for a steady order
+  primary key (round_id, player, sel)
+);
+create index if not exists kj_bet_player on public.kj_bet (player, round_id desc);
+create table if not exists public.kj_watch (
+  viewer text primary key,                  -- auth uid or guest id of a browser polling kj_state
+  seen_at bigint not null
+);
+create index if not exists kj_watch_seen on public.kj_watch (seen_at);
+alter table public.kj_round enable row level security;
+alter table public.kj_bet enable row level security;
+alter table public.kj_watch enable row level security;
+revoke all on public.kj_round, public.kj_bet, public.kj_watch from anon, authenticated;
+
+/* ---------- helpers (not granted) ---------- */
+
+-- the selections (SELS in src/games/kaiju/types.ts), in the board's order
+create or replace function public._kj_sels() returns text[]
+language sql immutable set search_path = public as $$
+  select array['win:a', 'win:b', 'how:ko', 'how:splash', 'how:dec', 'exact:a-ko', 'exact:a-splash', 'exact:a-dec',
+               'exact:b-ko', 'exact:b-splash', 'exact:b-dec', 'rnd:1', 'rnd:2', 'rnd:3', 'rnd:dist',
+               'first:a', 'first:b', 'dmg:over', 'dmg:under']
+$$;
+
+-- where a round is at now_ms (phaseAt in src/games/kaiju/clock.ts)
+create or replace function public._kj_phase(r public.kj_round, now_ms bigint) returns text
+language sql immutable set search_path = public as $$
+  select case when now_ms < r.closes_at then 'bets' when now_ms < r.show_at then 'closed' when now_ms < r.fight_at then 'walkout'
+              when now_ms < r.ends_at then 'fight' else 'result' end
+$$;
+
+-- makes round p_id with a fresh seed unless it is there already, on the timetable of timesOf in clock.ts: BET_MS
+-- 17000, CLOSE_MS 500, WALKOUT_MS 6000, FIGHT_MS 3 x 10000 + 2 x 3000, RESULT_MS 8000, CYCLE_MS 67000
+create or replace function public._kj_make(p_id bigint) returns void
+language plpgsql volatile set search_path = public as $$
+declare
+  s text := replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
+  o bigint := p_id * 67000;
+begin
+  insert into public.kj_round (id, opens_at, closes_at, show_at, fight_at, ends_at, next_at, seed, key, hash)
+  values (p_id, o, o + 16500, o + 17000, o + 23000, o + 59000, o + 67000, s,
+          encode(sha256(convert_to(s || ':key', 'UTF8')), 'hex'), encode(sha256(convert_to(s, 'UTF8')), 'hex'))
+  on conflict (id) do nothing;
+end $$;
+
+-- the round in play at now_ms (roundAt in clock.ts). The first call to need it makes it and the one after, under the
+-- lock (7361, 0), and clears rounds three days past their end and viewers gone a minute; the rest just read it.
+create or replace function public._kj_current(now_ms bigint) returns public.kj_round
+language plpgsql volatile set search_path = public as $$
+declare
+  n bigint := floor(now_ms / 67000.0)::bigint;
+  r public.kj_round;
+begin
+  select * into r from public.kj_round where id = n;
+  if found and exists (select 1 from public.kj_round where id = n + 1) then
+    return r;
+  end if;
+  perform pg_advisory_xact_lock(7361, 0);
+  perform public._kj_make(n);
+  perform public._kj_make(n + 1);
+  delete from public.kj_round where next_at < now_ms - 259200000;
+  delete from public.kj_watch where seen_at < now_ms - 60000;
+  select * into r from public.kj_round where id = n;
+  return r;
+end $$;
+
+-- what a player holds in a round, selection by selection ({} for nothing)
+create or replace function public._kj_held(p_round bigint, me text) returns jsonb
+language sql stable set search_path = public as $$
+  select coalesce(jsonb_object_agg(sel, amount), '{}'::jsonb) from public.kj_bet where round_id = p_round and player = me
+$$;
+
+/* ---------- public functions ---------- */
+
+-- Feed in src/games/kaiju/net.ts. The key is out once betting has closed and the seed once the final bell has rung;
+-- next is the round after, whose hash is published before its betting opens. bettors are this round's 30 biggest
+-- players (their name, avatar, total and biggest selection; me marks the caller's own row). p_hist is the newest
+-- finished round the browser already has: when nothing has finished since, the 50-round history is left out (null).
+-- p_open lists (as a json array, up to 50) the rounds the browser has paid into and not settled: those that have
+-- finished always come back in past, and asked says which ids were read, so a finished one missing from past held no
+-- bet of the caller's.
+create or replace function public.kj_state(p_player text default null, p_hist bigint default null, p_open jsonb default null)
+returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  me text := public._bj_player(p_player);
+  r public.kj_round := public._kj_current(now_ms);
+  nx public.kj_round;
+  head bigint;
+  asked bigint[] := array(
+    select e::bigint from jsonb_array_elements_text(case when jsonb_typeof(p_open) = 'array' then p_open else '[]'::jsonb end) e
+     where e ~ '^[0-9]{1,15}$' limit 50);
+begin
+  -- who is watching, for the online count; a viewer's row is rewritten at most every 5 s
+  if me is not null then
+    insert into public.kj_watch as w (viewer, seen_at) values (me, now_ms)
+    on conflict (viewer) do update set seen_at = excluded.seen_at where w.seen_at < excluded.seen_at - 5000;
+  end if;
+  select * into nx from public.kj_round where id = r.id + 1;
+  select id into head from public.kj_round where ends_at <= now_ms order by id desc limit 1;
+  return jsonb_build_object(
+    'now', now_ms,
+    'round', jsonb_build_object(
+      'id', r.id, 'phase', public._kj_phase(r, now_ms), 'opensAt', r.opens_at, 'closesAt', r.closes_at, 'showAt', r.show_at,
+      'fightAt', r.fight_at, 'endsAt', r.ends_at, 'nextAt', r.next_at, 'hash', r.hash,
+      'key', case when now_ms >= r.closes_at then r.key end,
+      'seed', case when now_ms >= r.ends_at then r.seed end),
+    'next', case when nx.id is not null then jsonb_build_object('id', nx.id, 'hash', nx.hash) end,
+    'sels', (
+      select jsonb_object_agg(s.sel, jsonb_build_object('total', coalesce(x.total, 0), 'players', coalesce(x.players, 0)))
+        from unnest(public._kj_sels()) s (sel)
+        left join (select sel, sum(amount) total, count(*) players from public.kj_bet where round_id = r.id group by sel) x on x.sel = s.sel),
+    'players', (select count(distinct player) from public.kj_bet where round_id = r.id),
+    'mine', (select jsonb_object_agg(sel, amount) from public.kj_bet where round_id = r.id and player = me),
+    'bettors', coalesce((
+      select jsonb_agg(jsonb_build_object('name', t.name, 'avatar', t.avatar, 'acct', public._is_acct(t.player), 'me', coalesce(t.player = me, false),
+                                          'total', t.total, 'sel', t.sel, 'amount', t.amount)
+                       order by t.total desc, t.first, t.name)
+        from (select p.player, p.total, p.first, top.sel, top.amount, top.name, top.avatar
+                from (select player, sum(amount) total, min(placed_at) first from public.kj_bet where round_id = r.id
+                       group by player order by sum(amount) desc, min(placed_at) limit 30) p
+                cross join lateral (select b.sel, b.amount, b.name, b.avatar from public.kj_bet b
+                                     where b.round_id = r.id and b.player = p.player order by b.amount desc, b.placed_at, b.sel limit 1) top) t),
+      '[]'::jsonb),
+    'online', (select count(*) from public.kj_watch where seen_at > now_ms - 30000),
+    'head', head,
+    'history', case when p_hist is not null and p_hist = head then null else coalesce((
+      select jsonb_agg(jsonb_build_object('id', h.id, 'seed', h.seed) order by h.id desc)
+        from (select id, seed from public.kj_round where ends_at <= now_ms order by id desc limit 50) h), '[]'::jsonb) end,
+    -- this player's last 20 finished rounds with a bet, and any of the asked ones, for settling rounds the browser
+    -- missed: an asked round that has finished and is not here held no bet of this player's
+    'past', coalesce((
+      select jsonb_agg(jsonb_build_object('round', p.round_id, 'seed', p.seed, 'hash', p.hash, 'stakes', p.stakes) order by p.round_id desc)
+        from (
+          (select b.round_id, d.seed, d.hash, jsonb_object_agg(b.sel, b.amount) stakes
+             from public.kj_bet b join public.kj_round d on d.id = b.round_id
+            where me is not null and b.player = me and d.ends_at <= now_ms
+            group by b.round_id, d.seed, d.hash order by b.round_id desc limit 20)
+          union
+          (select b.round_id, d.seed, d.hash, jsonb_object_agg(b.sel, b.amount) stakes
+             from public.kj_bet b join public.kj_round d on d.id = b.round_id
+            where me is not null and b.player = me and d.ends_at <= now_ms and b.round_id = any(asked)
+            group by b.round_id, d.seed, d.hash)
+        ) p), '[]'::jsonb),
+    'asked', to_jsonb(asked)
+  );
+end $$;
+
+-- changes this player's stakes in round p_round (null: whichever round is taking bets): p_bets maps selections to
+-- amounts to add (rounded to the cent), or below zero to take off (a selection never goes below nothing). All or
+-- nothing: 'sel' for an unknown selection, 'amount' for a bad amount, 'closed' once betting has closed (or for any
+-- other round), 'limit' when a selection would hold over 10,000. The reply holds everything the player has in the
+-- round afterwards, so the browser can give back whatever didn't land.
+create or replace function public.kj_bet(p_player text, p_name text, p_round bigint, p_bets jsonb, p_avatar int default 0) returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  me text := public._bj_player(p_player);
+  r public.kj_round;
+  e record;
+  amt numeric;
+  cur numeric;
+  nm text;
+  av smallint;
+begin
+  if me is null then return jsonb_build_object('ok', false, 'error', 'player'); end if;
+  if jsonb_typeof(p_bets) is distinct from 'object' or p_bets = '{}'::jsonb then
+    return jsonb_build_object('ok', false, 'error', 'amount');
+  end if;
+  for e in select key, value from jsonb_each(p_bets) loop
+    if not (e.key = any(public._kj_sels())) then return jsonb_build_object('ok', false, 'error', 'sel'); end if;
+    if jsonb_typeof(e.value) <> 'number' then return jsonb_build_object('ok', false, 'error', 'amount'); end if;
+    amt := round((e.value #>> '{}')::numeric, 2);
+    if amt = 0 or abs(amt) > 10000 then return jsonb_build_object('ok', false, 'error', 'amount'); end if;
+  end loop;
+  r := public._kj_current(now_ms);
+  if now_ms >= r.closes_at or (p_round is not null and p_round <> r.id) then
+    return jsonb_build_object('ok', false, 'error', 'closed', 'round', r.id);
+  end if;
+  -- one player's changes one at a time, each checked whole before any of it is applied; the clock is read again
+  -- after the wait, so nothing lands once betting has closed
+  perform pg_advisory_xact_lock(7362, hashtext(me));
+  if public._now_ms() >= r.closes_at then return jsonb_build_object('ok', false, 'error', 'closed', 'round', r.id); end if;
+  for e in select key, value from jsonb_each(p_bets) loop
+    select amount into cur from public.kj_bet where round_id = r.id and player = me and sel = e.key;
+    if coalesce(cur, 0) + round((e.value #>> '{}')::numeric, 2) > 10000 then
+      return jsonb_build_object('ok', false, 'error', 'limit');
+    end if;
+  end loop;
+  nm := public._bj_name(p_name);
+  av := public._bj_avatar(p_avatar);
+  for e in select key, value from jsonb_each(p_bets) loop
+    amt := round((e.value #>> '{}')::numeric, 2);
+    if amt > 0 then
+      insert into public.kj_bet as b (round_id, player, sel, name, avatar, amount, placed_at)
+      values (r.id, me, e.key, nm, av, amt, now_ms)
+      on conflict (round_id, player, sel) do update set amount = b.amount + excluded.amount;
+    else
+      update public.kj_bet set amount = amount + amt where round_id = r.id and player = me and sel = e.key and amount + amt > 0;
+      if not found then
+        delete from public.kj_bet where round_id = r.id and player = me and sel = e.key;
+      end if;
+    end if;
+  end loop;
+  -- the bettors list shows the name and avatar the player bet under last
+  update public.kj_bet set name = nm, avatar = av where round_id = r.id and player = me and (name <> nm or avatar <> av);
+  return jsonb_build_object('ok', true, 'round', r.id, 'held', public._kj_held(r.id, me));
+end $$;
+
+-- a round's hash, its key once betting has closed and its seed once the final bell has rung, for the fairness panel
+-- (who fought is matchupOf(id) in src/games/kaiju/rules.ts); null for a round the database doesn't hold
+create or replace function public.kj_round_info(p_round bigint) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', r.id, 'hash', r.hash, 'key', case when t.now_ms >= r.closes_at then r.key end,
+                            'seed', case when t.now_ms >= r.ends_at then r.seed end, 'opensAt', r.opens_at, 'endsAt', r.ends_at)
+    from public.kj_round r, (select public._now_ms() now_ms) t
+   where r.id = p_round
+$$;
+
 -- who may call what: the browser gets the public functions, the service key gets the admin ones
 revoke execute on all functions in schema public from public, anon, authenticated;
 grant usage on schema public to anon, authenticated, service_role;
@@ -3040,6 +3323,9 @@ grant execute on function
   public.pot_state(text, bigint, jsonb),
   public.pot_bet(text, text, bigint, numeric, int),
   public.pot_round_info(bigint),
+  public.kj_state(text, bigint, jsonb),
+  public.kj_bet(text, text, bigint, jsonb, int),
+  public.kj_round_info(bigint),
   public.username_available(text),
   public.profile_view(text),
   public.players_search(text, int),

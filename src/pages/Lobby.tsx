@@ -71,6 +71,23 @@ const TycoonHero = lazy(() => import('../games/tycoon/hero').then((m) => ({ defa
 
 const SLIDES: Slide[] = [
   {
+    key: 'kaiju',
+    eyebrow: 'New · Live fight night',
+    tone: 'text-[#ff8fa8] bg-[#ff3b6b]/15',
+    title: (
+      <>
+        Monsters fight.
+        <br />
+        The city falls.
+      </>
+    ),
+    text: 'Kaiju Clash: a live fight night in Neon Bay. Back your kaiju, call the KO or the Splash into the bay, and bet on the buildings.',
+    cta: 'Play Kaiju Clash',
+    to: '/game/kaiju',
+    bg: 'linear-gradient(110deg,#140a26 0%,#2a0f3d 55%,#4a1238 100%)',
+    art: <HeroFan ids={['showtime', 'summit', 'kaiju', 'pot', 'darts']} />,
+  },
+  {
     key: 'showtime',
     eyebrow: 'New game show',
     tone: 'text-[#ff8c9a] bg-[#ff4d61]/15',

@@ -1,5 +1,9 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useRef, type CSSProperties, type ReactNode } from 'react'
 import { Avatar } from './Avatar'
+import { Aura, AuraLayer, hasAura } from './auras'
+import { FX_BACK, FX_FRAMES, FX_UNDER } from './fx-frames'
+import { useOffscreenPause } from './fx-kit'
+import { NAME_FX } from './fx-names'
 import { useUid } from './ids'
 import { SuitShape } from './suits'
 import { GameIcon } from '../components/GameIcon'
@@ -7,26 +11,34 @@ import { shade } from '../lib/pixel'
 import { TIERS } from '../store/levels'
 import { gameInfo, type GameId } from '../store/games'
 import { achievement, cosmetic, type Rarity } from '../store/cosmetics'
+import { FX_BANNER_ART, FX_BANNER_BG } from './fx-banners'
+import { Backdrop } from './backdrops'
 
 /*
   How cosmetics look (src/store/cosmetics.ts has what they are and who may wear them).
 
-  - FramedAvatar: an avatar inside one of the fourteen frames. The avatar takes the middle 78% of the box and the frame
-    is drawn round it in one SVG on a 100-unit grid, so it scales from a 20 px list row to a 160 px profile header.
-    Below 36 px the fine detail (ticks, letters, sparkles) and the animation are left out, so long lists stay cheap.
-  - ProfileBanner: twelve scenes drawn in SVG on an 800 x 240 grid, cropped to fill whatever box they are given
-    (xMidYMid slice). The scene sits under the banner's children (a stacking context of its own), so a caller lays
-    its content out in the banner like in any div.
-  - NameTag: the nine name styles. Every one has a dark drop shadow, so a name stays readable on any banner.
-  - TitleChip: a title as a small plate, coloured by rarity (common grey, rare blue, epic purple, legendary gold).
+  - FramedAvatar: an avatar inside one of the twenty-six frames (the twelve animated ones are in fx-frames.tsx), with
+    an optional aura round it (auras.tsx). The avatar takes the middle 78% of the box and the frame is drawn round it
+    in one SVG on a 100-unit grid, so it scales from a 20 px list row to a 160 px profile header. Below 36 px the fine
+    detail (ticks, letters, sparkles) and the animation are left out, the animated frames only move from 56 px up, and
+    auras start at 44 px, so long lists stay cheap; anything animated pauses while it is offscreen.
+  - ProfileBanner: twenty-two scenes drawn in SVG on an 800 x 240 grid (the ten animated ones are in fx-banners.tsx),
+    cropped to fill whatever box they are given (xMidYMid slice). The scene sits under the banner's children (a
+    stacking context of its own), so a caller lays its content out in the banner like in any div.
+  - NameTag: the eighteen name styles (the nine animated ones are in fx-names.ts). Every one has a dark drop shadow, so
+    a name stays readable on any banner.
+  - TitleChip: a title as a small plate, coloured by rarity (common grey, rare blue, epic purple, legendary gold, and
+    the Mythic signature: a drifting rainbow with sparkles).
   - BadgeIcon: an achievement's medal. Its outline and rim say the rarity (a reeded disc, a hexagon, a seal, a
     sunburst with ribbons); the emblem in the middle says what it is for: a milestone's icon, a VIP tier's shield or,
     for a challenge, its game's icon on the game's colour. `locked` greys it out with a padlock.
-  - CosmeticPreview: any cosmetic as a square picture, for the shop and the wardrobe.
+  - CosmeticPreview: any cosmetic as a square picture, for the shop and the wardrobe (a backdrop as its scene behind
+    a little profile card, still below 48 px; the scenes themselves are backdrops.tsx).
 
   The animations (flames, neon buzz, the hologram turning, fire and rainbow names, twinkles) are CSS keyframes in one
   style sheet added once to the page below; they move only transform and opacity (and a background position for the
-  animated names), and stop when the player asks for reduced motion.
+  animated names), and stop when the player asks for reduced motion. The animated frames, auras, names and plates
+  bring their own sheets (fx-kit.tsx explains the shared rules); for reduced motion they pause where they stand.
 */
 
 /* ---------------- shared ---------------- */
@@ -37,6 +49,7 @@ export const RARITY: Record<Rarity, { name: string; color: string; light: string
   rare: { name: 'Rare', color: '#4c9dff', light: '#a8d1ff', dark: '#1b4ea6' },
   epic: { name: 'Epic', color: '#b06bff', light: '#dcc2ff', dark: '#5a22a6' },
   legendary: { name: 'Legendary', color: '#f7c548', light: '#fff0b0', dark: '#a86c0c' },
+  mythic: { name: 'Mythic', color: '#ff4fd8', light: '#ffd3f6', dark: '#7d1a8f' },
 }
 
 const CSS = `
@@ -475,19 +488,36 @@ const FRAME_ART: Record<string, (u: string, px: number) => ReactNode> = {
       )}
     </>
   ),
+  // the twelve animated frames (src/art/fx-frames.tsx)
+  ...FX_FRAMES,
 }
 
 const HOLO_MASK = 'radial-gradient(circle closest-side, transparent 77.2%, #000 78.2%, #000 97.6%, transparent 98.8%)'
 
-/** an avatar inside its frame */
-export function FramedAvatar({ avatar, frame, size = 40, className = '' }: { avatar: number; frame: string; size?: number; className?: string }) {
+/**
+ * An avatar inside its frame, with an aura round it when `aura` names one (src/art/auras.tsx; drawn from 44 px up,
+ * reaching a quarter of the size past the box, so leave it room). Some animated frames draw a layer under the avatar
+ * too (FX_UNDER, FX_BACK); anything animated pauses while it is offscreen.
+ */
+export function FramedAvatar({ avatar, frame, size = 40, className = '', aura }: { avatar: number; frame: string; size?: number; className?: string; aura?: string }) {
   const u = useUid()
-  const art = FRAME_ART[frame]
-  if (!art) return <Avatar index={avatar} size={size} className={className} />
-  const inner = Math.round(size * 0.78 * 10) / 10
+  const box = useRef<HTMLSpanElement>(null)
+  const art = FRAME_ART[frame] as ((u: string, px: number) => ReactNode) | undefined
+  const glow = size >= 44 && hasAura(aura) ? aura! : null
+  useOffscreenPause(box, (size >= 36 && frame in FX_FRAMES) || !!glow)
+  if (!art && !glow) return <Avatar index={avatar} size={size} className={className} />
+  const inner = art ? Math.round(size * 0.78 * 10) / 10 : size
   const off = (size - inner) / 2
+  const back = size >= 36 ? FX_BACK[frame] : undefined
   return (
-    <span className={`relative inline-block shrink-0 align-middle ${className}`} style={{ width: size, height: size }} data-frame={frame}>
+    <span ref={box} className={`relative inline-block shrink-0 align-middle ${className}`} style={{ width: size, height: size }} data-frame={frame} data-aura={glow ?? undefined}>
+      {glow && <AuraLayer id={glow} size={size} layer="back" />}
+      {FX_UNDER[frame]?.(size)}
+      {back && (
+        <svg viewBox="0 0 100 100" width={size} height={size} className="pointer-events-none absolute inset-0 overflow-visible" aria-hidden>
+          {back(`${u}b`, size)}
+        </svg>
+      )}
       {frame === 'frame:holo' && (
         <span
           aria-hidden
@@ -498,9 +528,12 @@ export function FramedAvatar({ avatar, frame, size = 40, className = '' }: { ava
       <span className="absolute" style={{ left: off, top: off, width: inner, height: inner }}>
         <Avatar index={avatar} size={inner} className="block" />
       </span>
-      <svg viewBox="0 0 100 100" width={size} height={size} className="pointer-events-none absolute inset-0 overflow-visible" aria-hidden>
-        {art(u, size)}
-      </svg>
+      {art && (
+        <svg viewBox="0 0 100 100" width={size} height={size} className="pointer-events-none absolute inset-0 overflow-visible" aria-hidden>
+          {art(u, size)}
+        </svg>
+      )}
+      {glow && <AuraLayer id={glow} size={size} layer="front" />}
     </span>
   )
 }
@@ -1241,10 +1274,13 @@ const BANNER_ART: Record<string, (u: string, live: boolean) => ReactNode> = {
       <path d="M0 240V206L90 176 170 200 260 168 360 204 460 172 560 206 660 180 740 200 800 186V240Z" fill="#051722" />
     </>
   ),
+  // the ten animated scenes (src/art/fx-banners.tsx)
+  ...FX_BANNER_ART,
 }
 
 /** a solid colour behind each scene while it draws, and for anything that can't */
 const BANNER_BG: Record<string, string> = {
+  ...FX_BANNER_BG,
   'banner:default': '#0e1d2b',
   'banner:felt': '#146b3c',
   'banner:sunset': '#8c1f7a',
@@ -1262,9 +1298,12 @@ const BANNER_BG: Record<string, string> = {
 /** a profile banner, filling its box (absolute inset-0); children sit on top. `still` holds its animation (small copies). */
 export function ProfileBanner({ id, className = '', children, still = false }: { id: string; className?: string; children?: ReactNode; still?: boolean }) {
   const u = useUid()
+  const box = useRef<HTMLDivElement>(null)
   const b = BANNER_ART[id] ? id : 'banner:default'
+  // the animated scenes hold still while scrolled out of view
+  useOffscreenPause(box, !still && b in FX_BANNER_ART)
   return (
-    <div className={`relative isolate overflow-hidden ${className}`} data-banner={b} style={{ background: BANNER_BG[b] }}>
+    <div ref={box} className={`relative isolate overflow-hidden ${className}`} data-banner={b} style={{ background: BANNER_BG[b] }}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" className="pointer-events-none absolute inset-0 -z-10 h-full w-full" aria-hidden>
         {BANNER_ART[b](u, !still)}
       </svg>
@@ -1289,13 +1328,15 @@ const NAME_STYLE: Record<string, { style: CSSProperties; cls?: string }> = {
   'name:fire': { style: clip('linear-gradient(90deg,#ffe36b,#ff8a1f,#ff3b2f,#ff8a1f,#ffe36b)', { filter: `${SHADOW} drop-shadow(0 0 7px rgba(255,110,30,.5))` }), cls: 'bjc-pan' },
   'name:rainbow': { style: clip('linear-gradient(90deg,#ff5f6d,#ffc371,#7cff6b,#4fd8ff,#a66bff,#ff5fa2,#ff5f6d)'), cls: 'bjc-pan' },
   'name:diamond': { style: clip('linear-gradient(180deg,#ffffff 0%,#efe6ff 30%,#a8eaff 48%,#ffffff 60%,#c4a6ff 100%)', { filter: `${SHADOW} drop-shadow(0 0 6px rgba(184,146,255,.45))` }) },
+  // the nine animated styles (src/art/fx-names.ts)
+  ...NAME_FX,
 }
 
-/** a player's name in their name colour */
+/** a player's name in their name colour (data-text feeds the styles that copy the name, like the glitch's slices) */
 export function NameTag({ name, color, className = '' }: { name: string; color: string; className?: string }) {
   const s = NAME_STYLE[color] ?? NAME_STYLE['name:default']
   return (
-    <span className={`font-extrabold ${s.cls ?? ''} ${className}`} style={s.style} data-color={color}>
+    <span className={`font-extrabold ${s.cls ?? ''} ${className}`} style={s.style} data-color={color} data-text={name}>
       {name}
     </span>
   )
@@ -1306,9 +1347,17 @@ const TITLE_STYLE: Record<Rarity, CSSProperties> = {
   rare: { background: 'linear-gradient(180deg,#2361b0,#173f78)', color: '#dcecff', boxShadow: 'inset 0 0 0 1px rgba(140,195,255,.35), 0 0 12px -4px rgba(76,157,255,.7)' },
   epic: { background: 'linear-gradient(180deg,#6a32b8,#43207a)', color: '#f0e4ff', boxShadow: 'inset 0 0 0 1px rgba(214,180,255,.4), 0 0 14px -4px rgba(176,107,255,.8)' },
   legendary: { background: 'linear-gradient(180deg,#ffeaa0,#f7c548 50%,#d39417)', color: '#3a2400', boxShadow: 'inset 0 0 0 1px rgba(255,250,220,.6), 0 0 16px -4px rgba(247,197,72,.9)' },
+  // the Mythic plate: a deep rainbow that drifts along (bjx-prism-bg), white letters, sparkles (TitleChip)
+  mythic: {
+    backgroundImage: 'linear-gradient(100deg,#c2187a,#7a1fd1 14%,#3a2be0 28%,#1279d6 42%,#0e9f7a 56%,#cf870c 70%,#d4402c 84%,#c2187a)',
+    backgroundSize: '200% 100%',
+    color: '#ffffff',
+    textShadow: '0 1px 1.5px rgba(0,0,0,.6)',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,.35), inset 0 0 0 1px rgba(255,255,255,.5), 0 0 14px -3px rgba(255,79,216,.85), 0 0 18px -6px rgba(63,216,255,.8)',
+  },
 }
 
-/** the little mark before a title: a dot, a diamond, a four-point star, a crown */
+/** the little mark before a title: a dot, a diamond, a four-point star, a crown, and for a Mythic a turning star */
 function RarityMark({ r }: { r: Rarity }) {
   const d =
     r === 'common'
@@ -1317,27 +1366,49 @@ function RarityMark({ r }: { r: Rarity }) {
         ? 'M5 1.5 8.5 5 5 8.5 1.5 5Z'
         : r === 'epic'
           ? sparkle(5, 5, 4)
-          : 'M1 7.6 1.6 2.6 3.6 4.6 5 1.6 6.4 4.6 8.4 2.6 9 7.6Z'
+          : r === 'mythic'
+            ? starPath(8, 4.9, 2, 5, 5)
+            : 'M1 7.6 1.6 2.6 3.6 4.6 5 1.6 6.4 4.6 8.4 2.6 9 7.6Z'
   return (
-    <svg width="10" height="10" viewBox="0 0 10 10" className="shrink-0" aria-hidden>
+    <svg width="10" height="10" viewBox="0 0 10 10" className={`shrink-0 ${r === 'mythic' ? 'bjx-t-turn' : ''}`} aria-hidden>
       <path d={d} fill="currentColor" opacity=".9" />
+      {r === 'mythic' && <circle cx="5" cy="5" r="1.1" fill="#fff" />}
     </svg>
   )
 }
 
-/** a title chip ("High Roller"); nothing for no title */
+/** a twinkle on a title plate */
+const PlateSpark = ({ at, s, delay }: { at: CSSProperties; s: number; delay: number }) => (
+  <span aria-hidden className="bjx-spark pointer-events-none absolute" style={{ ...at, width: s, height: s, animationDelay: `${-delay}s` }} />
+)
+
+/**
+ * A title chip ("High Roller"); nothing for no title. A Legendary plate glints and glows; a Mythic one wears the
+ * Mythic signature: its rainbow drifts, its star turns, a glint crosses it and sparkles come and go.
+ */
 export function TitleChip({ id, className = '' }: { id: string; className?: string }) {
   const c = cosmetic(id)
   if (!c || c.kind !== 'title' || id === 'title:none') return null
+  const fx = c.rarity === 'mythic' ? 'bjx-prism-bg' : c.rarity === 'legendary' ? 'bjx-t-legend' : ''
   return (
     <span
-      className={`relative inline-flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-md px-2 py-[4px] text-[10.5px] font-black uppercase leading-none tracking-[.08em] ${className}`}
+      className={`relative inline-flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-md px-2 py-[4px] text-[10.5px] font-black uppercase leading-none tracking-[.08em] ${fx} ${className}`}
       style={TITLE_STYLE[c.rarity]}
       data-title={id}
     >
       <RarityMark r={c.rarity} />
       {c.name}
-      {c.rarity === 'legendary' && <span aria-hidden className="bjc-glint pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/60 to-transparent" />}
+      {(c.rarity === 'legendary' || c.rarity === 'mythic') && (
+        <span aria-hidden className={`bjc-glint pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent ${c.rarity === 'mythic' ? 'via-white/45' : 'via-white/60'} to-transparent`} />
+      )}
+      {c.rarity === 'legendary' && <PlateSpark at={{ right: 2, top: 1 }} s={6} delay={0.6} />}
+      {c.rarity === 'mythic' && (
+        <>
+          <PlateSpark at={{ right: 2, top: 0 }} s={7} delay={0} />
+          <PlateSpark at={{ left: '46%', bottom: 0 }} s={5} delay={0.8} />
+          <PlateSpark at={{ left: 1, bottom: 1 }} s={5} delay={1.6} />
+        </>
+      )}
     </span>
   )
 }
@@ -1349,6 +1420,7 @@ const SHAPES: Record<Rarity, string> = {
   rare: Array.from({ length: 6 }, (_, i) => `${i ? 'L' : 'M'}${P(29, -90 + i * 60, 32, 32)}`).join('') + 'Z',
   epic: starPath(16, 29.5, 26.4, 32, 32),
   legendary: starPath(12, 31, 25, 32, 32),
+  mythic: starPath(10, 31.5, 22, 32, 32),
 }
 
 /** what the middle of a medal is coloured: a tier's colour, a game's, or the milestone's own */
@@ -1485,8 +1557,8 @@ export function BadgeIcon({ id, size = 32, className = '', locked = false }: { i
 
 /* ---------------- previews ---------------- */
 
-/** any cosmetic as a small square picture, for the shop and the wardrobe (a frame is shown round `avatar`) */
-export function CosmeticPreview({ id, size = 64, avatar }: { id: string; size?: number; avatar?: number }) {
+/** any cosmetic as a small square picture, for the shop and the wardrobe (a frame is shown round `avatar`, an aura round `avatar` in `frame`) */
+export function CosmeticPreview({ id, size = 64, avatar, frame }: { id: string; size?: number; avatar?: number; frame?: string }) {
   const c = cosmetic(id)
   if (!c) return null
   const box: CSSProperties = { width: size, height: size }
@@ -1503,6 +1575,17 @@ export function CosmeticPreview({ id, size = 64, avatar }: { id: string; size?: 
           <FramedAvatar avatar={avatar ?? 7} frame={id} size={Math.round(size * 0.9)} />
         </span>
       )
+    case 'aura': {
+      // the avatar at two thirds of the box, so the aura (a quarter past it on each side) just fits; small ones stay still
+      const s = Math.round(size * 0.64)
+      return (
+        <span className="inline-flex shrink-0 items-center justify-center" style={box} data-preview-aura={id}>
+          <Aura id={id} size={s} still={size < 50}>
+            <FramedAvatar avatar={avatar ?? 7} frame={frame ?? 'frame:bronze'} size={s} />
+          </Aura>
+        </span>
+      )
+    }
     case 'banner':
       return (
         <span className="relative block shrink-0 overflow-hidden rounded-[16%] bg-[#0b1823] shadow-[inset_0_0_0_1px_rgba(255,255,255,.07)]" style={box}>
@@ -1512,6 +1595,21 @@ export function CosmeticPreview({ id, size = 64, avatar }: { id: string; size?: 
           </span>
           <span className="absolute rounded-full bg-white/25" style={{ left: '48%', top: '72%', width: '40%', height: '7%' }} />
           <span className="absolute rounded-full bg-white/10" style={{ left: '48%', top: '84%', width: '26%', height: '6%' }} />
+        </span>
+      )
+    case 'backdrop':
+      // the scene behind a little profile page: a banner strip and a card standing on it (thumbnails stay still)
+      return (
+        <span className="relative block shrink-0 overflow-hidden rounded-[16%] shadow-[inset_0_0_0_1px_rgba(255,255,255,.07)]" style={box} data-preview-backdrop={id}>
+          <Backdrop id={id} mini still={size < 48} className="absolute inset-0" />
+          {size >= 40 && (
+            <span className="absolute overflow-hidden rounded-[12%] bg-[#112230]/90 shadow-[0_6px_14px_-6px_rgba(0,0,0,.8)] ring-1 ring-white/10" style={{ left: '29%', right: '29%', top: '44%', bottom: '-8%' }}>
+              <span className="absolute inset-x-0 top-0 h-[26%] bg-[linear-gradient(90deg,#1d3346,#26405a)]" />
+              <span className="absolute rounded-full bg-[linear-gradient(135deg,#8fa3b8,#4b5d70)] ring-2 ring-[#112230]" style={{ left: '12%', top: '14%', width: '30%', aspectRatio: '1' }} />
+              <span className="absolute rounded-full bg-white/30" style={{ left: '12%', top: '56%', width: '60%', height: '8%' }} />
+              <span className="absolute rounded-full bg-white/12" style={{ left: '12%', top: '70%', width: '40%', height: '7%' }} />
+            </span>
+          )}
         </span>
       )
     case 'nameColor':

@@ -1,10 +1,12 @@
 /*
-  The Overview: the profile header on the player's banner, then the wallet beside the quick stats, the recent
-  activity beside the achievements closest to done, and the favourite games. A guest gets the sign-up pitch under
-  the header, and the header says the progress lives in this browser.
+  The Overview: the profile header on the player's banner (standing on their backdrop, when they wear one, the way
+  their public page does), then the wallet beside the quick stats, the recent activity (crate openings included)
+  beside the achievements closest to done, and the favourite games. A guest gets the sign-up pitch under the header,
+  and the header says the progress lives in this browser.
 */
 import { useShallow } from 'zustand/react/shallow'
 import { BadgeIcon } from '../../art/cosmetics'
+import { Backdrop, hasScene } from '../../art/backdrops'
 import { AnimatedNumber } from '../../components/ui'
 import { Coin, IconGift, IconHistory, IconTrophy, IconUser } from '../../components/icons'
 import { fmt, fmtCompact } from '../../lib/format'
@@ -72,7 +74,14 @@ export function OverviewTab() {
   )
   return (
     <div className="flex flex-col gap-4">
-      <ProfileHeader look={look} avatar={me.avatar} name={me.name} xp={xp} meta={meta} actions={actions} onBadges={() => setTab('achievements')} />
+      <div className="relative isolate">
+        {hasScene(look.backdrop) && (
+          <div aria-hidden className="pointer-events-none absolute -inset-x-2 -top-2 bottom-[-28px] -z-10 overflow-hidden rounded-[22px] sm:-inset-x-3" style={{ WebkitMaskImage: 'linear-gradient(#000 55%, transparent)', maskImage: 'linear-gradient(#000 55%, transparent)' }} data-overview-backdrop={look.backdrop}>
+            <Backdrop id={look.backdrop} className="absolute inset-0" />
+          </div>
+        )}
+        <ProfileHeader look={look} avatar={me.avatar} name={me.name} xp={xp} meta={meta} actions={actions} onBadges={() => setTab('achievements')} />
+      </div>
       {!me.account && <GuestPitch available={available} compact />}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
         <WalletCard />

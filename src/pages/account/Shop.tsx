@@ -1,8 +1,8 @@
 /*
   The Shop: the cosmetics sold for coins (src/store/cosmetics.ts, every one with a price), by kind and rarity.
 
-  At the top, today's pick (one item not yet owned, the same all day) beside the wallet; then the filters and the
-  grid. Each card shows the item on a stage lit in its rarity's colour, its price, and whether it is owned or worn.
+  At the top, today's pick (one item not yet owned, the same all day) beside the wallet; then the crates
+  (./Crates.tsx: three crates with their odds and the opening); then the filters and the grid. Each card shows the item on a stage lit in its rarity's colour, its price, and whether it is owned or worn.
   A press opens the confirm step: the item tried on the player's own profile card, the price and the balance after,
   then Buy (buyCosmetic). A purchase is celebrated in the dialog (a burst of confetti in the item's colours) and
   offers to wear it straight away. Coins are play money: the copy says how to earn more, never how to buy them.
@@ -20,13 +20,16 @@ import { useWallet } from '../../store/wallet'
 import { COSMETICS, canWear, cosmetic, type Cosmetic, type CosmeticKind, type Rarity } from '../../store/cosmetics'
 import { Coins, EASE, Glow, IconBag, IconSparkle, KIND_NAME, LOOK_KEY, Panel, RARITY_ORDER, RarityTag, equip, useIdentity, useLook, useWardrobe } from './kit'
 import { ProfileCard } from './ProfileHeader'
+import { CratesSection } from './Crates'
 
 const FOR_SALE = COSMETICS.filter((c) => c.price !== undefined)
 type Sort = 'price' | '-price' | 'rarity'
 const KINDS: { id: 'all' | CosmeticKind; name: string }[] = [
   { id: 'all', name: 'Everything' },
   { id: 'frame', name: 'Frames' },
+  { id: 'aura', name: 'Auras' },
   { id: 'banner', name: 'Banners' },
+  { id: 'backdrop', name: 'Backdrops' },
   { id: 'nameColor', name: 'Name colours' },
   { id: 'title', name: 'Titles' },
   { id: 'avatar', name: 'Avatars' },
@@ -90,7 +93,9 @@ export function ShopTab() {
         </Panel>
       </div>
 
-      <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
+      <CratesSection />
+
+      <div className="mt-2 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
         <div className="no-scrollbar -mx-3 flex gap-1.5 overflow-x-auto px-3 py-0.5 sm:mx-0 sm:px-0">
           {KINDS.map((k) => (
             <button
@@ -105,7 +110,7 @@ export function ShopTab() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex gap-1 rounded-full bg-panel p-1">
-            {(['all', ...RARITY_ORDER] as const).map((r) => (
+            {(['all', ...RARITY_ORDER.filter((r) => FOR_SALE.some((c) => c.rarity === r))] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setRarity(r)}
@@ -311,6 +316,7 @@ export function BuyModal({ id, onClose }: { id: string; onClose: () => void }) {
         )}
         <motion.div className="relative" animate={done ? { scale: [1, 1.04, 1] } : {}} transition={{ duration: 0.5, ease: EASE }}>
           <ProfileCard
+            scene={c.kind === 'backdrop'}
             look={tryLook}
             avatar={tryAvatar}
             name={me.name}

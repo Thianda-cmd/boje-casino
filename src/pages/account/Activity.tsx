@@ -1,6 +1,7 @@
 /*
   The History tab: everything that moved the balance, in one list, newest first: the rounds played (the wallet keeps
-  the last 60), the rewards collected (the last 40) and the cosmetics bought (the last 40). It filters by kind (and
+  the last 60), the rewards collected (the last 40) and the cosmetics bought or found in crates (the last 40; a crate's
+  row shows what dropped, with the crate on its corner). It filters by kind (and
   rounds by result), totals what came in and went out for what is shown, and groups the rows by day. A round opens
   its game; a purchase opens the wardrobe. The Overview's recent activity uses the same rows.
 */
@@ -18,6 +19,8 @@ import { cosmetic } from '../../store/cosmetics'
 import type { RewardEntry } from '../../store/rewards'
 import { RARITY } from '../../art/cosmetics'
 import { IconBag, KIND_NAME, KINDS, KindTile, Panel, timeAgo } from './kit'
+import { CrateArt } from './Crates'
+import { crateOf } from '../../store/cosmetics'
 import { useAccountTab } from './tab'
 
 export type FeedKind = 'bet' | 'reward' | 'shop'
@@ -33,6 +36,8 @@ export interface FeedItem {
   game?: GameId
   reward?: RewardEntry['kind']
   item?: string
+  /** the crate it came out of (a crate opening) */
+  crate?: string
   win?: boolean
 }
 
@@ -46,7 +51,8 @@ export function feedOf(bets: BetRecord[], rewards: RewardEntry[], purchases: Pur
   rewards.forEach((r, i) => out.push({ key: `r${r.time}${i}`, kind: 'reward', time: r.time, title: r.label, sub: KINDS[r.kind]?.one ?? 'Reward', amount: r.amount, reward: r.kind }))
   purchases.forEach((p, i) => {
     const c = cosmetic(p.id)
-    out.push({ key: `p${p.time}${i}`, kind: 'shop', time: p.time, title: c?.name ?? 'Cosmetic', sub: c ? `Shop · ${RARITY[c.rarity].name} ${KIND_NAME[c.kind].toLowerCase()}` : 'Shop', amount: -p.price, item: p.id })
+    const from = p.crate ? (crateOf(p.crate)?.name ?? 'Crate') : 'Shop'
+    out.push({ key: `p${p.time}${i}`, kind: 'shop', time: p.time, title: c?.name ?? 'Cosmetic', sub: c ? `${from} · ${RARITY[c.rarity].name} ${KIND_NAME[c.kind].toLowerCase()}` : from, amount: -p.price, item: p.id, crate: p.crate })
   })
   return out.sort((a, b) => b.time - a.time)
 }
@@ -91,8 +97,13 @@ export function FeedRow({ it, now, i = 0 }: { it: FeedItem; now: number; i?: num
           {k.icon(18)}
         </KindTile>
       ) : (
-        <span className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-raised/70">
-          {it.item ? <CosmeticPreview id={it.item} size={36} /> : <IconBag size={18} />}
+        <span className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl bg-raised/70" data-feed-crate={it.crate}>
+          <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-xl">{it.item ? <CosmeticPreview id={it.item} size={36} /> : <IconBag size={18} />}</span>
+          {it.crate && (
+            <span className="absolute -bottom-1.5 -right-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-stage ring-2 ring-panel" title={crateOf(it.crate)?.name}>
+              <CrateArt id={it.crate} size={22} still />
+            </span>
+          )}
         </span>
       )}
       <span className="min-w-0 flex-1">
@@ -141,7 +152,7 @@ export function ActivityTab() {
     ['all', 'Everything'],
     ['bet', 'Rounds'],
     ['reward', 'Rewards'],
-    ['shop', 'Shop'],
+    ['shop', 'Shop & crates'],
   ]
   return (
     <div className="flex flex-col gap-4">
@@ -198,10 +209,10 @@ export function ActivityTab() {
             <IconHistory size={22} />
           </span>
           <div className="text-[15px] font-extrabold">Nothing here yet</div>
-          <div className="max-w-[340px] text-[13px] text-muted">Rounds you play, rewards you collect and cosmetics you buy all show up here.</div>
+          <div className="max-w-[340px] text-[13px] text-muted">Rounds you play, rewards you collect, cosmetics you buy and crates you open all show up here.</div>
         </div>
       )}
-      <p className="px-1 text-[12px] text-dim">The last 60 rounds, 40 rewards and 40 purchases are kept. Lifetime totals are on the Statistics tab.</p>
+      <p className="px-1 text-[12px] text-dim">The last 60 rounds, 40 rewards and 40 purchases and crate openings are kept. Lifetime totals are on the Statistics tab.</p>
     </div>
   )
 }

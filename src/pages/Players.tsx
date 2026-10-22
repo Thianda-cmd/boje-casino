@@ -243,7 +243,7 @@ function Podium({ rows, board }: { rows: PlayerRow[]; board: Board }) {
               <Medal place={i} size={wide ? 30 : 20} />
             </span>
             <span className={`relative ${wide ? '-mt-11' : '-mt-7'}`}>
-              <FramedAvatar avatar={r.avatar} frame={r.look.frame} size={wide ? (first ? 92 : 80) : first ? 60 : 52} className="drop-shadow-[0_10px_18px_rgba(0,0,0,.55)]" />
+              <FramedAvatar avatar={r.avatar} frame={r.look.frame} aura={r.look.aura} size={wide ? (first ? 92 : 80) : first ? 60 : 52} className="drop-shadow-[0_10px_18px_rgba(0,0,0,.55)]" />
               {r.online && <span className="absolute bottom-[6%] right-[6%] h-3 w-3 rounded-full border-2 border-panel bg-accent sm:h-4 sm:w-4" />}
             </span>
             <span className="mt-2 w-full min-w-0 px-2 sm:px-3">

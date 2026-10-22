@@ -3,15 +3,17 @@
   banner across the top, the framed avatar breaking over its lower edge, the name in its colour with the title, the
   three showcase badges, the VIP tier with the level bar on the right, and a row of account details under a rule.
   ProfileCard is the narrow one: the wardrobe's live preview and the shop's try-on, which draw whatever look they are
-  handed (one being tried on included).
+  handed (one being tried on included). Both wear the aura round the avatar; with `scene` the card stands on the
+  look's backdrop, the way the public profile page stands on it, with the backdrop's name under the card.
 */
 import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { BadgeIcon, FramedAvatar, NameTag, ProfileBanner, TitleChip } from '../../art/cosmetics'
+import { Backdrop } from '../../art/backdrops'
 import { TierBadge } from '../../art/TierBadge'
 import { fmt } from '../../lib/format'
 import { TIERS, levelFromXp, tierIndexOf } from '../../store/wallet'
-import { SHOWCASE, achievement, type Look } from '../../store/cosmetics'
+import { SHOWCASE, achievement, cosmetic, type Look } from '../../store/cosmetics'
 import { Bar, useMedia } from './kit'
 
 /** the VIP tier's shield, the level and the bar to the next one */
@@ -72,7 +74,7 @@ export function ProfileHeader({ look, avatar, name, xp, meta, actions, onBadges 
       <div className="relative px-4 pb-4 sm:px-6 sm:pb-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-5">
           <div className="-mt-[56px] w-fit shrink-0 sm:-mt-[74px]">
-            <FramedAvatar avatar={avatar} frame={look.frame} size={wide ? 140 : 104} />
+            <FramedAvatar avatar={avatar} frame={look.frame} aura={look.aura} size={wide ? 140 : 104} />
           </div>
           <div className="min-w-0 flex-1 sm:pb-1">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
@@ -96,8 +98,20 @@ export function ProfileHeader({ look, avatar, name, xp, meta, actions, onBadges 
   )
 }
 
-/** the narrow profile: the live preview in the wardrobe and the shop's try-on */
-export function ProfileCard({ look, avatar, name, xp, ribbon, className = '' }: { look: Look; avatar: number; name: string; xp: number; ribbon?: ReactNode; className?: string }) {
+/** the narrow profile: the live preview in the wardrobe and the shop's try-on (`scene`: standing on the backdrop) */
+export function ProfileCard({ look, avatar, name, xp, ribbon, className = '', scene = false }: { look: Look; avatar: number; name: string; xp: number; ribbon?: ReactNode; className?: string; scene?: boolean }) {
+  if (scene)
+    return (
+      <div className={`relative isolate overflow-hidden rounded-[20px] px-4 pb-14 pt-4 shadow-[0_24px_60px_-30px_rgba(0,0,0,.85)] ring-1 ring-white/[.06] ${className}`} data-profile-scene={look.backdrop}>
+        <Backdrop id={look.backdrop} className="absolute inset-0 -z-10" />
+        <ProfileCard look={look} avatar={avatar} name={name} xp={xp} ribbon={ribbon} />
+        <div className="absolute inset-x-0 bottom-4 flex justify-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[.08em] text-white/75 backdrop-blur-sm">
+            <span className="text-white/45">Page backdrop</span> {cosmetic(look.backdrop)?.name ?? 'None'}
+          </span>
+        </div>
+      </div>
+    )
   return (
     <div className={`relative overflow-hidden rounded-2xl bg-panel shadow-[0_24px_60px_-30px_rgba(0,0,0,.85)] ring-1 ring-white/[.06] ${className}`} data-profile-card>
       <ProfileBanner id={look.banner} className="h-[112px]">
@@ -106,7 +120,7 @@ export function ProfileCard({ look, avatar, name, xp, ribbon, className = '' }: 
       {ribbon && <div className="absolute right-3 top-3">{ribbon}</div>}
       <div className="relative px-4 pb-4">
         <div className="-mt-12 flex items-end justify-between gap-3">
-          <FramedAvatar avatar={avatar} frame={look.frame} size={96} />
+          <FramedAvatar avatar={avatar} frame={look.frame} aura={look.aura} size={96} />
           <div className="pb-1">
             <Showcase badges={look.badges} size={28} />
           </div>

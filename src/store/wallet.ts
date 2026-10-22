@@ -6,7 +6,7 @@ import { round2 } from '../lib/format'
 import { gameById, type GameId } from './games'
 import type { Save as TycoonSave } from '../games/tycoon/engine'
 import { rand } from '../lib/rng'
-import { DEFAULT_LOOK, canWear, cleanLook, cosmetic, earnedAchievements, setChallenges, type Look } from './cosmetics'
+import { CRATE_WEIGHT, DEFAULT_LOOK, canWear, cleanLook, cosmetic, crateDrops, crateOf, earnedAchievements, setChallenges, type Look } from './cosmetics'
 import { TIERS, levelFromXp, levelReward, tierIndexOf } from './levels'
 import { LOG_SIZE, MISSION_MIN_BET, RAKEBACK, TIER_BONUS, WHEEL_PRIZES, dayKey, missionStep, missionTarget, missionText, missionsFor, msToMidnight, pickWheel, type RewardEntry, type RewardKind } from './rewards'
 
@@ -418,6 +418,33 @@ export const CHALLENGES: Challenge[] = [
     step: (e, p) => (e.game === 'summit' && Number(e.meta?.pitches) >= 10 && e.meta?.fell !== true ? 1 : p),
   },
   {
+    id: 'kaiju-exact',
+    game: 'kaiju',
+    title: 'Called It',
+    desc: 'Win an exact-result bet in Kaiju Clash: the winner and how it ends.',
+    reward: 2500,
+    goal: 1,
+    step: (e, p) => (e.game === 'kaiju' && String(e.meta?.hits ?? '').split(',').some((h) => h.startsWith('exact:')) ? 1 : p),
+  },
+  {
+    id: 'kaiju-upset',
+    game: 'kaiju',
+    title: 'Giant Slayer',
+    desc: 'Back the winner in Kaiju Clash at 3× or more.',
+    reward: 2500,
+    goal: 1,
+    step: (e, p) => (e.game === 'kaiju' && e.meta?.upset === true ? 1 : p),
+  },
+  {
+    id: 'kaiju-r1',
+    game: 'kaiju',
+    title: 'First-Round Knockout',
+    desc: 'Win a Round 1 bet in Kaiju Clash: the fight over inside the first round.',
+    reward: 3000,
+    goal: 1,
+    step: (e, p) => (e.game === 'kaiju' && String(e.meta?.hits ?? '').split(',').includes('rnd:1') ? 1 : p),
+  },
+  {
     id: 'high-roller',
     title: 'High Roller',
     desc: 'Wager 100,000 coins in total across all games. Every bet counts, whatever its size.',
@@ -481,14 +508,17 @@ export interface Limits {
 }
 export const LIMIT_DELAY = 24 * 3600_000
 export const NO_LIMITS: Limits = { lossPerDay: null, pending: null, reminderMin: null, coolOffUntil: 0 }
-/** a cosmetic bought in the shop */
+/** a cosmetic bought in the shop, or dropped by a crate (`crate`: which one; `price`: what the crate cost) */
 export interface Purchase {
   id: string
   price: number
   time: number
+  crate?: string
 }
 export const PURCHASE_LOG = 40
 export type BuyResult = 'ok' | 'owned' | 'unavailable' | 'coins'
+/** what opening a crate gave: the cosmetic dropped and the chance it had, or why the crate stayed shut */
+export type CrateResult = { ok: true; id: string; chance: number } | { ok: false; why: 'unavailable' | 'complete' | 'coins' | 'cooloff' }
 /**
  * What a signed-in player's public profile shows (src/pages/Player.tsx): their bio and what they share. It is kept in
  * the wallet so it is saved with it (save_wallet), and the server reads it from there for the public profile.
@@ -581,6 +611,13 @@ interface WalletState {
   dismissToast: (id: number) => void
   /** buys a cosmetic from the shop: takes its price and adds it to `owned` */
   buyCosmetic: (id: string) => BuyResult
+  /**
+   * Opens a crate (src/store/cosmetics.ts CRATES): takes its price and adds one cosmetic it can still drop to `owned`,
+   * picked by weight (crateDrops) with crypto.getRandomValues, and logs it with the purchases. Refused when the crate
+   * has nothing left the player can't already wear, when the balance is short, or during a cool-off (a crate is a
+   * draw for coins, so it pauses with betting).
+   */
+  openCrate: (id: string) => CrateResult
   /** wears what it can of a look (anything not owned or unlocked is ignored) */
   wear: (look: Partial<Look>) => void
   /** sets responsible-play limits (a raised or removed loss limit waits LIMIT_DELAY; a cool-off only lengthens) */
@@ -889,11 +926,30 @@ export const useWallet = create<WalletState>()(
         return 'ok'
       },
 
+      openCrate: (id) => {
+        const crate = crateOf(id)
+        const s = get()
+        if (!crate) return { ok: false, why: 'unavailable' }
+        const drops = crateDrops(crate, wardrobeOf(s))
+        if (!drops.length) return { ok: false, why: 'complete' }
+        if (s.balance < crate.price) return { ok: false, why: 'coins' }
+        if (currentLimits(s.limits).coolOffUntil > Date.now()) return { ok: false, why: 'cooloff' }
+        // each item weighs its rarity's weight (crateDrops' chances are these over their sum): one uniform draw from the
+        // crypto source picks a point along the weights laid end to end
+        const weights = drops.map((d) => CRATE_WEIGHT[cosmetic(d.id)!.rarity])
+        let r = rand() * weights.reduce((a, b) => a + b, 0)
+        let k = 0
+        while (k < drops.length - 1 && (r -= weights[k]) >= 0) k++
+        const drop = drops[k]
+        set((w) => ({ balance: round2(w.balance - crate.price), owned: [...w.owned, drop.id], purchases: [{ id: drop.id, price: crate.price, time: Date.now(), crate: crate.id }, ...w.purchases].slice(0, PURCHASE_LOG) }))
+        return { ok: true, id: drop.id, chance: drop.chance }
+      },
+
       wear: (look) => {
         const s = get()
         const w = wardrobeOf(s)
         const next = { ...cleanLook(s.look) }
-        for (const k of ['frame', 'banner', 'nameColor', 'title'] as const) {
+        for (const k of ['frame', 'aura', 'banner', 'backdrop', 'nameColor', 'title'] as const) {
           const id = look[k]
           if (id !== undefined && canWear(id, w)) next[k] = id
         }

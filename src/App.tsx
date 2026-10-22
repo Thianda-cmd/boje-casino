@@ -17,6 +17,8 @@ import { hasShared as hasBattleStakes, isNew as isNewBattle, migrateGuest as mig
 import type { BattleServer } from './games/battles/types'
 import { hasOpen as hasPotStakes } from './games/pot/ledger'
 import type { PotServer } from './games/pot/net'
+import { hasKaijuStakes } from './games/kaiju/open'
+import type { KaijuServer } from './games/kaiju/net'
 import { GameIcon } from './components/GameIcon'
 import { GameCover } from './components/covers'
 import { MoreGames } from './components/GameRows'
@@ -61,6 +63,7 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   deal: lazy(() => import('./games/deal/BankersDeal')),
   pot: lazy(() => import('./games/pot/PotLuck')),
   summit: lazy(() => import('./games/summit/Summit')),
+  kaiju: lazy(() => import('./games/kaiju/Kaiju')),
   lines: lazy(() => import('./games/lines/LuckyLines')),
   penalty: lazy(() => import('./games/penalty/Penalty')),
   scratch: lazy(() => import('./games/scratch/Scratch')),
@@ -73,6 +76,8 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   videopoker: lazy(() => import('./games/videopoker/VideoPoker')),
 }
 const Heist = lazy(() => import('./games/heist/Heist'))
+// the development labs (#/dev): only the dev server has them, so the build leaves them out
+const DevLab = import.meta.env.DEV ? lazy(() => import('./pages/DevLab')) : null
 const Tycoon = lazy(() => import('./games/tycoon/Tycoon'))
 // the lobby is the landing page and ships with the app; the other pages load when first opened
 const Rewards = lazy(() => import('./pages/Rewards'))
@@ -97,6 +102,7 @@ export default function App() {
   useLiveBjPayouts(who, authReady && m?.[1] !== 'livebj')
   useBattlePayouts(who, authReady && m?.[1] !== 'battles')
   usePotPayouts(who, authReady && m?.[1] !== 'pot')
+  useKaijuPayouts(who, authReady && m?.[1] !== 'kaiju')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -125,6 +131,13 @@ export default function App() {
     page = (
       <Suspense fallback={pageFallback}>
         <Tycoon />
+        <BootDone />
+      </Suspense>
+    )
+  else if (DevLab && route.startsWith('/dev'))
+    page = (
+      <Suspense fallback={pageFallback}>
+        <DevLab />
         <BootDone />
       </Suspense>
     )
@@ -247,6 +260,44 @@ function usePotPayouts(who: string, on: boolean) {
         if (stop) return
         for (const s of await settleMissed(server, who)) {
           const t = awayToast(s)
+          if (t) useWallet.getState().pushToast(t)
+        }
+      } catch {
+        /* offline: try again on the next tick */
+      } finally {
+        busy = false
+      }
+    }
+    run()
+    const id = setInterval(run, 5000)
+    const onVisible = () => !document.hidden && run()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      stop = true
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [who, on])
+}
+
+/* A Kaiju Clash fight goes on whether or not anyone watches. The Kaiju Clash page settles its own rounds; everywhere
+   else this settles the ones you bet on once the stage has shown their result (games/kaiju/net.ts settleMissed), and
+   only polls while a stake waits (games/kaiju/open.ts). */
+function useKaijuPayouts(who: string, on: boolean) {
+  useEffect(() => {
+    if (!on) return
+    let stop = false
+    let busy = false
+    let server: KaijuServer | null = null
+    const run = async () => {
+      if (busy || !hasKaijuStakes(who)) return
+      busy = true
+      try {
+        const net = await import('./games/kaiju/net')
+        server ??= await net.tryShared()
+        if (stop) return
+        for (const s of await net.settleMissed(server, who)) {
+          const t = net.awayToast(s)
           if (t) useWallet.getState().pushToast(t)
         }
       } catch {
