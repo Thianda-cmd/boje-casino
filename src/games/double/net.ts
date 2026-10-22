@@ -16,6 +16,8 @@ export interface Bettor {
   avatar: number
   amount: number
   me: boolean
+  /** a signed-in player's bet: their name opens their public profile (the stand-in marks nobody) */
+  acct?: boolean
   /** a house bot (offline stand-in only) */
   bot?: boolean
 }
@@ -85,7 +87,7 @@ function normalise(raw: any, asked: number[]): Feed {
     colors[c] = {
       total: n(col?.total),
       players: n(col?.players),
-      bets: (col?.bets ?? []).map((b: any) => ({ name: String(b.name), avatar: n(b.avatar), amount: n(b.amount), me: !!b.me })),
+      bets: (col?.bets ?? []).map((b: any) => ({ name: String(b.name), avatar: n(b.avatar), amount: n(b.amount), me: !!b.me, acct: !!b.acct })),
     }
   }
   return {

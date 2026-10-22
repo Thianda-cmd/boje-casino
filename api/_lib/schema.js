@@ -9,6 +9,9 @@
   worker. Each round commits to sha256(seed) before bets open; the seed (and so the crash point)
   is only revealed once the rocket has blown.
   Accounts: Supabase Auth users, one profile row each holding the username, avatar and wallet.
+  Public profiles: what anyone may see of an account (profile_view, players_search, players_top), read from the saved
+  wallet with the player's privacy honoured, the look checked against the cosmetics catalog, and presence (last_seen).
+  The live games mark which players are accounts (acct), so their names can open these profiles.
   Live Blackjack: shared five-seat tables. Rounds advance lazily under a per-table advisory lock; the shoe never
   leaves the database and the hole card is only sent once the dealer plays. Wallets stay on the client, as in Crash.
   Case Battles: two to four seats open the same crates; every item is drawn when the last seat fills, under a
@@ -22,7 +25,7 @@
   and reveals the seed once the wheel has landed.
 */
 
-export const SCHEMA_VERSION = '2026-10-21.2'
+export const SCHEMA_VERSION = '2026-10-22.1'
 
 export const SCHEMA_SQL = /* sql */ `
 set local lock_timeout = '8s';
@@ -72,6 +75,13 @@ language sql volatile set search_path = public as $$
       then current_setting('app.now_ms', true)::bigint
     else (extract(epoch from clock_timestamp()) * 1000)::bigint
   end
+$$;
+
+-- whether a player id in the live games is a signed-in account's (an auth uid), not a guest's g_ id or a house bot's;
+-- the games send it as acct, so the browser can open that player's public profile from their name
+create or replace function public._is_acct(p text) returns boolean
+language sql immutable set search_path = public as $$
+  select coalesce(p ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', false)
 $$;
 
 -- multiplier after ms of flight, floored to cents; the client draws the same curve
@@ -152,7 +162,8 @@ begin
       'crash', case when ph = 'crashed' then r.crash end,
       'seed', case when ph = 'crashed' then r.seed end),
     'bets', coalesce((
-      select jsonb_agg(jsonb_build_object('name', b.name, 'bet', b.bet, 'cashed', public._crash_eff(b.cashed, b.auto, ph, m), 'me', b.player = me)
+      select jsonb_agg(jsonb_build_object('name', b.name, 'bet', b.bet, 'cashed', public._crash_eff(b.cashed, b.auto, ph, m), 'me', b.player = me,
+                                          'acct', public._is_acct(b.player))
         order by b.bet desc, b.name)
       from (select * from public.crash_bet where round_id = r.id order by bet desc, name limit 50) b), '[]'::jsonb),
     'players', (select count(*) from public.crash_bet where round_id = r.id),
@@ -307,8 +318,12 @@ begin
   if exists (select 1 from public.profiles where lower(username) = lower(p_username)) then
     return jsonb_build_object('ok', false, 'error', 'taken');
   end if;
-  insert into public.profiles (id, username, avatar, wallet, balance, xp)
-  values (p_id, p_username, abs(coalesce(p_avatar, 0)) % 32, w, coalesce((w ->> 'balance')::numeric, 0), coalesce((w ->> 'xp')::numeric, 0))
+  -- a guest who signs up brings their play along: the public profile's figures start from it (see save_wallet)
+  insert into public.profiles (id, username, avatar, wallet, balance, xp, rounds, wagered, won, biggest, listed, stats_public, look, last_seen)
+  values (p_id, p_username, abs(coalesce(p_avatar, 0)) % 32, w, coalesce((w ->> 'balance')::numeric, 0), coalesce((w ->> 'xp')::numeric, 0),
+          least(floor(public._w_num(w -> 'rounds')), 2147483647)::int, round(public._w_num(w -> 'totalWagered'), 2),
+          round(public._w_num(w -> 'totalWon'), 2), round(public._w_num(w -> 'biggestWin'), 2),
+          public._w_shares(w, 'listed'), public._w_shares(w, 'stats'), public._public_look(w), public._now_ms())
   returning * into p;
   return jsonb_build_object('ok', true, 'profile', public._profile_json(p));
 exception when unique_violation then
@@ -330,7 +345,8 @@ begin
   return public._create_profile(p_id, p_username, p_wallet, p_avatar);
 end $$;
 
--- optimistic save: only lands if nobody else saved since p_rev
+-- optimistic save: only lands if nobody else saved since p_rev. It also keeps the public profile's figures (the
+-- leaderboards sort on them), privacy and look in step with the wallet, and counts as being seen.
 create or replace function public.save_wallet(p_wallet jsonb, p_rev int) returns jsonb
 language plpgsql volatile security definer set search_path = public as $$
 declare
@@ -341,7 +357,15 @@ begin
   update public.profiles
      set wallet = p_wallet, rev = rev + 1, updated_at = now(),
          balance = (p_wallet ->> 'balance')::numeric,
-         xp = coalesce((p_wallet ->> 'xp')::numeric, xp)
+         xp = coalesce((p_wallet ->> 'xp')::numeric, xp),
+         rounds = least(floor(public._w_num(p_wallet -> 'rounds')), 2147483647)::int,
+         wagered = round(public._w_num(p_wallet -> 'totalWagered'), 2),
+         won = round(public._w_num(p_wallet -> 'totalWon'), 2),
+         biggest = round(public._w_num(p_wallet -> 'biggestWin'), 2),
+         listed = public._w_shares(p_wallet, 'listed'),
+         stats_public = public._w_shares(p_wallet, 'stats'),
+         look = public._public_look(p_wallet),
+         last_seen = public._now_ms()
    where id = auth.uid() and rev = p_rev
   returning * into p;
   if found then return jsonb_build_object('ok', true, 'rev', p.rev); end if;
@@ -382,6 +406,257 @@ begin
   select count(*) into n from public.signup_attempt where ip = p_ip and at > now() - interval '1 hour';
   insert into public.signup_attempt (ip) values (p_ip);
   return n;
+end $$;
+
+/* ------------------------------------------------------------------ */
+/*  Public profiles                                                    */
+/* ------------------------------------------------------------------ */
+-- What anyone may see of an account, read from the wallet it saved (src/lib/profiles.ts reads these replies): the
+-- username, avatar and when it joined from the row; the bio, the look and, unless the player keeps them private
+-- (wallet.profile.privacy), their stats and biggest recent wins from the wallet. Never the email, the balance or the
+-- wallet itself. The look is checked id by id against public.cosmetic, the catalog of src/store/cosmetics.ts (the
+-- ids are stored data and never renamed; tools/profile-sql/test.mjs checks the two match). The figures the
+-- leaderboards sort on, and whether the player is listed and shares their stats, are columns that save_wallet keeps
+-- in step with the wallet. last_seen (ms) is touched by every save and by presence_ping: seen in the last 5 minutes
+-- is online. Unlisted players are left out of search and the leaderboards, and players who keep their stats private
+-- are left out of the boards ranked by them; their profile still opens by name (from a live game's player list).
+
+alter table public.profiles add column if not exists rounds integer not null default 0;
+alter table public.profiles add column if not exists wagered numeric(18, 2) not null default 0;
+alter table public.profiles add column if not exists won numeric(18, 2) not null default 0;
+alter table public.profiles add column if not exists biggest numeric(18, 2) not null default 0;
+alter table public.profiles add column if not exists listed boolean not null default true;
+alter table public.profiles add column if not exists stats_public boolean not null default true;
+alter table public.profiles add column if not exists last_seen bigint;
+-- the look as anyone sees it (_public_look), worked out when the wallet is saved so lists of players needn't read wallets
+alter table public.profiles add column if not exists look jsonb;
+create index if not exists profiles_top_xp on public.profiles (xp desc) where listed;
+create index if not exists profiles_top_wagered on public.profiles (wagered desc) where listed and stats_public;
+create index if not exists profiles_top_biggest on public.profiles (biggest desc) where listed and stats_public;
+create index if not exists profiles_seen on public.profiles (last_seen desc) where listed;
+create index if not exists profiles_newest on public.profiles (created_at desc) where listed;
+
+create table if not exists public.cosmetic (
+  id text primary key,
+  kind text not null check (kind in ('avatar', 'frame', 'banner', 'nameColor', 'title'))
+);
+alter table public.cosmetic enable row level security;
+revoke all on public.cosmetic from anon, authenticated;
+
+-- COSMETICS in src/store/cosmetics.ts, id for id
+delete from public.cosmetic;
+insert into public.cosmetic (kind, id)
+select 'avatar', 'avatar:' || g from generate_series(0, 31) as g
+union all
+select v.kind, v.id from (values
+  ('frame', 'frame:none'), ('frame', 'frame:bronze'), ('frame', 'frame:silver'), ('frame', 'frame:gold'),
+  ('frame', 'frame:platinum'), ('frame', 'frame:diamond'), ('frame', 'frame:neon'), ('frame', 'frame:pixel'),
+  ('frame', 'frame:flame'), ('frame', 'frame:laurel'), ('frame', 'frame:crown'), ('frame', 'frame:holo'),
+  ('frame', 'frame:explorer'), ('frame', 'frame:highroller'),
+  ('banner', 'banner:default'), ('banner', 'banner:felt'), ('banner', 'banner:sunset'), ('banner', 'banner:ocean'),
+  ('banner', 'banner:neon'), ('banner', 'banner:arcade'), ('banner', 'banner:galaxy'), ('banner', 'banner:vault'),
+  ('banner', 'banner:gold'), ('banner', 'banner:diamond'), ('banner', 'banner:jackpot'), ('banner', 'banner:aurora'),
+  ('nameColor', 'name:default'), ('nameColor', 'name:green'), ('nameColor', 'name:ice'), ('nameColor', 'name:rose'),
+  ('nameColor', 'name:violet'), ('nameColor', 'name:gold'), ('nameColor', 'name:fire'), ('nameColor', 'name:rainbow'),
+  ('nameColor', 'name:diamond'),
+  ('title', 'title:none'), ('title', 'title:newcomer'), ('title', 'title:regular'), ('title', 'title:lucky'),
+  ('title', 'title:night-owl'), ('title', 'title:explorer'), ('title', 'title:card-shark'), ('title', 'title:veteran'),
+  ('title', 'title:big-fish'), ('title', 'title:high-roller'), ('title', 'title:jackpot-hunter'), ('title', 'title:legend'),
+  ('title', 'title:tycoon')
+) as v (kind, id);
+
+/* ---------- helpers (not granted) ---------- */
+
+-- a figure from the wallet: a JSON number, kept between 0 and 1e15; anything else is 0
+create or replace function public._w_num(v jsonb) returns numeric
+language sql immutable set search_path = public as $$
+  select case when jsonb_typeof(v) = 'number' then least(greatest((v #>> '{}')::numeric, 0), 1e15) else 0 end
+$$;
+
+-- whether the wallet shares something (wallet.profile.privacy.listed, .stats, .bets): yes unless it says false
+create or replace function public._w_shares(w jsonb, what text) returns boolean
+language sql immutable set search_path = public as $$
+  select w #> array['profile', 'privacy', what] is distinct from 'false'::jsonb
+$$;
+
+-- an id of the shape the stored data uses for games, challenges and achievements: lower-case words joined by dashes
+create or replace function public._w_slug(s text, n int) returns boolean
+language sql immutable set search_path = public as $$
+  select coalesce(length(s) <= n and s ~ '^[a-z0-9]+(-[a-z0-9]+)*$', false)
+$$;
+
+-- the bio as it is shown: one line, control characters and runs of spaces made one space, at most 160 characters
+-- (cleanBio in src/store/wallet.ts)
+create or replace function public._public_bio(w jsonb) returns text
+language sql immutable set search_path = public as $$
+  select case when jsonb_typeof(w #> '{profile,bio}') = 'string'
+    then left(btrim(regexp_replace(regexp_replace(w #>> '{profile,bio}', '[[:cntrl:]]+', ' ', 'g'), '[[:space:]]+', ' ', 'g')), 160)
+    else '' end
+$$;
+
+-- the look as anyone sees it: every id checked against the catalog by kind and put back to the default when it is not
+-- there (DEFAULT_LOOK and cleanLook in src/store/cosmetics.ts), and up to three badges with an achievement's shape
+-- (a milestone id, or challenge: and a challenge id), each once, in the order worn
+create or replace function public._public_look(w jsonb) returns jsonb
+language sql stable set search_path = public as $$
+  select jsonb_build_object(
+    'frame', coalesce((select c.id from public.cosmetic c where c.kind = 'frame' and c.id = w #>> '{look,frame}'), 'frame:bronze'),
+    'banner', coalesce((select c.id from public.cosmetic c where c.kind = 'banner' and c.id = w #>> '{look,banner}'), 'banner:default'),
+    'nameColor', coalesce((select c.id from public.cosmetic c where c.kind = 'nameColor' and c.id = w #>> '{look,nameColor}'), 'name:default'),
+    'title', coalesce((select c.id from public.cosmetic c where c.kind = 'title' and c.id = w #>> '{look,title}'), 'title:newcomer'),
+    'badges', coalesce((
+      select jsonb_agg(b.v order by b.i)
+        from (select x.v, min(x.i) i
+                from (select e #>> '{}' v, i
+                        from jsonb_array_elements(case when jsonb_typeof(w #> '{look,badges}') = 'array' then w #> '{look,badges}' else '[]'::jsonb end)
+                             with ordinality as a (e, i)
+                       where jsonb_typeof(e) = 'string') x
+               where public._w_slug(case when left(x.v, 10) = 'challenge:' then substr(x.v, 11) else x.v end, 40)
+               group by x.v order by min(x.i) limit 3) b), '[]'::jsonb))
+$$;
+
+-- a player as the search and the leaderboards list them (readRow in src/lib/profiles.ts)
+create or replace function public._player_row(p public.profiles, now_ms bigint, val numeric) returns jsonb
+language sql stable set search_path = public as $$
+  select jsonb_build_object('username', p.username, 'avatar', p.avatar, 'look', coalesce(p.look, public._public_look(p.wallet)), 'xp', p.xp,
+                            'online', coalesce(p.last_seen > now_ms - 300000, false), 'value', val)
+$$;
+
+-- profiles saved before these columns existed get their figures from their wallets, once
+update public.profiles
+   set rounds = least(floor(public._w_num(wallet -> 'rounds')), 2147483647)::int,
+       wagered = round(public._w_num(wallet -> 'totalWagered'), 2),
+       won = round(public._w_num(wallet -> 'totalWon'), 2),
+       biggest = round(public._w_num(wallet -> 'biggestWin'), 2),
+       listed = public._w_shares(wallet, 'listed'),
+       stats_public = public._w_shares(wallet, 'stats'),
+       last_seen = (extract(epoch from updated_at) * 1000)::bigint
+ where last_seen is null;
+update public.profiles set look = public._public_look(wallet) where look is null;
+
+/* ---------- public functions ---------- */
+
+-- a player's public profile by username (any case), or null if there is none
+create or replace function public.profile_view(p_username text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  p public.profiles;
+  w jsonb;
+begin
+  if p_username is null or not public._valid_username(p_username) then return null; end if;
+  select * into p from public.profiles where lower(username) = lower(p_username);
+  if not found then return null; end if;
+  w := case when jsonb_typeof(p.wallet) = 'object' then p.wallet else '{}'::jsonb end;
+  return jsonb_build_object(
+    'username', p.username,
+    'avatar', p.avatar,
+    'createdAt', p.created_at,
+    'lastSeen', case when p.last_seen is not null then to_timestamp(p.last_seen / 1000.0) end,
+    'online', coalesce(p.last_seen > now_ms - 300000, false),
+    'bio', public._public_bio(w),
+    'look', coalesce(p.look, public._public_look(w)),
+    'xp', p.xp,
+    'stats', case when public._w_shares(w, 'stats') then jsonb_build_object(
+      'rounds', p.rounds,
+      'wagered', p.wagered,
+      'won', p.won,
+      'biggestWin', p.biggest,
+      -- rounds of 25 coins or more by game
+      'gamesPlayed', coalesce((
+        select jsonb_object_agg(g.key, g.n)
+          from (select key, floor(public._w_num(value)) n
+                  from jsonb_each(case when jsonb_typeof(w -> 'gamesPlayed') = 'object' then w -> 'gamesPlayed' else '{}'::jsonb end)
+                 where public._w_slug(key, 32) and jsonb_typeof(value) = 'number'
+                 order by key limit 100) g), '{}'::jsonb),
+      -- the challenges claimed, which make the challenge badges
+      'claimed', coalesce((
+        select jsonb_agg(c.key order by c.key)
+          from (select key
+                  from jsonb_each(case when jsonb_typeof(w -> 'challenges') = 'object' then w -> 'challenges' else '{}'::jsonb end)
+                 where public._w_slug(key, 40) and jsonb_typeof(value) = 'object' and value -> 'claimed' = 'true'::jsonb
+                 order by key limit 200) c), '[]'::jsonb),
+      'dailyStreak', least(floor(public._w_num(w -> 'dailyStreak')), 1000000),
+      'heistBest', least(floor(public._w_num(w #> '{heist,best}')), 1000000))
+    end,
+    -- the five biggest wins (payout over the stake) among the rounds the wallet keeps
+    'bigWins', case when public._w_shares(w, 'bets') then coalesce((
+      select jsonb_agg(jsonb_build_object('game', b.game, 'bet', b.bet, 'payout', b.payout, 'time', b.at) order by b.k)
+        from (select x.*, row_number() over (order by x.payout - x.bet desc, x.at desc) k
+                from (select e ->> 'game' game, round(public._w_num(e -> 'bet'), 2) bet, round(public._w_num(e -> 'payout'), 2) payout,
+                             floor(public._w_num(e -> 'time')) at
+                        from jsonb_array_elements(case when jsonb_typeof(w -> 'bets') = 'array' then w -> 'bets' else '[]'::jsonb end) e
+                       where jsonb_typeof(e) = 'object' and public._w_slug(e ->> 'game', 32)) x
+               where x.payout > x.bet
+               order by x.payout - x.bet desc, x.at desc limit 5) b), '[]'::jsonb)
+    end);
+end $$;
+
+-- listed players whose username contains the query (letters, digits and _ only), names that start with it first
+create or replace function public.players_search(p_query text, p_limit int default 20) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  q text := lower(left(regexp_replace(coalesce(p_query, ''), '[^A-Za-z0-9_]', '', 'g'), 16));
+  n int := least(greatest(coalesce(p_limit, 20), 1), 50);
+begin
+  if q = '' then return '[]'::jsonb; end if;
+  return coalesce((
+    select jsonb_agg(r.j order by r.k)
+      from (select public._player_row(p, now_ms, null) j,
+                   row_number() over (order by left(lower(p.username), length(q)) = q desc, length(p.username), lower(p.username)) k
+              from public.profiles p
+             where p.listed and strpos(lower(p.username), q) > 0
+             order by left(lower(p.username), length(q)) = q desc, length(p.username), lower(p.username)
+             limit n) r), '[]'::jsonb);
+end $$;
+
+-- a leaderboard of listed players (Board in src/lib/profiles.ts): level (XP), wagered and biggest (with the figure as
+-- value; players who keep their stats private are left out), online (seen in the last 5 minutes, latest first) and
+-- newest (latest to join first)
+create or replace function public.players_top(p_board text, p_limit int default 50) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  n int := least(greatest(coalesce(p_limit, 50), 1), 100);
+  res jsonb;
+begin
+  if p_board = 'level' then
+    select jsonb_agg(r.j order by r.k) into res
+      from (select public._player_row(p, now_ms, null) j, row_number() over (order by p.xp desc, p.created_at) k
+              from public.profiles p where p.listed order by p.xp desc, p.created_at limit n) r;
+  elsif p_board = 'wagered' then
+    select jsonb_agg(r.j order by r.k) into res
+      from (select public._player_row(p, now_ms, p.wagered) j, row_number() over (order by p.wagered desc, p.created_at) k
+              from public.profiles p where p.listed and p.stats_public and p.wagered > 0 order by p.wagered desc, p.created_at limit n) r;
+  elsif p_board = 'biggest' then
+    select jsonb_agg(r.j order by r.k) into res
+      from (select public._player_row(p, now_ms, p.biggest) j, row_number() over (order by p.biggest desc, p.created_at) k
+              from public.profiles p where p.listed and p.stats_public and p.biggest > 0 order by p.biggest desc, p.created_at limit n) r;
+  elsif p_board = 'online' then
+    select jsonb_agg(r.j order by r.k) into res
+      from (select public._player_row(p, now_ms, null) j, row_number() over (order by p.last_seen desc, p.created_at) k
+              from public.profiles p where p.listed and p.last_seen > now_ms - 300000 order by p.last_seen desc, p.created_at limit n) r;
+  elsif p_board = 'newest' then
+    select jsonb_agg(r.j order by r.k) into res
+      from (select public._player_row(p, now_ms, null) j, row_number() over (order by p.created_at desc, p.id) k
+              from public.profiles p where p.listed order by p.created_at desc, p.id limit n) r;
+  end if;
+  return coalesce(res, '[]'::jsonb);
+end $$;
+
+-- the signed-in player is here (src/lib/account.ts pings every minute while the tab is visible); written at most every
+-- 30 s
+create or replace function public.presence_ping() returns jsonb
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  now_ms bigint := public._now_ms();
+  n int;
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'error', 'auth'); end if;
+  update public.profiles set last_seen = now_ms where id = auth.uid() and (last_seen is null or last_seen < now_ms - 30000);
+  get diagnostics n = row_count;
+  return jsonb_build_object('ok', true, 'seen', n > 0);
 end $$;
 
 /* ------------------------------------------------------------------ */
@@ -1997,7 +2272,8 @@ begin
                'total', coalesce((select sum(amount) from public.dbl_bet where round_id = r.id and color = c.color), 0),
                'players', (select count(*) from public.dbl_bet where round_id = r.id and color = c.color),
                'bets', coalesce((
-                 select jsonb_agg(jsonb_build_object('name', b.name, 'avatar', b.avatar, 'amount', b.amount, 'me', coalesce(b.player = me, false))
+                 select jsonb_agg(jsonb_build_object('name', b.name, 'avatar', b.avatar, 'amount', b.amount, 'me', coalesce(b.player = me, false),
+                                                     'acct', public._is_acct(b.player))
                           order by b.amount desc, b.placed_at, b.name)
                    from (select * from public.dbl_bet where round_id = r.id and color = c.color
                           order by amount desc, placed_at, name limit 30) b), '[]'::jsonb)))
@@ -2545,7 +2821,8 @@ language sql stable set search_path = public as $$
        f as (select x.player, row_number() over (order by x.at, x.id) p
                from (select distinct on (player) player, at, id from d order by player, at, id) x)
   select coalesce(jsonb_agg(jsonb_build_object('p', f.p, 'name', d.name, 'avatar', d.avatar, 'amount', d.amount, 'bot', d.bot,
-                                               'me', coalesce(d.player = me, false), 'at', d.at) order by d.at, d.id), '[]'::jsonb)
+                                               'me', coalesce(d.player = me, false), 'at', d.at, 'acct', public._is_acct(d.player))
+                            order by d.at, d.id), '[]'::jsonb)
     from d join f on f.player = d.player
 $$;
 
@@ -2763,7 +3040,11 @@ grant execute on function
   public.pot_state(text, bigint, jsonb),
   public.pot_bet(text, text, bigint, numeric, int),
   public.pot_round_info(bigint),
-  public.username_available(text)
+  public.username_available(text),
+  public.profile_view(text),
+  public.players_search(text, int),
+  public.players_top(text, int),
+  public.presence_ping()
 to anon, authenticated;
 grant execute on function
   public.my_profile(),

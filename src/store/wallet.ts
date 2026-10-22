@@ -6,6 +6,8 @@ import { round2 } from '../lib/format'
 import { gameById, type GameId } from './games'
 import type { Save as TycoonSave } from '../games/tycoon/engine'
 import { rand } from '../lib/rng'
+import { DEFAULT_LOOK, canWear, cleanLook, cosmetic, earnedAchievements, setChallenges, type Look } from './cosmetics'
+import { TIERS, levelFromXp, levelReward, tierIndexOf } from './levels'
 import { LOG_SIZE, MISSION_MIN_BET, RAKEBACK, TIER_BONUS, WHEEL_PRIZES, dayKey, missionStep, missionTarget, missionText, missionsFor, msToMidnight, pickWheel, type RewardEntry, type RewardKind } from './rewards'
 
 /* ------------------------------------------------------------------ */
@@ -52,30 +54,8 @@ export function heistPicks(h: HeistState, now = Date.now()) {
   return { picks, gained, next: picks >= HEIST_MAX_PICKS ? 0 : h.at + (gained + 1) * HEIST_REGEN - now }
 }
 
-/** XP = coins wagered. Each level needs more than the last. */
-export const xpForLevel = (lvl: number) => Math.round(2000 * Math.pow(lvl, 1.55))
-export const levelReward = (lvl: number) => 75 * lvl
-export function levelFromXp(xp: number) {
-  let lvl = 0
-  let acc = 0
-  while (acc + xpForLevel(lvl + 1) <= xp) {
-    acc += xpForLevel(lvl + 1)
-    lvl++
-  }
-  return { level: lvl, into: xp - acc, need: xpForLevel(lvl + 1) }
-}
-
-/** VIP tier names for level bands; purely cosmetic. */
-export const TIERS = [
-  { min: 0, name: 'Bronze', color: '#d4925a' },
-  { min: 5, name: 'Silver', color: '#c6d2de' },
-  { min: 12, name: 'Gold', color: '#f7c548' },
-  { min: 25, name: 'Platinum', color: '#7fe3ff' },
-  { min: 40, name: 'Diamond', color: '#b892ff' },
-] as const
-export const tierOf = (level: number) => [...TIERS].reverse().find((t) => level >= t.min)!
-/** the VIP tier's index in TIERS for a level (0 Bronze … 4 Diamond) */
-export const tierIndexOf = (level: number) => TIERS.reduce((i, t, k) => (level >= t.min ? k : i), 0)
+// the levels and VIP tiers live in their own module (src/store/levels.ts), which the cosmetics can read without the wallet
+export { TIERS, levelFromXp, levelReward, tierIndexOf, tierOf, xpForLevel } from './levels'
 /** the share of each stake set aside as rakeback at this level */
 export const rakebackRate = (level: number) => RAKEBACK[tierIndexOf(level)]
 
@@ -429,6 +409,15 @@ export const CHALLENGES: Challenge[] = [
     step: (e, p) => (e.game === 'pot' && e.meta?.won === true && Number(e.meta?.share) > 0 && Number(e.meta?.share) <= 0.25 ? 1 : p),
   },
   {
+    id: 'summit-top',
+    game: 'summit',
+    title: 'Top of the World',
+    desc: 'Reach the summit in Summit: all ten pitches without a fall.',
+    reward: 2500,
+    goal: 1,
+    step: (e, p) => (e.game === 'summit' && Number(e.meta?.pitches) >= 10 && e.meta?.fell !== true ? 1 : p),
+  },
+  {
     id: 'high-roller',
     title: 'High Roller',
     desc: 'Wager 100,000 coins in total across all games. Every bet counts, whatever its size.',
@@ -437,6 +426,7 @@ export const CHALLENGES: Challenge[] = [
     step: (_e, _p, s) => Math.min(s.totalWagered, 100_000),
   },
 ]
+setChallenges(CHALLENGES)
 
 export interface BetRecord {
   id: string
@@ -474,6 +464,48 @@ const freshMissions = (day: string): MissionState => ({ day, progress: [0, 0, 0]
 /** the stored missions if they are today's, or a fresh day */
 export const missionsToday = (m: MissionState | undefined, day = dayKey()): MissionState => (m && m.day === day ? m : freshMissions(day))
 
+/**
+ * Responsible play, as a real casino offers it (on play money, for the habit): a daily loss limit, a reminder every so
+ * many minutes, and a cool-off that locks betting for a while. Lowering the loss limit (or setting one) takes effect at
+ * once; raising or removing it waits LIMIT_DELAY, so it can't be lifted on tilt. A cool-off can't be ended early.
+ */
+export interface Limits {
+  /** the most a player may lose in a day (stakes less payouts since midnight), or null for none */
+  lossPerDay: number | null
+  /** a raised or removed loss limit waiting to take effect */
+  pending: { lossPerDay: number | null; at: number } | null
+  /** a reminder of how long the session has run, every so many minutes, or null */
+  reminderMin: number | null
+  /** betting is locked until then (ms), 0 for none */
+  coolOffUntil: number
+}
+export const LIMIT_DELAY = 24 * 3600_000
+export const NO_LIMITS: Limits = { lossPerDay: null, pending: null, reminderMin: null, coolOffUntil: 0 }
+/** a cosmetic bought in the shop */
+export interface Purchase {
+  id: string
+  price: number
+  time: number
+}
+export const PURCHASE_LOG = 40
+export type BuyResult = 'ok' | 'owned' | 'unavailable' | 'coins'
+/**
+ * What a signed-in player's public profile shows (src/pages/Player.tsx): their bio and what they share. It is kept in
+ * the wallet so it is saved with it (save_wallet), and the server reads it from there for the public profile.
+ */
+export interface Privacy {
+  /** show stats, favourite games and achievements */
+  stats: boolean
+  /** show recent big wins */
+  bets: boolean
+  /** appear in player search and the leaderboards */
+  listed: boolean
+}
+export const DEFAULT_PRIVACY: Privacy = { stats: true, bets: true, listed: true }
+export const BIO_MAX = 160
+/** why the last placeBet said no */
+export type Refusal = 'coins' | 'limit' | 'cooloff'
+
 interface WalletState {
   balance: number
   xp: number
@@ -499,6 +531,17 @@ interface WalletState {
   rewardLog: RewardEntry[]
   /** Casino Tycoon's saved game (src/games/tycoon/engine.ts), kept with the wallet so an account carries it */
   tycoon: TycoonSave | null
+  /** cosmetics bought in the shop (ids from src/store/cosmetics.ts), the look worn, and the purchase history */
+  owned: string[]
+  look: Look
+  purchases: Purchase[]
+  /** the public profile's bio and privacy (see Privacy) */
+  profile: { bio: string; privacy: Privacy }
+  /** responsible play: the limits, and today's net loss they are checked against */
+  limits: Limits
+  lossDay: { day: string; net: number }
+  /** why the last bet was refused, and when (not saved) */
+  refusal: { why: Refusal; at: number } | null
   toasts: Toast[]
 
   /** Deducts the stake. Returns false if the balance can't cover it (or it is under `min`, MIN_BET by default). */
@@ -536,6 +579,14 @@ interface WalletState {
   tycoonCollect: (coins: number, label: string, save: TycoonSave) => number
   pushToast: (t: Omit<Toast, 'id'>) => void
   dismissToast: (id: number) => void
+  /** buys a cosmetic from the shop: takes its price and adds it to `owned` */
+  buyCosmetic: (id: string) => BuyResult
+  /** wears what it can of a look (anything not owned or unlocked is ignored) */
+  wear: (look: Partial<Look>) => void
+  /** sets responsible-play limits (a raised or removed loss limit waits LIMIT_DELAY; a cool-off only lengthens) */
+  setLimits: (l: { lossPerDay?: number | null; reminderMin?: number | null; coolOffHours?: number }) => void
+  /** sets the public profile's bio (trimmed to BIO_MAX, one line) and privacy */
+  setProfileInfo: (p: { bio?: string; privacy?: Partial<Privacy> }) => void
   reset: () => void
 }
 
@@ -564,6 +615,13 @@ const initial = () => ({
   tierClaimed: 0,
   rewardLog: [] as RewardEntry[],
   tycoon: null as TycoonSave | null,
+  owned: [] as string[],
+  look: DEFAULT_LOOK,
+  purchases: [] as Purchase[],
+  profile: { bio: '', privacy: DEFAULT_PRIVACY },
+  limits: NO_LIMITS,
+  lossDay: { day: '', net: 0 },
+  refusal: null as { why: Refusal; at: number } | null,
   toasts: [] as Toast[],
 })
 
@@ -625,12 +683,24 @@ export const useWallet = create<WalletState>()(
 
       placeBet: (amount, min = MIN_BET) => {
         amount = round2(amount)
-        if (!(amount >= Math.max(0.01, min)) || amount > get().balance) return false
-        set((s) => ({ balance: round2(s.balance - amount) }))
+        if (!(amount >= Math.max(0.01, min)) || amount > get().balance) {
+          set({ refusal: { why: 'coins', at: Date.now() } })
+          return false
+        }
+        const why = limitRefusal(get(), amount)
+        if (why) {
+          const now = Date.now()
+          const last = get().refusal
+          set({ refusal: { why, at: now } })
+          // say why once (a game may also say it can't place the bet); not again for a few seconds
+          if (!last || last.why !== why || now - last.at > 4000) get().pushToast({ kind: 'info', title: why === 'cooloff' ? `You're on a cool-off until ${new Date(get().limits.coolOffUntil).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}. Betting is paused.` : `That bet would pass your daily loss limit of ${get().limits.lossPerDay?.toLocaleString('en-US')} coins.` })
+          return false
+        }
+        set((s) => ({ balance: round2(s.balance - amount), lossDay: lossAfter(s.lossDay, amount), refusal: null }))
         return true
       },
 
-      refund: (amount) => set((s) => ({ balance: round2(s.balance + amount) })),
+      refund: (amount) => set((s) => ({ balance: round2(s.balance + amount), lossDay: lossAfter(s.lossDay, -amount) })),
 
       settle: (ev) => {
         get().rollover()
@@ -644,6 +714,7 @@ export const useWallet = create<WalletState>()(
             totalWagered: round2(s.totalWagered + ev.bet),
             totalWon: round2(s.totalWon + payout),
             biggestWin: Math.max(s.biggestWin, payout - ev.bet),
+            lossDay: lossAfter(s.lossDay, -round2(payout - round2(Math.max(0, Math.min(payout, ev.prepaid ?? 0))))),
             bets: [
               { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, game: ev.game, bet: ev.bet, payout, time: Date.now() },
               ...s.bets,
@@ -808,6 +879,58 @@ export const useWallet = create<WalletState>()(
       },
       dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
+      buyCosmetic: (id) => {
+        const c = cosmetic(id)
+        const s = get()
+        if (!c || c.price === undefined) return 'unavailable'
+        if (canWear(id, wardrobeOf(s))) return 'owned'
+        if (s.balance < c.price) return 'coins'
+        set((w) => ({ balance: round2(w.balance - c.price!), owned: [...w.owned, id], purchases: [{ id, price: c.price!, time: Date.now() }, ...w.purchases].slice(0, PURCHASE_LOG) }))
+        return 'ok'
+      },
+
+      wear: (look) => {
+        const s = get()
+        const w = wardrobeOf(s)
+        const next = { ...cleanLook(s.look) }
+        for (const k of ['frame', 'banner', 'nameColor', 'title'] as const) {
+          const id = look[k]
+          if (id !== undefined && canWear(id, w)) next[k] = id
+        }
+        if (look.badges) {
+          const earned = new Set(earnedAchievements(w.source))
+          next.badges = cleanLook({ badges: look.badges }).badges.filter((b) => earned.has(b))
+        }
+        set({ look: next })
+      },
+
+      setLimits: (l) => {
+        const now = Date.now()
+        set((s) => {
+          const cur = currentLimits(s.limits, now)
+          const next: Limits = { ...cur }
+          if (l.lossPerDay !== undefined) {
+            const want = l.lossPerDay === null || !(l.lossPerDay > 0) ? null : Math.round(l.lossPerDay)
+            // tighter takes effect now; looser waits
+            const tighter = want !== null && (cur.lossPerDay === null || want <= cur.lossPerDay)
+            if (tighter) next.lossPerDay = want
+            if (tighter || want === cur.lossPerDay) next.pending = null
+            else next.pending = { lossPerDay: want, at: now + LIMIT_DELAY }
+          }
+          if (l.reminderMin !== undefined) next.reminderMin = l.reminderMin && l.reminderMin > 0 ? Math.round(l.reminderMin) : null
+          if (l.coolOffHours !== undefined && l.coolOffHours > 0) next.coolOffUntil = Math.max(cur.coolOffUntil, now + l.coolOffHours * 3600_000)
+          return { limits: next }
+        })
+      },
+
+      setProfileInfo: (p) =>
+        set((s) => {
+          const cur = { bio: s.profile?.bio ?? '', privacy: { ...DEFAULT_PRIVACY, ...(s.profile?.privacy ?? {}) } }
+          if (p.bio !== undefined) cur.bio = cleanBio(p.bio)
+          if (p.privacy) for (const k of ['stats', 'bets', 'listed'] as const) if (typeof p.privacy[k] === 'boolean') cur.privacy[k] = p.privacy[k]!
+          return { profile: cur }
+        }),
+
       reset: () => set({ ...initial() }),
     }),
     {
@@ -815,10 +938,62 @@ export const useWallet = create<WalletState>()(
       // the wallet can change many times a second (Reef Raid's trigger held down): its writes are batched, and any other
       // write lands them first, so nothing saved after a bet ever gets ahead of it (see src/lib/storage.ts)
       storage: createJSONStorage(() => ({ getItem: safeStorage.getItem, setItem: safeStorage.setSoon, removeItem: safeStorage.removeSoon })),
-      partialize: ({ toasts: _t, ...rest }) => rest,
+      partialize: ({ toasts: _t, refusal: _r, ...rest }) => rest,
     },
   ),
 )
+
+/* ------------------------------------------------------------------ */
+/*  Cosmetics and responsible play                                     */
+/* ------------------------------------------------------------------ */
+
+/** what the wallet has earned and bought, for the cosmetics checks (src/store/cosmetics.ts) */
+export function wardrobeOf(s: Pick<WalletState, 'xp' | 'rounds' | 'totalWagered' | 'totalWon' | 'biggestWin' | 'dailyStreak' | 'heist' | 'challenges' | 'owned'>) {
+  return {
+    owned: s.owned ?? [],
+    source: {
+      xp: s.xp,
+      rounds: s.rounds ?? 0,
+      totalWagered: s.totalWagered,
+      totalWon: s.totalWon,
+      biggestWin: s.biggestWin,
+      dailyStreak: s.dailyStreak,
+      heistBest: s.heist?.best ?? 0,
+      claimed: Object.entries(s.challenges ?? {})
+        .filter(([, c]) => c.claimed)
+        .map(([id]) => id),
+    },
+  }
+}
+
+/** the limits in force now: a waiting change that is due has taken effect */
+export function currentLimits(l: Limits | undefined, now = Date.now()): Limits {
+  const cur = { ...NO_LIMITS, ...(l ?? {}) }
+  if (cur.pending && cur.pending.at <= now) return { ...cur, lossPerDay: cur.pending.lossPerDay, pending: null }
+  return cur
+}
+
+/** a bio as it is kept: one line, no control characters, at most BIO_MAX characters */
+export const cleanBio = (s: string) => s.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, BIO_MAX)
+
+/** today's net loss after a stake (positive) or a payout or refund (negative) */
+function lossAfter(d: { day: string; net: number } | undefined, delta: number) {
+  const day = dayKey()
+  const base = d && d.day === day ? d.net : 0
+  return { day, net: round2(base + delta) }
+}
+
+/** today's net loss so far (stakes less payouts since midnight) */
+export const lossToday = (s: Pick<WalletState, 'lossDay'>) => (s.lossDay && s.lossDay.day === dayKey() ? s.lossDay.net : 0)
+
+/** why a bet of `amount` is refused by the limits, or null */
+function limitRefusal(s: WalletState, amount: number): Refusal | null {
+  const now = Date.now()
+  const l = currentLimits(s.limits, now)
+  if (l.coolOffUntil > now) return 'cooloff'
+  if (l.lossPerDay !== null && lossToday(s) + amount > l.lossPerDay + 1e-9) return 'limit'
+  return null
+}
 
 /* ------------------------------------------------------------------ */
 /*  Switching between the guest wallet and an account's wallet         */

@@ -1,8 +1,8 @@
 # Boje Casino (play money)
 
-A Stake-style casino with thirty-six games. Originals: Showtime (a game-show money wheel), Bullseye (darts), Market
+A Stake-style casino with thirty-seven games. Originals: Showtime (a game-show money wheel), Bullseye (darts), Market
 Rush (a live trading chart), Banker's Deal (briefcases and a Banker's offers), Pot Luck (a live player-versus-player
-pot), Chicken Road, Crash, Double, Coin Flip, Reef Raid, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
+pot), Summit (a mountain climb), Chicken Road, Crash, Double, Coin Flip, Reef Raid, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
 Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Slots: Lucky Lines, Plunder Bay, Chompers, Pop Party and Robo Riot. Table games:
 Blackjack, Live Blackjack, Baccarat, Sic Bo, Craps, Hold'em Showdown, Roulette and Video Poker.
 Vault Heist (a skill game) and Casino Tycoon (an idle game) are free and pay coins. Coins are play money only. Guests keep their wallet in the
@@ -125,11 +125,36 @@ in the browser (`engine.ts`, `local.ts`, battles kept in localStorage) against t
 of their own to keep the lobby busy; that code is its own chunk.
 
 ## Accounts
-Email and password through Supabase Auth, with a username and one of 16 avatars. Signing up from a guest wallet
-carries its coins into the new account. The wallet is cached on the device and saved a moment after it changes
-(and when the page is hidden) with a revision number, so two devices can't silently overwrite each other: a
-stale save is refused and the newer server copy wins. The Account page changes username, avatar and password,
-logs out and deletes the account.
+Email and password through Supabase Auth, with a username and an avatar (16 free, 16 more earned or bought).
+Signing up from a guest wallet carries its coins into the new account. The wallet is cached on the device and saved
+a moment after it changes (and when the page is hidden) with a revision number, so two devices can't silently
+overwrite each other: a stale save is refused and the newer server copy wins.
+
+The Account page (src/pages/account/) is a casino account dashboard: an overview on the player's banner (balance,
+VIP progress, an account number), Customize (a wardrobe with a live preview of the profile), the cosmetics Shop,
+Statistics, a unified History of bets, rewards and purchases, Achievements (pick three for the showcase), Settings
+and security (username, email, password, bio, privacy, log out, delete) and Responsible play.
+
+Cosmetics and achievements (src/store/cosmetics.ts): 32 avatars, 14 frames, 12 banners, 9 name colours and 13 titles,
+each free, earned (a level, a VIP tier, a challenge or an achievement) or sold for coins; bought items are kept in the
+wallet's `owned`, unlocks are worked out from the wallet. Achievements are milestones (rounds, coins wagered, the
+biggest win, the daily streak, Vault Heist, VIP tiers) plus one per challenge. The look, bio and privacy (share
+stats, share big wins, appear in search and the leaderboards) are kept in the wallet, so they are saved with it.
+
+Public profiles (src/pages/Player.tsx at #/player/<name>, src/lib/profiles.ts): the server's profile_view reads a
+signed-in player's saved wallet and returns only what is public: the look (every id checked against a whitelist of
+the catalog), bio, level, member since, online, and, if shared, stats, favourite games, achievements and recent big
+wins. The Players page (#/players) searches players and shows the leaderboards (top level, most wagered, biggest
+win, online now, newest). Names of signed-in players in Crash, Double, Pot Luck, Live Blackjack and Case Battles
+open their profile (a hover card on desktop, a tap card on phones); guests' names are plain text. A signed-in
+player's browser pings presence every minute while the page is in view. (`tools/profile-test.ts`,
+`tools/profile-sql/test.mjs`, `tools/profile-sql/live-names.mjs`, `tools/account-check.mjs`,
+`tools/community-check.mjs`.)
+
+Responsible play (store/wallet.ts Limits), as a real casino offers it, on play money: a daily loss limit (stakes
+less payouts since midnight; lowering it takes effect at once, raising or removing it after 24 hours), a session
+reminder every so many minutes, and a cool-off (1 hour to 30 days) that can't be ended early. placeBet refuses a bet
+the limits don't allow and says why.
 
 Password-reset emails need the Supabase project's Site URL and Redirect URLs set to the live site
 (Authentication > URL Configuration), and a custom SMTP sender for anything beyond a few test emails.
@@ -341,6 +366,12 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   opened (the player's at the end), so a stored game never holds a prize the player hasn't seen; each draw and offer
   is stored before it is shown. `tools/deal-test.ts` checks the boards, the course of a game, every offer's bound,
   the fairness of the draws and six ways of playing.
+- Summit (src/games/summit/rules.ts): ten pitches to the summit; at each the player picks a route, Trail (holds
+  90%), Ridge (66%), Cliff (40%) or Sheer Wall (20%), which multiplies the climb by 1/p when it holds and ends it
+  when it doesn't. Banking after any pitch pays the stake × 97% × every step climbed (capped at 10,000×, which only
+  the boldest routes reach), so every mix of routes and every moment to bank returns exactly 97% until the cap. Each
+  pitch is drawn when its route is chosen and stored before it is shown; a climb in progress resumes after a reload
+  and is paid once (`tools/summit-test.ts`, `tools/summit-money.mjs`).
 - Pot Luck (src/games/pot/rules.ts): a live pot on the database clock (20 s of betting, the draw, the winner). Every
   cent paid in is a ticket, numbered in the order paid; the draw takes u from sha256(seed + ':pot') (the hash of the
   seed is published when the round opens) and the holder of ticket floor(u × tickets) wins the pot less a 4% rake.

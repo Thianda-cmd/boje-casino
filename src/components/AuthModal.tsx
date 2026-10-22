@@ -2,7 +2,8 @@ import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'reac
 import { AnimatePresence, motion } from 'framer-motion'
 import { Modal } from './Modal'
 import { Coin } from './icons'
-import { Avatar, AVATAR_COUNT } from '../art/Avatar'
+import { Avatar } from '../art/Avatar'
+import { FREE_AVATARS } from '../store/cosmetics'
 import { authMessage, changePassword, login, register, sendReset, usernameFree } from '../lib/account'
 import { fmt } from '../lib/format'
 import { useAuth, type AuthView } from '../store/auth'
@@ -176,7 +177,7 @@ function RegisterForm({ onDone, go }: { onDone: () => void; go: (v: AuthView) =>
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [avatar, setAvatar] = useState(() => Math.floor(Math.random() * AVATAR_COUNT))
+  const [avatar, setAvatar] = useState(() => Math.floor(Math.random() * FREE_AVATARS))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [free, setFree] = useState<boolean | null>(null)
@@ -227,7 +228,7 @@ function RegisterForm({ onDone, go }: { onDone: () => void; go: (v: AuthView) =>
           </div>
         </div>
         <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 py-1 [mask-image:linear-gradient(90deg,#000_88%,transparent)]">
-          {Array.from({ length: AVATAR_COUNT }, (_, i) => (
+          {Array.from({ length: FREE_AVATARS }, (_, i) => (
             <button
               key={i}
               type="button"

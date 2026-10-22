@@ -16,12 +16,13 @@ import { RARITY_TEXT } from '../cases/tiles'
 import { battleLink, callBots, copyText, createBattle, joinBattle, leaveBattle, mySeat } from './actions'
 import { CRAZY, CrazyMark, Crown, EMBER, GOLD, TEAM, VsBadge } from './art'
 import { ModeChip, TagChip, closesIn } from './bits'
+import { PlayerName } from '../../components/profile/PlayerName'
 import { itemOfMult, landedBy, leadersAfter, roundAt, roundLand, roundStart, sideOf, totalsAfter } from './engine'
 import { Reel } from './Reel'
 import { Burst, Sparkles } from '../cases/LootReel'
 import { settleMissed, settleView, srcOfServer } from './settle'
 import { isNew, keyOf, pending, pendingAll } from './ledger'
-import { SEATS, statusAt, type BattleServer, type BattleView, type SeatView } from './types'
+import { SEATS, isAccount, statusAt, type BattleServer, type BattleView, type SeatView } from './types'
 import { battleInstants, useBattle, useInstants, useMeasure, type Clock } from './useBattle'
 
 /*
@@ -553,7 +554,7 @@ function SeatHeader({
       <div className="flex w-full flex-col items-center gap-1 px-1 pt-2.5 text-center" style={{ opacity: lost ? 0.6 : 1 }}>
         {avatar}
         <span className="flex w-full min-w-0 items-center justify-center gap-1">
-          <span className="truncate text-[11px] font-extrabold text-ink">{s ? s.name : 'Open seat'}</span>
+          {s ? <PlayerName name={s.name} acct={isAccount(s)} className="truncate text-[11px] font-extrabold text-ink" /> : <span className="truncate text-[11px] font-extrabold text-ink">Open seat</span>}
         </span>
         {s ? totalEl : <span className="text-[11px] font-bold text-dim">—</span>}
         <span className="flex h-4 items-center">{badge ?? (s ? <TagChip s={s} /> : null)}</span>
@@ -564,7 +565,7 @@ function SeatHeader({
       {avatar}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[14px] font-extrabold text-ink">{s ? s.name : 'Open seat'}</span>
+          {s ? <PlayerName name={s.name} acct={isAccount(s)} className="truncate text-[14px] font-extrabold text-ink" /> : <span className="truncate text-[14px] font-extrabold text-ink">Open seat</span>}
           {s && <TagChip s={s} />}
         </div>
         <div className="flex h-5 items-center gap-1.5 text-[11px] font-semibold text-dim">{badge ?? (team ? <span style={{ color: team }}>Team {seat <= 2 ? 'A' : 'B'}</span> : `Seat ${seat}`)}</div>

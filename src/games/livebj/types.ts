@@ -75,6 +75,8 @@ export interface HandView {
   name: string
   avatar: number
   guest: boolean
+  /** a signed-in player (shared tables only, where every seat that is not a guest's is an account): the name opens their profile */
+  acct?: boolean
   mine: boolean
   ctl: boolean
   bet: number
@@ -91,6 +93,8 @@ export interface SeatView {
   name: string
   avatar: number
   guest: boolean
+  /** a signed-in player (shared tables only, where every seat that is not a guest's is an account): the name opens their profile */
+  acct?: boolean
   me: boolean
   away: boolean
   idle: number
@@ -151,6 +155,7 @@ export interface RoundDetail {
     name: string
     avatar: number
     guest: boolean
+    acct?: boolean
     bet: number
     cards: number[]
     doubled: boolean

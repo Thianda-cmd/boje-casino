@@ -11,6 +11,7 @@ const COLUMNS: [string, [string, string][]][] = [
       ['/', 'Lobby'],
       ['/rewards', 'Rewards'],
       ['/history', 'My bets'],
+      ['/players', 'Players'],
       ['/account', 'Account'],
     ],
   ],

@@ -19,8 +19,8 @@ export interface Feed {
   /** server clock when the state was read */
   now: number
   round: { id: number; phase: Phase; startsAt: number; hash: string; crash: number | null; seed: string | null }
-  /** the 50 biggest bets of this round */
-  bets: { name: string; bet: number; cashed: number | null; me: boolean }[]
+  /** the 50 biggest bets of this round; acct: a signed-in player's (their name opens their profile) */
+  bets: { name: string; bet: number; cashed: number | null; me: boolean; acct?: boolean }[]
   players: number
   total: number
   mine: { bet: number; auto: number | null; cashed: number | null } | null
@@ -63,7 +63,7 @@ function normalise(raw: any): Feed {
       crash: num(raw.round.crash),
       seed: raw.round.seed ?? null,
     },
-    bets: (raw.bets ?? []).map((b: any) => ({ name: String(b.name), bet: Number(b.bet), cashed: num(b.cashed), me: !!b.me })),
+    bets: (raw.bets ?? []).map((b: any) => ({ name: String(b.name), bet: Number(b.bet), cashed: num(b.cashed), me: !!b.me, acct: !!b.acct })),
     players: Number(raw.players ?? 0),
     total: Number(raw.total ?? 0),
     mine: raw.mine ? { bet: Number(raw.mine.bet), auto: num(raw.mine.auto), cashed: num(raw.mine.cashed) } : null,

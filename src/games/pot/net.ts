@@ -22,6 +22,8 @@ export interface Dep {
   me: boolean
   /** server clock when it went in */
   at: number
+  /** a signed-in player's: their name opens their public profile (the stand-in marks nobody) */
+  acct?: boolean
 }
 export interface FeedRound {
   id: number
@@ -104,7 +106,7 @@ export const asDeposits = (ds: readonly Dep[]): (Deposit & { at: number; me: boo
 
 const n = (v: unknown) => Number(v ?? 0)
 const num = (v: unknown) => (v == null ? null : Number(v))
-const dep = (d: any): Dep => ({ p: n(d.p), name: String(d.name ?? ''), avatar: n(d.avatar), amount: n(d.amount), bot: !!d.bot, me: !!d.me, at: n(d.at) })
+const dep = (d: any): Dep => ({ p: n(d.p), name: String(d.name ?? ''), avatar: n(d.avatar), amount: n(d.amount), bot: !!d.bot, me: !!d.me, at: n(d.at), acct: !!d.acct })
 
 function normalise(raw: any, asked: number[]): Feed {
   if (!raw?.round) throw new Error('no round')

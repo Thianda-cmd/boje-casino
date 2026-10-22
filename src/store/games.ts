@@ -1,4 +1,4 @@
-export type GameId = 'chicken' | 'showtime' | 'darts' | 'market' | 'deal' | 'pot' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'coinflip' | 'reef' | 'lines' | 'sicbo' | 'craps' | 'holdem' | 'plunder' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
+export type GameId = 'chicken' | 'showtime' | 'darts' | 'market' | 'deal' | 'pot' | 'summit' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'coinflip' | 'reef' | 'lines' | 'sicbo' | 'craps' | 'holdem' | 'plunder' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
 
 export type Category = 'originals' | 'slots' | 'table'
 
@@ -18,6 +18,7 @@ export const GAMES: GameInfo[] = [
   { id: 'market', name: 'Market Rush', category: 'originals', tagline: 'A live price chart. Go Up or Down with up to 100× leverage and cash out before you are liquidated.', accent: '#00d1a0', tag: 'new' },
   { id: 'deal', name: "Banker's Deal", category: 'originals', tagline: 'Sixteen briefcases and a Banker on the phone. Take his offer, or play on for a case worth up to 250×.', accent: '#f2b134', tag: 'new' },
   { id: 'pot', name: 'Pot Luck', category: 'originals', tagline: 'Everyone pays into one pot; your share is your chance. Winner takes it all.', accent: '#a855f7', tag: 'live' },
+  { id: 'summit', name: 'Summit', category: 'originals', tagline: 'Climb the mountain pitch by pitch: the safe Trail or the Sheer Wall, your call every time. Bank at any camp.', accent: '#38bdf8', tag: 'new' },
   { id: 'chicken', name: 'Chicken Road', category: 'originals', tagline: 'Cross lane by lane, cash out before the traffic gets you.', accent: '#f7a440', tag: 'hot' },
   { id: 'crash', name: 'Crash', category: 'originals', tagline: 'Everyone rides the same rocket. Cash out before it blows.', accent: '#9b7bff', tag: 'live' },
   { id: 'double', name: 'Double', category: 'originals', tagline: 'Red, black or green. One strip, and everyone bets the same spin.', accent: '#ef3e5c', tag: 'live' },

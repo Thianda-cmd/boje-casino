@@ -15,6 +15,7 @@ import { useWallet } from '../../store/wallet'
 import { verifyRound, type Verdict } from './fair'
 import { BET_MS, connect, defaultName, GROWTH, multAt, saveName, timeAt, tryShared, type CrashServer, type Feed, type Phase, type RoundInfo } from './net'
 import { Spinner } from '../../components/Loader'
+import { PlayerName } from '../../components/profile/PlayerName'
 
 /* Crash: everyone rides the same rocket. Bets open for a few seconds, the rocket launches, and each
    player cashes out (or doesn't) before it blows. Rounds come from the shared database when it is
@@ -802,7 +803,7 @@ function Players({
         {feed.bets.length === 0 && <div className="px-3 py-4 text-center text-[12px] text-dim">No bets yet this round</div>}
         {feed.bets.map((b, i) => (
           <div key={`${b.name}-${i}`} className={`flex items-center gap-2 px-3 py-1.5 text-[12px] ${b.me ? 'bg-accent/8' : i % 2 ? 'bg-panel/40' : ''}`}>
-            <span className={`min-w-0 flex-1 truncate font-semibold ${b.me ? 'text-accent' : 'text-ink/85'}`}>{b.name}</span>
+            <PlayerName name={b.name} acct={b.acct} className={`min-w-0 flex-1 truncate font-semibold ${b.me ? 'text-accent' : 'text-ink/85'}`} />
             <span className="tnum w-20 text-right text-muted">{fmt(b.bet)}</span>
             <span className={`tnum w-16 text-right font-bold ${b.cashed != null ? 'text-accent' : crashed ? 'text-danger' : 'text-dim'}`}>
               {b.cashed != null ? `${b.cashed.toFixed(2)}×` : crashed ? 'bust' : '-'}

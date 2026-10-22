@@ -35,6 +35,7 @@ import { CrateArt, ItemArt } from '../games/cases/art'
 import { TierBadge } from '../art/TierBadge'
 import { TycoonIcon } from '../games/tycoon/icon'
 import { useTycoonStatus } from '../games/tycoon/status'
+import { TopPlayers } from '../components/profile/TopPlayers'
 
 export default function Lobby() {
   return (
@@ -45,6 +46,7 @@ export default function Lobby() {
       </div>
       <GuestStrip />
       <Games />
+      <TopPlayers />
       <Activity />
     </div>
   )
@@ -101,6 +103,23 @@ const SLIDES: Slide[] = [
     to: '/game/pot',
     bg: 'linear-gradient(110deg,#140a26 0%,#22103e 55%,#3a1660 100%)',
     art: <HeroFan ids={['battles', 'double', 'pot', 'showtime', 'crash']} />,
+  },
+  {
+    key: 'summit',
+    eyebrow: 'New original',
+    tone: 'text-[#9be3ff] bg-[#38bdf8]/15',
+    title: (
+      <>
+        Every pitch,
+        <br />
+        your call.
+      </>
+    ),
+    text: 'Summit: climb the mountain route by route. Take the safe Trail or chance the Sheer Wall, and bank at any camp before the rope gives.',
+    cta: 'Climb Summit',
+    to: '/game/summit',
+    bg: 'linear-gradient(110deg,#06182a 0%,#0b2b46 55%,#123e5e 100%)',
+    art: <HeroFan ids={['chicken', 'mines', 'summit', 'darts', 'deal']} />,
   },
   {
     key: 'deal',

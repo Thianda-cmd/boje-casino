@@ -46,6 +46,9 @@ export interface SeatView {
   me: boolean
 }
 
+/** a signed-in player's seat (the server seats accounts, guests and house bots; the stand-in only its guest and bots): their name opens their profile */
+export const isAccount = (s: SeatView) => !s.guest && !s.bot
+
 export interface BattleView {
   now: number
   id: number

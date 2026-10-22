@@ -1,6 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { apiUrl, backend, backendConfig, fetchWithTimeout, rpc, type BackendConfig } from './backend'
 import { safeStorage } from './storage'
+import { presencePing } from './profiles'
 import { round2 } from './format'
 import { useAuth, type Profile } from '../store/auth'
 import { accountWalletKey, GUEST_WALLET_KEY, switchWallet, useWallet, walletSnapshot } from '../store/wallet'
@@ -8,7 +9,9 @@ import { accountWalletKey, GUEST_WALLET_KEY, switchWallet, useWallet, walletSnap
 /* Accounts. Supabase Auth keeps the session; each account has a profile row holding its username,
    avatar and the whole wallet. The wallet is cached on the device and saved to the server a moment
    after it changes (and when the page is hidden), with a revision number so two devices can't
-   silently overwrite each other: a stale save is refused and the newer server copy wins. */
+   silently overwrite each other: a stale save is refused and the newer server copy wins. While a player is
+   signed in and the tab is visible, a heartbeat tells the server every minute that they are here (presence_ping),
+   which is what makes them show as online on their public profile and the leaderboards. */
 
 interface ServerProfile extends Profile {
   wallet: Record<string, unknown> | null
@@ -82,7 +85,7 @@ export async function initAccount() {
     setTimeout(() => void onSession(event, session), 0)
   })
   window.addEventListener('pagehide', flushNow)
-  document.addEventListener('visibilitychange', () => document.hidden && flushNow())
+  document.addEventListener('visibilitychange', () => (document.hidden ? flushNow() : beat()))
 }
 
 async function onSession(event: string, session: Session | null) {
@@ -168,11 +171,13 @@ async function enterAccount(uid: string, email: string | null, metaName: string 
     safeStorage.setItem(CARRIED_KEY, JSON.stringify({ to: uid, at: Date.now() }))
   }
   startSync()
+  startPresence()
   if (dirty) schedule(500)
 }
 
 function enterGuest() {
   stopSync()
+  stopPresence()
   token = null
   applying = true
   switchWallet(GUEST_WALLET_KEY)
@@ -188,6 +193,31 @@ export function carried(): { to: string; at: number } | null {
   } catch {
     return null
   }
+}
+
+/* ---------------- presence ---------------- */
+
+const PRESENCE_MS = 60_000
+let presenceTimer = 0
+let lastBeat = 0
+
+/** one heartbeat, when signed in with the tab in view (the server writes at most every 30 s, so a quick return is cheap) */
+function beat() {
+  if (useAuth.getState().status !== 'user' || document.hidden || Date.now() - lastBeat < 30_000) return
+  lastBeat = Date.now()
+  void presencePing()
+}
+
+function startPresence() {
+  stopPresence()
+  beat()
+  presenceTimer = window.setInterval(beat, PRESENCE_MS)
+}
+
+function stopPresence() {
+  clearInterval(presenceTimer)
+  presenceTimer = 0
+  lastBeat = 0
 }
 
 /* ---------------- wallet sync ---------------- */

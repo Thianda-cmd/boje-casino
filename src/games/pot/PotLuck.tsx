@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useMotionValue } from 'framer-motion'
 import { Avatar } from '../../art/Avatar'
 import { ActionButton, AnimatedNumber, BetInput, GameShell, useStake } from '../../components/ui'
 import { Coin } from '../../components/icons'
+import { PlayerName } from '../../components/profile/PlayerName'
 import { fmt, round2 } from '../../lib/format'
 import { safeStorage } from '../../lib/storage'
 import { useSize } from '../../lib/useSize'
@@ -523,14 +524,15 @@ export default function PotLuck() {
     () =>
       shares(ds).map((s) => {
         const p = s.who === 'me' ? (view.find((d) => d.me)?.p ?? 0) : Number(s.who.slice(1))
-        return { key: `${rid}:${s.who}`, name: s.name, avatar: s.avatar, bot: s.bot, me: s.who === 'me', amount: s.amount, share: s.share, colour: colourOf(p, s.who === 'me') }
+        const acct = view.some((d) => d.acct && (s.who === 'me' ? d.me : !d.me && d.p === p))
+        return { key: `${rid}:${s.who}`, name: s.name, avatar: s.avatar, bot: s.bot, me: s.who === 'me', acct, amount: s.amount, share: s.share, colour: colourOf(p, s.who === 'me') }
       }),
     [ds, view, rid],
   )
   const lines: FeedLine[] = useMemo(
     () =>
       view
-        .map((d, i) => ({ key: `${rid}:${i}`, name: d.name, avatar: d.avatar, amount: d.amount, me: d.me, bot: d.bot, colour: colourOf(d.p, d.me), at: d.at === Number.MAX_SAFE_INTEGER ? Date.now() + offset.current : d.at }))
+        .map((d, i) => ({ key: `${rid}:${i}`, name: d.name, avatar: d.avatar, amount: d.amount, me: d.me, bot: d.bot, acct: d.acct, colour: colourOf(d.p, d.me), at: d.at === Number.MAX_SAFE_INTEGER ? Date.now() + offset.current : d.at }))
         .slice(-7)
         .reverse(),
     [view, rid],
@@ -611,7 +613,9 @@ export default function PotLuck() {
                 </motion.span>
               </span>
               <span className={`mt-1.5 flex max-w-full items-center gap-1.5 font-black ${winDep.me ? 'text-accent' : 'text-white'}`} style={{ fontSize: Math.max(14, wheelSize * 0.032) }}>
-                <span className="truncate">{winDep.me ? 'You won!' : winDep.name}</span>
+                <PlayerName name={winDep.name} acct={winDep.acct} className="pointer-events-auto truncate">
+                  {winDep.me ? 'You won!' : winDep.name}
+                </PlayerName>
                 {winDep.bot && <BotTag />}
               </span>
               <span className="tnum flex items-center gap-1 font-black leading-tight text-gold" style={{ fontSize: Math.max(20, wheelSize * 0.052), textShadow: '0 0 22px rgba(247,197,72,.45)' }}>

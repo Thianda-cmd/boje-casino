@@ -347,8 +347,9 @@ export function useStake() {
   const pushToast = useWallet((s) => s.pushToast)
   return (amount: number) => {
     const ok = placeBet(amount)
-    if (!ok) pushToast({ kind: 'info', title: 'Not enough coins. Visit Rewards to earn more.' })
-    else sfx.bet()
+    // a bet the responsible-play limits refused has said why already (store/wallet.ts)
+    if (!ok && useWallet.getState().refusal?.why === 'coins') pushToast({ kind: 'info', title: 'Not enough coins. Visit Rewards to earn more.' })
+    else if (ok) sfx.bet()
     return ok
   }
 }

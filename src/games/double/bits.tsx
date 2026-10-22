@@ -5,6 +5,7 @@ import { AnimatedNumber } from '../../components/ui'
 import { Coin, IconCheck, IconUsers } from '../../components/icons'
 import { Modal } from '../../components/Modal'
 import { Spinner } from '../../components/Loader'
+import { PlayerName } from '../../components/profile/PlayerName'
 import { fmt } from '../../lib/format'
 import { Swatch, TONE, Tile } from './art'
 import { verifyRound, type Verdict } from './fair'
@@ -297,7 +298,9 @@ function BetColumn({
               <Avatar index={b.avatar} size={compact ? 18 : 22} />
               <div className={`flex min-w-0 flex-1 ${compact ? 'flex-col' : 'items-center gap-2'}`}>
                 <span className={`flex min-w-0 items-center gap-1 truncate text-[12px] font-semibold ${b.me ? 'text-accent' : 'text-ink/85'}`}>
-                  <span className="truncate">{b.me ? 'You' : b.name}</span>
+                  <PlayerName name={b.name} acct={b.acct} className="truncate">
+                    {b.me ? 'You' : b.name}
+                  </PlayerName>
                   {b.bot && !compact && <BotTag />}
                 </span>
                 <span className={`flex items-center gap-1.5 ${compact ? '' : 'ml-auto'}`}>

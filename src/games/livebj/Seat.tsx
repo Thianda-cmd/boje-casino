@@ -4,6 +4,7 @@ import { Avatar } from '../../art/Avatar'
 import { CardBack, CardFace } from '../../art/Card'
 import { Chip } from '../../art/Chip'
 import { IconCheck } from '../../components/icons'
+import { PlayerName } from '../../components/profile/PlayerName'
 import { fmt } from '../../lib/format'
 import { sfx } from '../../lib/sound'
 import { ChipStack, OutcomeBadge, PlayingCard, ScorePill, type Card, type Outcome } from '../blackjack/table'
@@ -42,6 +43,8 @@ export interface SeatInfo {
   name: string
   avatar: number
   tag: 'you' | 'guest' | 'account' | 'bot'
+  /** a signed-in player: the name opens their profile */
+  acct?: boolean
   /** away, idle, left the table, leaving */
   status: string | null
   /** the sitter has gone and only their hand is left */
@@ -135,7 +138,7 @@ export function Nameplate({ info, turn, now, size = 30 }: { info: SeatInfo; turn
         <Avatar index={info.avatar} size={size} />
       </TurnRing>
       <div className="min-w-0 leading-tight">
-        <div className="truncate text-[12px] font-extrabold text-white">{info.name}</div>
+        <PlayerName name={info.name} acct={info.acct} className="block max-w-full truncate text-[12px] font-extrabold text-white" />
         <div className="flex min-w-0 items-center gap-1">
           {TAG[info.tag]}
           {info.status && <span className="truncate text-[10px] font-bold text-white/50">· {info.status}</span>}

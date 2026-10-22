@@ -4,10 +4,10 @@ import { navigate, useRoute } from './lib/router'
 import { CATEGORIES, GAMES, type GameId } from './store/games'
 import { HEIST_MAX_PICKS, levelFromXp, tierOf, useClaimableCount, useHeistPicks, useWallet } from './store/wallet'
 import { AnimatedNumber } from './components/ui'
-import { Coin, IconGift, IconGrid, IconHistory, IconHome, IconMenu, IconMute, IconLogout, IconSearch, IconUser, IconVault, IconVolume, IconX, Logo } from './components/icons'
+import { Coin, IconGift, IconGrid, IconHistory, IconHome, IconMenu, IconMute, IconLogout, IconSearch, IconUser, IconUsers, IconVault, IconVolume, IconX, Logo } from './components/icons'
 import { AuthModal } from './components/AuthModal'
 import { BojeLoader, Spinner } from './components/Loader'
-import { Avatar } from './art/Avatar'
+import { FramedAvatar, NameTag, ProfileBanner, TitleChip } from './art/cosmetics'
 import { useAuth } from './store/auth'
 import { carried, logout } from './lib/account'
 import { guestId } from './lib/identity'
@@ -27,6 +27,10 @@ import { BootDone } from './lib/boot'
 import { TycoonIcon } from './games/tycoon/icon'
 import { useTycoonBadge, useTycoonStatus } from './games/tycoon/status'
 import { VaultDoor } from './art/Vault'
+import { SessionReminder } from './components/profile/Reminder'
+import { LevelPill } from './components/profile/ProfileCard'
+import { PlayerChip, PlayerChipSkeleton } from './components/profile/PlayerChip'
+import { profilePath, useMyLook, usePlayerSearch } from './components/profile/data'
 import Lobby from './pages/Lobby'
 
 const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
@@ -56,6 +60,7 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   market: lazy(() => import('./games/market/MarketRush')),
   deal: lazy(() => import('./games/deal/BankersDeal')),
   pot: lazy(() => import('./games/pot/PotLuck')),
+  summit: lazy(() => import('./games/summit/Summit')),
   lines: lazy(() => import('./games/lines/LuckyLines')),
   penalty: lazy(() => import('./games/penalty/Penalty')),
   scratch: lazy(() => import('./games/scratch/Scratch')),
@@ -73,6 +78,8 @@ const Tycoon = lazy(() => import('./games/tycoon/Tycoon'))
 const Rewards = lazy(() => import('./pages/Rewards'))
 const History = lazy(() => import('./pages/History'))
 const Account = lazy(() => import('./pages/Account'))
+const Players = lazy(() => import('./pages/Players'))
+const Player = lazy(() => import('./pages/Player'))
 const pageFallback = (
   <div className="flex h-[calc(100dvh-108px)] min-h-[420px] items-center justify-center rounded-2xl bg-panel2/50">
     <BojeLoader />
@@ -129,7 +136,17 @@ export default function App() {
       </Suspense>
     )
   else {
-    const Page = route.startsWith('/rewards') ? Rewards : route.startsWith('/history') ? History : route.startsWith('/account') ? Account : Lobby
+    const Page = route.startsWith('/rewards')
+      ? Rewards
+      : route.startsWith('/history')
+        ? History
+        : route.startsWith('/account')
+          ? Account
+          : route.startsWith('/players')
+            ? Players
+            : route.startsWith('/player/')
+              ? Player
+              : Lobby
     page = (
       <Suspense fallback={pageFallback}>
         <Page />
@@ -164,6 +181,7 @@ export default function App() {
       <AnimatePresence>{search && <SearchModal onClose={() => setSearch(false)} />}</AnimatePresence>
       <AuthModal />
       <Toasts />
+      <SessionReminder />
     </div>
   )
 }
@@ -293,7 +311,8 @@ function Sidebar({ route, collapsed }: { route: string; collapsed: boolean }) {
   const picks = useHeistPicks()
   const tycoon = useTycoonBadge()
   const item = (to: string, icon: ReactNode, label: string, badge?: number, accent?: string) => {
-    const active = to === '/' ? route === '/' : route.startsWith(to)
+    // a player's profile counts as the Players page
+    const active = to === '/' ? route === '/' : to === '/players' ? route.startsWith('/player') : route.startsWith(to)
     return (
       <button
         key={to}
@@ -326,6 +345,7 @@ function Sidebar({ route, collapsed }: { route: string; collapsed: boolean }) {
           {item('/', <IconHome size={19} />, 'Lobby')}
           {item('/rewards', <IconGift size={19} />, 'Rewards', claimable)}
           {item('/history', <IconHistory size={19} />, 'My bets')}
+          {item('/players', <IconUsers size={19} />, 'Players')}
           {item('/account', <IconUser size={19} />, 'Account')}
         </nav>
         <div className="mt-4">
@@ -439,12 +459,13 @@ function TopBar({ onToggle, onSearch }: { onToggle: () => void; onSearch: () => 
 function MobileNav({ route, onGames }: { route: string; onGames: () => void }) {
   const claimable = useClaimableCount()
   const profile = useAuth((s) => s.profile)
+  const look = useMyLook()
   const items: [string, ReactNode, string][] = [
     ['/', <IconHome />, 'Lobby'],
     ['games', <IconGrid />, 'Games'],
     ['/rewards', <IconGift />, 'Rewards'],
     ['/history', <IconHistory />, 'Bets'],
-    ['/account', profile ? <Avatar index={profile.avatar} size={24} /> : <IconUser />, profile ? 'Me' : 'Account'],
+    ['/account', profile ? <FramedAvatar avatar={profile.avatar} frame={look.frame} size={24} /> : <IconUser />, profile ? 'Me' : 'Account'],
   ]
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex bg-panel pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-12px_rgba(0,0,0,.7)] lg:hidden">
@@ -473,6 +494,7 @@ function UserMenu({ muted, onMute }: { muted: boolean; onMute: () => void }) {
   const profile = useAuth((s) => s.profile)
   const open = useAuth((s) => s.open)
   const xp = useWallet((s) => s.xp)
+  const look = useMyLook()
   const [menu, setMenu] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -503,11 +525,12 @@ function UserMenu({ muted, onMute }: { muted: boolean; onMute: () => void }) {
 
   const lv = levelFromXp(xp)
   const tier = tierOf(lv.level)
+  const pct = Math.max(3, Math.min(100, (lv.into / lv.need) * 100))
   const go = (to: string) => (setMenu(false), navigate(to))
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setMenu(!menu)} className="flex items-center gap-2 rounded-full p-0.5 transition hover:brightness-110" aria-label="Account menu">
-        <Avatar index={profile.avatar} size={38} ring={tier.color} />
+        <FramedAvatar avatar={profile.avatar} frame={look.frame} size={40} />
       </button>
       <AnimatePresence>
         {menu && (
@@ -516,20 +539,35 @@ function UserMenu({ muted, onMute }: { muted: boolean; onMute: () => void }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.14 }}
-            className="absolute right-0 top-[calc(100%+8px)] z-50 w-60 origin-top-right overflow-hidden rounded-xl border border-line bg-panel shadow-[0_24px_60px_-12px_rgba(0,0,0,.8)]"
+            className="absolute right-0 top-[calc(100%+8px)] z-50 w-[280px] origin-top-right overflow-hidden rounded-xl border border-line bg-panel shadow-[0_24px_60px_-12px_rgba(0,0,0,.8)]"
           >
-            <div className="flex items-center gap-3 border-b border-line p-3">
-              <Avatar index={profile.avatar} size={40} />
-              <div className="min-w-0">
-                <div className="truncate text-[14px] font-extrabold">{profile.username}</div>
-                <div className="text-[12px] font-semibold" style={{ color: tier.color }}>
-                  {tier.name} · Level {lv.level}
+            <button onClick={() => go(profilePath(profile.username))} className="group block w-full text-left">
+              <ProfileBanner id={look.banner} className="h-[58px]">
+                <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/0 to-[#112230]" />
+              </ProfileBanner>
+              <div className="-mt-7 flex items-end gap-3 px-3">
+                <FramedAvatar avatar={profile.avatar} frame={look.frame} size={56} className="shrink-0 drop-shadow-[0_6px_12px_rgba(0,0,0,.6)]" />
+                <div className="min-w-0 flex-1 pb-0.5">
+                  <NameTag key={look.nameColor} name={profile.username} color={look.nameColor} className="block truncate text-[15px] leading-tight" />
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                    <TitleChip id={look.title} className="truncate" />
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="p-1.5">
+              <div className="px-3 pb-3 pt-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <LevelPill xp={xp} tier />
+                  <span className="tnum text-[11px] font-bold text-dim">{Math.floor(pct)}% to {lv.level + 1}</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stage">
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: tier.color }} />
+                </div>
+              </div>
+            </button>
+            <div className="border-t border-line p-1.5">
               {(
                 [
+                  [profilePath(profile.username), <IconUsers size={17} />, 'My profile'],
                   ['/account', <IconUser size={17} />, 'Account'],
                   ['/rewards', <IconGift size={17} />, 'Rewards'],
                   ['/history', <IconHistory size={17} />, 'My bets'],
@@ -566,7 +604,7 @@ const EARN = [
   { to: '/tycoon', name: 'Casino Tycoon', words: 'casino tycoon idle free coins earn vault' },
 ] as const
 
-/** Ctrl+K game finder; also the mobile "Games" sheet. */
+/** Ctrl+K game finder; also the mobile "Games" sheet. From three letters on it finds players too. */
 function SearchModal({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState('')
   const picks = useHeistPicks()
@@ -574,6 +612,8 @@ function SearchModal({ onClose }: { onClose: () => void }) {
   const t = q.trim().toLowerCase()
   const list = useMemo(() => (t ? GAMES.filter((g) => g.name.toLowerCase().includes(t) || g.tagline.toLowerCase().includes(t)) : GAMES), [t])
   const earn = EARN.filter((e) => !t || e.name.toLowerCase().includes(t) || e.words.includes(t))
+  const people = usePlayerSearch(q, 3, 250)
+  const players = people.state === 'ready' ? people.rows.slice(0, 6) : people.state === 'loading' ? (people.last?.slice(0, 6) ?? null) : null
   const go = (id: GameId) => {
     navigate(`/game/${id}`)
     onClose()
@@ -599,8 +639,8 @@ function SearchModal({ onClose }: { onClose: () => void }) {
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (list[0] ? go(list[0].id) : earn[0] && open(earn[0].to))}
-            placeholder="Search games"
+            onKeyDown={(e) => e.key === 'Enter' && (list[0] ? go(list[0].id) : earn[0] ? open(earn[0].to) : players?.[0] && open(profilePath(players[0].username)))}
+            placeholder="Search games and players"
             className="h-14 flex-1 bg-transparent text-[16px] font-semibold outline-none placeholder:text-dim"
           />
           <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-panel2 hover:text-ink" aria-label="Close">
@@ -631,9 +671,36 @@ function SearchModal({ onClose }: { onClose: () => void }) {
                   ),
                 )}
               </div>
-              {list.length > 0 && <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-dim">Games</div>}
+              {list.length > 0 && !players?.length && people.state !== 'loading' && <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-dim">Games</div>}
             </>
           )}
+          {people.state !== 'idle' && (players?.length || people.state === 'loading') ? (
+            <div className="mb-4">
+              <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-wider text-dim">
+                Players
+                <button onClick={() => open('/players')} className="normal-case tracking-normal text-muted transition hover:text-ink">
+                  All players
+                </button>
+              </div>
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {players?.length
+                  ? players.map((r) => (
+                      <button key={r.username} onClick={() => open(profilePath(r.username))} className="group flex min-w-0 items-center gap-2 rounded-xl bg-panel2/70 px-2.5 py-2 text-left ring-1 ring-white/[.03] transition hover:bg-raised">
+                        <span className="min-w-0 flex-1">
+                          <PlayerChip who={r} size={36} ring="border-panel2 group-hover:border-raised" nameClass="text-[13.5px]" />
+                        </span>
+                        <LevelPill xp={r.xp} />
+                      </button>
+                    ))
+                  : [0, 1].map((i) => (
+                      <div key={i} className="rounded-xl bg-panel2/70 px-2.5 py-2">
+                        <PlayerChipSkeleton size={36} />
+                      </div>
+                    ))}
+              </div>
+              {list.length > 0 && <div className="mb-2 mt-4 text-[11px] font-bold uppercase tracking-wider text-dim">Games</div>}
+            </div>
+          ) : null}
           <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
             {list.map((g) => (
               <button key={g.id} onClick={() => go(g.id)} className="group text-left">
@@ -643,7 +710,9 @@ function SearchModal({ onClose }: { onClose: () => void }) {
                 </div>
               </button>
             ))}
-            {!list.length && !earn.length && <div className="col-span-full py-10 text-center text-[14px] text-muted">No games match “{q}”.</div>}
+            {!list.length && !earn.length && !players?.length && people.state !== 'loading' && (
+              <div className="col-span-full py-10 text-center text-[14px] text-muted">{people.state === 'idle' ? `No games match “${q}”.` : `No games or players match “${q.trim()}”.`}</div>
+            )}
           </div>
         </div>
       </motion.div>

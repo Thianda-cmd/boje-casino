@@ -4,6 +4,7 @@ import { Avatar } from '../../art/Avatar'
 import { AnimatedNumber } from '../../components/ui'
 import { Coin, IconCheck, IconUsers } from '../../components/icons'
 import { Modal } from '../../components/Modal'
+import { PlayerName } from '../../components/profile/PlayerName'
 import { fmt } from '../../lib/format'
 import { BotTag, Crown, Token, colourOf } from './art'
 import { verifyRound, type Verdict } from './fair'
@@ -26,6 +27,8 @@ export interface PlayerRow {
   avatar: number
   bot: boolean
   me: boolean
+  /** a signed-in player: the name opens their profile */
+  acct?: boolean
   amount: number
   share: number
   colour: string
@@ -68,7 +71,9 @@ export const Players = memo(function Players({ rows, pot, round, winner, open, c
                 </span>
                 <span className="relative flex min-w-0 flex-1 flex-col leading-tight">
                   <span className={`flex min-w-0 items-center gap-1.5 text-[13px] font-bold ${r.me ? 'text-accent' : 'text-ink/90'}`}>
-                    <span className="truncate">{r.me ? 'You' : r.name}</span>
+                    <PlayerName name={r.name} acct={r.acct} className="truncate">
+                      {r.me ? 'You' : r.name}
+                    </PlayerName>
                     {r.bot && <BotTag />}
                   </span>
                   <span className="tnum text-[11px] font-semibold text-muted">{fmt(r.amount)}</span>
@@ -92,6 +97,7 @@ export interface FeedLine {
   amount: number
   me: boolean
   bot: boolean
+  acct?: boolean
   colour: string
   at: number
 }
@@ -119,7 +125,10 @@ export const LiveFeed = memo(function LiveFeed({ lines, now, className = '' }: {
             >
               <Avatar index={l.avatar} size={20} />
               <span className="min-w-0 flex-1 truncate font-semibold text-ink/85">
-                <span className={l.me ? 'font-extrabold text-accent' : 'font-extrabold text-ink'}>{l.me ? 'You' : l.name}</span> added{' '}
+                <PlayerName name={l.name} acct={l.acct} className={l.me ? 'font-extrabold text-accent' : 'font-extrabold text-ink'}>
+                  {l.me ? 'You' : l.name}
+                </PlayerName>{' '}
+                added{' '}
                 <span className="tnum font-extrabold" style={{ color: l.colour }}>
                   {fmt(l.amount, l.amount % 1 ? 2 : 0)}
                 </span>
@@ -301,6 +310,7 @@ export function FairnessModal({ server, feed, history, id, landed, onPick, onClo
   const hash = current?.hash ?? info?.hash ?? ''
   const ds = info ? asDeposits(info.deposits) : []
   const win = verdict && verdict.index >= 0 ? ds[verdict.index] : null
+  const winAcct = !!(win && info?.deposits[verdict!.index]?.acct)
   const winAmount = win ? ds.filter((d) => d.who === win.who).reduce((a, d) => a + ticketsOf(d.amount), 0) / 100 : 0
   const pot = info ? potOf(ds) : 0
   const range = win && verdict ? ranges(ds)[verdict.index] : null
@@ -338,7 +348,10 @@ export function FairnessModal({ server, feed, history, id, landed, onPick, onClo
               </span>
               <div className="min-w-0">
                 <div className="truncate text-[19px] font-black leading-tight">
-                  {win.me ? 'You' : win.name} won <span className="tnum text-gold">{fmt(winnings(pot))}</span>
+                  <PlayerName name={win.name} acct={winAcct}>
+                    {win.me ? 'You' : win.name}
+                  </PlayerName>{' '}
+                  won <span className="tnum text-gold">{fmt(winnings(pot))}</span>
                 </div>
                 <div className="tnum text-[12px] font-semibold text-muted">
                   {fmt(winAmount)} of a {fmt(pot)} pot: a {pct(pot ? winAmount / pot : 0)} chance
@@ -380,7 +393,10 @@ export function FairnessModal({ server, feed, history, id, landed, onPick, onClo
                   <div key={i} className={`flex items-center gap-2 rounded-lg px-2 py-1 text-[12px] ${hit ? 'bg-gold/[.12] ring-1 ring-gold/50' : ''}`}>
                     <Token colour={colourOf(d.p, d.me)} size={13} />
                     <span className="min-w-0 flex-1 truncate font-semibold text-ink/85">
-                      {d.me ? 'You' : d.name} {d.bot && <BotTag className="ml-1" />}
+                      <PlayerName name={d.name} acct={info?.deposits[i]?.acct}>
+                        {d.me ? 'You' : d.name}
+                      </PlayerName>{' '}
+                      {d.bot && <BotTag className="ml-1" />}
                     </span>
                     <span className="tnum font-bold text-ink">{fmt(d.amount)}</span>
                     <span className="tnum w-[128px] text-right text-[11px] font-semibold text-dim">

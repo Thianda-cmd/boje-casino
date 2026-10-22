@@ -5,6 +5,7 @@ import { CardFace } from '../../art/Card'
 import { Modal } from '../../components/Modal'
 import { Spinner } from '../../components/Loader'
 import { Coin, IconChevron, IconUsers } from '../../components/icons'
+import { PlayerName } from '../../components/profile/PlayerName'
 import { fmt } from '../../lib/format'
 import { navigate } from '../../lib/router'
 import { fmtScore } from '../blackjack/table'
@@ -92,7 +93,7 @@ export function SeatList({ feed, t }: { feed: TableFeed; t: number }) {
     if (!s && !hs.length) return []
     const bet = hs.reduce((a, h) => a + h.bet, 0)
     const net = out && hs.every((h) => h.payout != null) ? hs.reduce((a, h) => a + (h.payout ?? 0) - h.bet, 0) : null
-    return [{ seat, name: s?.name ?? hs[0].name, avatar: s?.avatar ?? hs[0].avatar, me: s?.me ?? hs[0]?.mine, bot: !!s?.bot, left: !s, bet, net, best: out ? bestOutcome(hs) : null }]
+    return [{ seat, name: s?.name ?? hs[0].name, avatar: s?.avatar ?? hs[0].avatar, me: s?.me ?? hs[0]?.mine, bot: !!s?.bot, acct: s ? s.acct : hs[0]?.acct, left: !s, bet, net, best: out ? bestOutcome(hs) : null }]
   })
   return (
     <div className="flex shrink-0 flex-col overflow-hidden rounded-xl bg-stage">
@@ -110,7 +111,7 @@ export function SeatList({ feed, t }: { feed: TableFeed; t: number }) {
           <span className="tnum w-3 text-dim">{r.seat}</span>
           <Avatar index={r.avatar} size={20} />
           <span className="flex min-w-0 flex-1 items-center gap-1.5">
-            <span className={`truncate font-semibold ${r.me ? 'text-gold' : 'text-ink/85'}`}>{r.name}</span>
+            <PlayerName name={r.name} acct={r.acct} className={`truncate font-semibold ${r.me ? 'text-gold' : 'text-ink/85'}`} />
             {r.bot && <span className="shrink-0 rounded bg-raised px-1 text-[9px] font-black uppercase text-muted">Bot</span>}
           </span>
           <span className="tnum w-14 text-right text-muted">{r.bet ? fmt(r.bet) : '-'}</span>
@@ -224,7 +225,7 @@ export function HistoryModal({ server, id, recent, onPick, onClose }: { server: 
             label={
               <span className="flex items-center gap-2">
                 <Avatar index={h.avatar} size={20} />
-                <span className="truncate">{h.name}</span>
+                <PlayerName name={h.name} acct={h.acct} className="truncate" />
                 <span className="text-dim">· seat {h.seat}</span>
               </span>
             }

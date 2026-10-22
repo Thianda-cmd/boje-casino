@@ -73,11 +73,12 @@ function seatInfo(feed: TableFeed, seat: number): SeatInfo | null {
       name: s.name,
       avatar: s.avatar,
       tag: s.me ? 'you' : s.bot ? 'bot' : s.guest ? 'guest' : 'account',
+      acct: s.acct,
       status: s.leaving ? 'Leaving' : s.away ? 'Away' : s.idle >= 2 ? 'Idle zzz' : null,
       ghost: false,
     }
   const h = handsAt(feed, seat)[0]
-  return h ? { seat, name: h.name, avatar: h.avatar, tag: h.mine ? 'you' : h.guest ? 'guest' : 'account', status: 'Left the table', ghost: true } : null
+  return h ? { seat, name: h.name, avatar: h.avatar, tag: h.mine ? 'you' : h.guest ? 'guest' : 'account', acct: h.acct, status: 'Left the table', ghost: true } : null
 }
 
 const PLACEHOLDER = toCard(0, 0)
