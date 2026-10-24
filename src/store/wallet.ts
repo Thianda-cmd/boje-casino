@@ -418,6 +418,15 @@ export const CHALLENGES: Challenge[] = [
     step: (e, p) => (e.game === 'summit' && Number(e.meta?.pitches) >= 10 && e.meta?.fell !== true ? 1 : p),
   },
   {
+    id: 'pusher-idol',
+    game: 'pusher',
+    title: 'Idol Hands',
+    desc: 'Tip the Golden Idol over the edge in Coin Cascade.',
+    reward: 3000,
+    goal: 1,
+    step: (e, p) => (e.game === 'pusher' && Number(e.meta?.idol) > 0 ? 1 : p),
+  },
+  {
     id: 'kaiju-exact',
     game: 'kaiju',
     title: 'Called It',

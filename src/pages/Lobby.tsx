@@ -88,6 +88,23 @@ const SLIDES: Slide[] = [
     art: <HeroFan ids={['showtime', 'summit', 'kaiju', 'pot', 'darts']} />,
   },
   {
+    key: 'pusher',
+    eyebrow: 'New original',
+    tone: 'text-[#7ff3ea] bg-[#16c0b4]/15',
+    title: (
+      <>
+        Push it
+        <br />
+        over the edge.
+      </>
+    ),
+    text: 'Coin Cascade: a neon coin pusher. Drop a coin, aim the slot and shove the gems, the gold bar, the Golden Idol and the 500× Crown into the tray.',
+    cta: 'Play Coin Cascade',
+    to: '/game/pusher',
+    bg: 'linear-gradient(110deg,#07122e 0%,#0c2a52 55%,#0f4a5c 100%)',
+    art: <HeroFan ids={['plinko', 'claw', 'pusher', 'kaiju', 'reef']} />,
+  },
+  {
     key: 'showtime',
     eyebrow: 'New game show',
     tone: 'text-[#ff8c9a] bg-[#ff4d61]/15',
@@ -361,7 +378,7 @@ function Hero() {
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className="relative min-h-[280px] overflow-hidden rounded-2xl shadow-[0_24px_60px_-30px_rgba(0,0,0,.8)] sm:min-h-[300px]"
+      className="@container relative min-h-[280px] overflow-hidden rounded-2xl shadow-[0_24px_60px_-30px_rgba(0,0,0,.8)] sm:min-h-[300px]"
     >
       {/* every slide's picture stays mounted and the active one fades in, so changing slides only fades layers the
           GPU already has; mounting the art fresh each time redrew the shadowed covers and stalled a frame */}
@@ -377,6 +394,8 @@ function Hero() {
       ))}
       <AnimatePresence initial={false}>
         <motion.div key={s.key} className="absolute inset-0 z-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+          {/* the fan of covers takes the right half and, on a narrower slide, reaches under the text: a soft shade keeps it readable */}
+          <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-[62%] bg-gradient-to-r from-black/55 via-black/30 to-transparent sm:block" />
           <div className="relative flex h-full max-w-[460px] flex-col justify-center px-6 pb-12 pt-6 sm:px-8 sm:pb-12 sm:pt-8">
             <motion.span
               initial={{ opacity: 0, y: 8 }}
@@ -389,7 +408,7 @@ function Hero() {
             <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="mt-3 text-[28px] font-black leading-[1.06] tracking-tight sm:text-[38px]">
               {s.title}
             </motion.h1>
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }} className="mt-2 max-w-[380px] text-[14px] text-muted">
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }} className="mt-2 max-w-[330px] text-[14px] text-muted">
               {s.text}
             </motion.p>
             <motion.button
@@ -900,8 +919,10 @@ function HeroBattles() {
 }
 
 function HeroFan({ ids =['blackjack', 'videopoker', 'popparty', 'roulette', 'mines'] }: { ids?: GameId[] }) {
+  // on a narrow slide (a laptop with the sidebar open) the fan moves right, out from under the text, and its last cover
+  // runs off the edge
   return (
-    <div className="absolute inset-y-0 right-0 hidden w-[55%] sm:block">
+    <div className="absolute inset-y-0 right-0 hidden w-[55%] sm:block @max-[780px]:-right-[16%]">
       {ids.map((id, i) => {
         const mid = (ids.length - 1) / 2
         return (

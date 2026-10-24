@@ -30,6 +30,7 @@ import { DealCover } from '../games/deal/cover'
 import { PotCover } from '../games/pot/cover'
 import { SummitCover } from '../games/summit/cover'
 import { KaijuCover } from '../games/kaiju/cover'
+import { PusherCover } from '../games/pusher/cover'
 
 /* Lobby art. Chicken Road keeps its pixel look; everything else is clean vector art on a bold gradient. */
 
@@ -104,6 +105,8 @@ export function GameCover({ id }: { id: GameId }) {
       return <SummitCover />
     case 'kaiju':
       return <KaijuCover />
+    case 'pusher':
+      return <PusherCover />
     case 'holdem':
       return <HoldemCover />
     case 'cases':

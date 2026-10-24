@@ -64,6 +64,7 @@ const gamePages: Record<GameId, React.LazyExoticComponent<() => ReactNode>> = {
   pot: lazy(() => import('./games/pot/PotLuck')),
   summit: lazy(() => import('./games/summit/Summit')),
   kaiju: lazy(() => import('./games/kaiju/Kaiju')),
+  pusher: lazy(() => import('./games/pusher/CoinCascade')),
   lines: lazy(() => import('./games/lines/LuckyLines')),
   penalty: lazy(() => import('./games/penalty/Penalty')),
   scratch: lazy(() => import('./games/scratch/Scratch')),

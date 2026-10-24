@@ -11,6 +11,7 @@ import { DealIcon } from '../games/deal/cover'
 import { PotIcon } from '../games/pot/cover'
 import { SummitIcon } from '../games/summit/cover'
 import { KaijuIcon } from '../games/kaiju/cover'
+import { PusherIcon } from '../games/pusher/cover'
 
 // Small 20px monochrome icons for navigation.
 export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
@@ -203,6 +204,8 @@ export function GameIcon({ id, size = 20 }: { id: GameId; size?: number }) {
       return <SummitIcon {...p} />
     case 'kaiju':
       return <KaijuIcon {...p} />
+    case 'pusher':
+      return <PusherIcon {...p} />
     case 'plunder':
       return (
         <svg {...p}>

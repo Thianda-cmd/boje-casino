@@ -1,4 +1,4 @@
-export type GameId = 'chicken' | 'kaiju' | 'showtime' | 'darts' | 'market' | 'deal' | 'pot' | 'summit' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'coinflip' | 'reef' | 'lines' | 'sicbo' | 'craps' | 'holdem' | 'plunder' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
+export type GameId = 'chicken' | 'kaiju' | 'pusher' | 'showtime' | 'darts' | 'market' | 'deal' | 'pot' | 'summit' | 'crash' | 'double' | 'mines' | 'plinko' | 'dice' | 'limbo' | 'keno' | 'hilo' | 'wheel' | 'cases' | 'battles' | 'derby' | 'claw' | 'penalty' | 'scratch' | 'coinflip' | 'reef' | 'lines' | 'sicbo' | 'craps' | 'holdem' | 'plunder' | 'chompers' | 'popparty' | 'roboriot' | 'blackjack' | 'livebj' | 'baccarat' | 'roulette' | 'videopoker'
 
 export type Category = 'originals' | 'slots' | 'table'
 
@@ -14,6 +14,7 @@ export interface GameInfo {
 
 export const GAMES: GameInfo[] = [
   { id: 'kaiju', name: 'Kaiju Clash', category: 'originals', tagline: 'A live monster fight night: back a kaiju, call the KO, the Splash into the bay or the round, and watch the city fall.', accent: '#ff3b6b', tag: 'live' },
+  { id: 'pusher', name: 'Coin Cascade', category: 'originals', tagline: 'A neon coin pusher: drop a coin, aim the slot and shove gems, gold bars, the Golden Idol and the 500× Crown over the edge.', accent: '#16c0b4', tag: 'new' },
   { id: 'showtime', name: 'Showtime', category: 'originals', tagline: 'A live game-show money wheel: everyone bets the same spin, with a Booster and four bonus rounds up to 20,000×.', accent: '#ff4d61', tag: 'live' },
   { id: 'darts', name: 'Bullseye', category: 'originals', tagline: 'Three darts at the board. Pick your target and your thrower; the total pays, up to 10,000× for a big finish.', accent: '#e8344e', tag: 'new' },
   { id: 'market', name: 'Market Rush', category: 'originals', tagline: 'A live price chart. Go Up or Down with up to 100× leverage and cash out before you are liquidated.', accent: '#00d1a0', tag: 'new' },

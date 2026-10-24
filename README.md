@@ -1,7 +1,7 @@
 # Boje Casino (play money)
 
-A Stake-style casino with thirty-eight games. Originals: Kaiju Clash (a live kaiju fight night), Showtime (a game-show
-money wheel), Bullseye (darts), Market Rush (a live trading chart), Banker's Deal (briefcases and a Banker's offers),
+A Stake-style casino with thirty-nine games. Originals: Kaiju Clash (a live kaiju fight night), Coin Cascade (a coin
+pusher), Showtime (a game-show money wheel), Bullseye (darts), Market Rush (a live trading chart), Banker's Deal (briefcases and a Banker's offers),
 Pot Luck (a live player-versus-player pot), Summit (a mountain climb), Chicken Road, Crash, Double, Coin Flip, Reef Raid, Mines, Plinko, Dice, Limbo, Keno, Hi-Lo,
 Wheel, Cases, Case Battles, Duck Derby, Lucky Claw, Penalty Shootout and Scratch & Win. Slots: Lucky Lines, Plunder Bay, Chompers, Pop Party and Robo Riot. Table games:
 Blackjack, Live Blackjack, Baccarat, Sic Bo, Craps, Hold'em Showdown, Roulette and Video Poker.
@@ -16,8 +16,8 @@ browser (localStorage); signed-in players have it saved to their account.
 
 ## Stack
 Vite + React 19 + TypeScript, Tailwind CSS v4, Framer Motion, Zustand, supabase-js. Plinko and Crash draw on
-canvas; the slots (Chompers, Pop Party, Robo Riot and Plunder Bay) and Kaiju Clash's Neon Bay are three.js scenes, loaded
-only when the game opens.
+canvas; the slots (Chompers, Pop Party, Robo Riot and Plunder Bay), Kaiju Clash's Neon Bay and Coin Cascade's machine are
+three.js scenes, loaded only when the game opens.
 The wallet is saved to localStorage in batches (src/lib/storage.ts): its writes, and Reef Raid's ledger with them, land
 together at the end of a task and at most every 250 ms while they keep coming, any other write lands them first, and
 hiding or leaving the page writes everything at once (`tools/storage-test.ts`). Hash
@@ -379,6 +379,18 @@ Password-reset emails need the Supabase project's Site URL and Redirect URLs set
   the boldest routes reach), so every mix of routes and every moment to bank returns exactly 97% until the cap. Each
   pitch is drawn when its route is chosen and stored before it is shown; a climb in progress resumes after a reload
   and is paid once (`tools/summit-test.ts`, `tools/summit-money.mjs`).
+- Coin Cascade (src/games/pusher/rules.ts): a coin pusher; each drop costs the stake and pays what goes over the front
+  edge into the tray: a silver coin 0.25×, a gold coin 1×, a gem 5×, a gold bar 25×, the Golden Idol 100×, the Crown
+  500×. The result is drawn first, from 61 outcomes (what goes over, and whether the drop brings a Coin Shower or a
+  Quake) with whole-number ways out of 1,000,000 whose multipliers add up to exactly 97% (paid rounded down to the
+  cent): any win 44.77%, a gold coin 25.3%, a gem 1 in 29.5, a gold bar 1 in 305, the Idol 1 in 4,132, the Crown 1 in
+  31,250, a Shower 1 in 22.8, a Quake 1 in 65.9, the top win 612.5× (Crown and Idol in a Quake). Then the drop is
+  played on a physics simulation of the coins and prizes (sim.ts, world.ts, in a worker) in which exactly that goes
+  over and nothing else does; aiming moves where the coin lands, never what it pays. The field is kept per player and
+  always holds the prize stock (a prize that falls is replaced in the same drop). A drop is stored before it plays and
+  paid once: when its last item lands, at once if the page is hidden or left, or on the next visit if the page died
+  (`tools/pusher-test.ts` checks the table and samples the draw, `tools/pusher-sim-test.ts` 20,000 chained drops,
+  `tools/pusher-money.mjs` the money through the page).
 - Kaiju Clash (src/games/kaiju/rules.ts): a live fight night on the database clock (src/games/kaiju/clock.ts: 17 s of
   betting, a 6 s walkout, three 10 s rounds with 3 s breaks, 8 s for the result; one fight every 67 s, the same fight
   for everyone). Each fight, two of eight kaiju (the pairing from the round id alone, so the card is known ahead) end
